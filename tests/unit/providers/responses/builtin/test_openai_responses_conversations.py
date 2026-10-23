@@ -65,11 +65,16 @@ class TestConversationValidation:
     """Test conversation ID validation logic."""
 
     async def test_nonexistent_conversation_raises_error(
-        self, responses_impl_with_conversations, mock_conversations_api
+        self, responses_impl_with_conversations, mock_conversations_api, mock_responses_store
     ):
         """Test that ConversationNotFoundError is raised for non-existent conversation."""
         conv_id = "conv_" + "0" * 48
 
+        # A conversation that doesn't exist has no stored messages either -- without
+        # this, the AsyncMock's default (an unconfigured, truthy Mock) would skip the
+        # conversations_api.list_items call entirely (see _process_input_with_previous_response's
+        # "stored_messages truthy" fast path) and never discover the conversation is missing.
+        mock_responses_store.get_conversation_messages.return_value = None
         # Mock conversation not found
         mock_conversations_api.list_items.side_effect = ConversationNotFoundError(conv_id)
 
@@ -238,10 +243,12 @@ class TestIntegrationWorkflow:
             )
 
     async def test_create_response_with_nonexistent_conversation(
-        self, responses_impl_with_conversations, mock_conversations_api
+        self, responses_impl_with_conversations, mock_conversations_api, mock_responses_store
     ):
         """Test creating a response with a non-existent conversation."""
         conv_id = "conv_" + "b" * 48
+        # See test_nonexistent_conversation_raises_error for why this is needed.
+        mock_responses_store.get_conversation_messages.return_value = None
         mock_conversations_api.list_items.side_effect = ConversationNotFoundError(conv_id)
 
         with pytest.raises(ConversationNotFoundError) as exc_info:

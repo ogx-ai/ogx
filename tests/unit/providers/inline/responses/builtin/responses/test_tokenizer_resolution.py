@@ -203,12 +203,13 @@ class TestMaybeAutoCompactExtraBody:
     async def test_extra_body_invalid_encoding_raises_through_auto_compact(self):
         impl = self._make_impl(model_tokenizer_mappings={})
         context_management = [{"type": "compaction", "compact_threshold": 10}]
+        history = [OpenAIResponseMessage(role="user", content="some text here")]
         with pytest.raises(InvalidParameterError, match="tokenizer_encoding"):
             await impl._maybe_auto_compact(
-                input="some text here",
+                history=history,
+                new_input=[],
                 model="unknown-model",
                 context_management=context_management,
-                previous_usage=None,
                 extra_body={"tokenizer_encoding": "bogus"},
             )
 

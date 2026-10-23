@@ -44,6 +44,7 @@ from ogx_api import (
     OpenAIChoiceLogprobs,
     OpenAIFinishReason,
     OpenAIMessageParam,
+    OpenAIResponseCompaction,
     OpenAIResponseContentPartOutputText,
     OpenAIResponseContentPartReasoningText,
     OpenAIResponseContentPartRefusal,
@@ -289,6 +290,8 @@ class StreamingResponseOrchestrator:
         presence_penalty: float | None = None,
         extra_body: dict | None = None,
         stream_options: ResponseStreamOptions | None = None,
+        initial_usage: OpenAIChatCompletionUsage | None = None,
+        pending_compaction_item: OpenAIResponseCompaction | None = None,
     ):
         self.inference_api = inference_api
         self.ctx = ctx
@@ -342,6 +345,11 @@ class StreamingResponseOrchestrator:
         self.final_messages: list[OpenAIMessageParam] = []
         # mapping for annotations
         self.citation_files: dict[str, str] = {}
+        # Item representing a compaction that already happened before this turn's own
+        # inference loop starts (see openai_responses.py's _maybe_auto_compact); surfaced
+        # as the first item of this response's own output, matching OpenAI's behavior of
+        # returning the compaction item rather than hiding it in server-only state.
+        self.pending_compaction_item = pending_compaction_item
         # Track accumulated usage across all inference calls
         self.accumulated_usage: OpenAIResponseUsage | None = None
         # Track if we've sent a refusal response
@@ -350,6 +358,14 @@ class StreamingResponseOrchestrator:
         self.accumulated_builtin_tool_calls = 0
         # Track total output tokens generated across inference calls
         self.accumulated_builtin_output_tokens = 0
+        if initial_usage is not None:
+            # Seeds with the compaction/summarization call's own usage, so a client sees
+            # what that call cost instead of it silently not showing up anywhere. Must
+            # not count toward accumulated_builtin_output_tokens: that call already ran
+            # to completion before this turn's own inference loop starts, capped by its
+            # own independent budget (CompactionConfig.summary_max_output_tokens), and
+            # must not eat into max_output_tokens' budget for the actual answer.
+            self._accumulate_usage(initial_usage, count_toward_output_budget=False)
 
     async def _create_refusal_response(self, violation_message: str) -> OpenAIResponseObjectStream:
         """Create a refusal response to replace streaming content."""
@@ -453,6 +469,27 @@ class StreamingResponseOrchestrator:
             response=self._snapshot_response("in_progress", output_messages),
             sequence_number=self.sequence_number,
         )
+
+        # Auto-compaction already happened before this turn's inference loop started (see
+        # openai_responses.py's _maybe_auto_compact); surface it as this response's own
+        # first output item instead of leaving it as invisible server-only state.
+        if self.pending_compaction_item is not None:
+            compaction_output_index = len(output_messages)
+            output_messages.append(self.pending_compaction_item)
+            self.sequence_number += 1
+            yield OpenAIResponseObjectStreamResponseOutputItemAdded(
+                response_id=self.response_id,
+                item=self.pending_compaction_item,
+                output_index=compaction_output_index,
+                sequence_number=self.sequence_number,
+            )
+            self.sequence_number += 1
+            yield OpenAIResponseObjectStreamResponseOutputItemDone(
+                response_id=self.response_id,
+                item=self.pending_compaction_item,
+                output_index=compaction_output_index,
+                sequence_number=self.sequence_number,
+            )
 
         # Input safety validation - check messages before processing
         if self.enable_guardrails:
@@ -1022,9 +1059,19 @@ class StreamingResponseOrchestrator:
             return
         self._accumulate_usage(chunk.usage)
 
-    def _accumulate_usage(self, usage: OpenAIChatCompletionUsage) -> None:
-        """Accumulate chat completion usage into the response usage format."""
-        self.accumulated_builtin_output_tokens += usage.completion_tokens
+    def _accumulate_usage(self, usage: OpenAIChatCompletionUsage, count_toward_output_budget: bool = True) -> None:
+        """Accumulate chat completion usage into the response usage format.
+
+        count_toward_output_budget=False keeps usage out of
+        accumulated_builtin_output_tokens -- the counter that gates max_output_tokens
+        (see the while-loop's remaining_output_tokens calculation) -- while still
+        folding it into accumulated_usage so it's reported to the caller. Used for the
+        auto-compaction summary call's usage: that call is internal housekeeping done
+        before the main loop even starts, not part of the answer the caller asked
+        max_output_tokens tokens of, so it must not eat into that budget.
+        """
+        if count_toward_output_budget:
+            self.accumulated_builtin_output_tokens += usage.completion_tokens
 
         if self.accumulated_usage is None:
             # Convert from chat completion format to response format

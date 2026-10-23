@@ -436,6 +436,20 @@ class OpenAIResponseOutputMessageReasoningItem(BaseModel):
     )
 
 
+@json_schema_type
+class OpenAIResponseCompaction(BaseModel):
+    """A compaction item that summarizes prior conversation context.
+
+    :param type: Always "compaction"
+    :param encrypted_content: Compacted summary of prior conversation (plaintext in OGX)
+    :param id: Unique identifier for this compaction item
+    """
+
+    type: Literal["compaction"] = "compaction"
+    encrypted_content: str
+    id: str | None = None
+
+
 OpenAIResponseOutput = Annotated[
     OpenAIResponseMessage
     | OpenAIResponseOutputMessageWebSearchToolCall
@@ -444,7 +458,8 @@ OpenAIResponseOutput = Annotated[
     | OpenAIResponseOutputMessageMCPCall
     | OpenAIResponseOutputMessageMCPListTools
     | OpenAIResponseMCPApprovalRequest
-    | OpenAIResponseOutputMessageReasoningItem,
+    | OpenAIResponseOutputMessageReasoningItem
+    | OpenAIResponseCompaction,
     Field(discriminator="type"),
 ]
 register_schema(OpenAIResponseOutput, name="OpenAIResponseOutput")
@@ -1615,20 +1630,6 @@ class OpenAIResponseInputFunctionToolCallOutput(BaseModel):
     status: str | None = None
 
 
-@json_schema_type
-class OpenAIResponseCompaction(BaseModel):
-    """A compaction item that summarizes prior conversation context.
-
-    :param type: Always "compaction"
-    :param encrypted_content: Compacted summary of prior conversation (plaintext in OGX)
-    :param id: Unique identifier for this compaction item
-    """
-
-    type: Literal["compaction"] = "compaction"
-    encrypted_content: str
-    id: str | None = None
-
-
 OpenAIResponseInput = Annotated[
     # Responses API allows output messages to be passed in as input
     # OpenAIResponseMessage appears in both OpenAIResponseOutput (discriminated by type="message")
@@ -1636,10 +1637,15 @@ OpenAIResponseInput = Annotated[
     # an explicit "type" field (e.g. {"role": "user", "content": "..."}) fail the discriminator
     # check in OpenAIResponseOutput. The left_to_right union mode tries the discriminated union
     # first, then falls back to matching OpenAIResponseMessage directly.
+    #
+    # OpenAIResponseCompaction, unlike OpenAIResponseMessage, does NOT need a standalone fallback
+    # entry here: it always carries a "type" field (defaulted to "compaction"), so the
+    # discriminator on OpenAIResponseOutput (of which it's a member) already resolves it. A
+    # redundant standalone entry here previously made this same type reachable two ways, which
+    # showed up as an unrelated-looking schema restructuring when generating the OpenAPI spec.
     OpenAIResponseOutput
     | OpenAIResponseInputFunctionToolCallOutput
     | OpenAIResponseMCPApprovalResponse
-    | OpenAIResponseCompaction
     | OpenAIResponseMessage,
     Field(union_mode="left_to_right"),
 ]
