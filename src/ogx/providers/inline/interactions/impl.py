@@ -523,6 +523,8 @@ class BuiltinInteractionsImpl(Interactions):
                         args = json.loads(tc.function.arguments) if tc.function.arguments else {}
                     except json.JSONDecodeError:
                         args = {}
+                    if not isinstance(args, dict):
+                        args = {}
                     outputs.append(
                         GoogleFunctionCallOutput(
                             id=tc.id or f"call_{uuid.uuid4().hex[:24]}",
