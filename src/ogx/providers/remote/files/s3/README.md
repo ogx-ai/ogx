@@ -10,6 +10,7 @@ A remote S3-based implementation of the OGX Files API that provides scalable clo
 - **Flexible Authentication**: Support for IAM roles and access keys
 - **Custom S3 Endpoints**: Support for MinIO and other S3-compatible services
 - **Bucket Organization**: Optional key prefix to store files under a folder within the bucket
+- **Streaming Uploads**: Files are streamed to S3, as a multipart upload above 8 MiB; boto3 buffers at most about 80 MiB per upload, whatever the file size
 
 ## Configuration
 
@@ -98,6 +99,7 @@ The S3 provider requires the following permissions:
       "Action": [
         "s3:GetObject",
         "s3:PutObject",
+        "s3:AbortMultipartUpload",
         "s3:DeleteObject",
         "s3:ListBucket"
       ],
@@ -109,6 +111,10 @@ The S3 provider requires the following permissions:
   ]
 }
 ```
+
+If the bucket's default encryption uses an AWS KMS key (SSE-KMS), the provider also needs `kms:GenerateDataKey`
+and `kms:Decrypt` on that key. Multipart uploads, which the provider uses for files larger than 8 MiB, require
+`kms:Decrypt` even though single-part uploads do not.
 
 ### Automatic Bucket Creation
 
@@ -132,6 +138,7 @@ config:
       "Action": [
         "s3:GetObject",
         "s3:PutObject",
+        "s3:AbortMultipartUpload",
         "s3:DeleteObject",
         "s3:ListBucket",
         "s3:CreateBucket"
@@ -186,6 +193,7 @@ For additional security, you can add a bucket policy:
       "Action": [
         "s3:GetObject",
         "s3:PutObject",
+        "s3:AbortMultipartUpload",
         "s3:DeleteObject"
       ],
       "Resource": "arn:aws:s3:::your-bucket-name/*"
@@ -203,6 +211,29 @@ For additional security, you can add a bucket policy:
     }
   ]
 }
+```
+
+### Incomplete Multipart Uploads
+
+Uploads larger than 8 MiB are sent as multipart uploads. The provider aborts a multipart upload that fails,
+but one interrupted by a server crash, or whose abort request also fails, leaves its parts in the bucket.
+They are not visible as objects but are billed as storage. AWS recommends a lifecycle rule that removes them:
+
+```json
+{
+  "Rules": [
+    {
+      "ID": "abort-incomplete-multipart-uploads",
+      "Status": "Enabled",
+      "Filter": {"Prefix": ""},
+      "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 7}
+    }
+  ]
+}
+```
+
+```bash
+aws s3api put-bucket-lifecycle-configuration --bucket your-bucket-name --lifecycle-configuration file://lifecycle.json
 ```
 
 ## Implementation Details
@@ -291,4 +322,3 @@ The provider handles various error scenarios:
 - Fixed long TTL (100 years) instead of configurable expiration
 - No server-side encryption enabled by default
 - No support for AWS session tokens
-- No multipart upload support (all files uploaded as single objects)
