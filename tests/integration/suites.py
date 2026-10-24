@@ -180,22 +180,13 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
     # by test_id. Setups without ST-rerank recordings (e.g. vllm) intentionally omit it.
     "gpt": Setup(
         name="gpt",
-        description="OpenAI GPT models for high-quality responses and tool calling",
+        description="OpenAI GPT models for high-quality responses, tool calling, and reasoning effort tests",
         defaults={
-            "text_model": "openai/gpt-4o",
-            "vision_model": "openai/gpt-4o",
-            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
-            "embedding_dimension": 1536,
-            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
-        },
-    ),
-    "gpt-reasoning": Setup(
-        name="gpt-reasoning",
-        description="OpenAI reasoning models (o4-mini) for reasoning effort tests",
-        defaults={
-            "text_model": "openai/o4-mini",
+            "text_model": "openai/gpt-5-nano",
+            "vision_model": "openai/gpt-5-nano",
             "embedding_model": "openai/text-embedding-3-small",
             "embedding_dimension": 1536,
+            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "azure": Setup(
@@ -463,7 +454,7 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
             "tests/integration/responses/test_openai_responses.py::test_openai_response_reasoning_effort_streaming",
             "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_reasoning_passthrough",
         ],
-        default_setup="gpt-reasoning",
+        default_setup="gpt",
     ),
     # The gpt setup exercises the Anthropic-to-OpenAI translation path, since
     # OpenAI has no native /v1/messages endpoint.

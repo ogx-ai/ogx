@@ -1191,8 +1191,8 @@ class TestOpenAIResponses:
         """Check if the model supports reasoning_effort based on model name patterns."""
         # Strip provider prefix (e.g., "openai/", "azure/") to get base model name
         base_model = model_id.split("/")[-1] if "/" in model_id else model_id
-        # OpenAI reasoning models: o1, o3, o4, etc.
-        reasoning_prefixes = ("o1", "o3", "o4")
+        # OpenAI reasoning models: the o-series and GPT-5+ generations
+        reasoning_prefixes = ("o1", "o3", "o4", "gpt-5", "gpt-6")
         return base_model.startswith(reasoning_prefixes)
 
     def _skip_reasoning_effort_for_unsupported(self, text_model_id):

@@ -14,16 +14,16 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `bedrock` | `bedrock` | library client only; 3 roots |
 | `base` | `ollama-postgres` | server client only; Postgres store |
 | `vision` | `ollama-vision` | `test_vision_inference.py` only |
-| `responses` | `gpt` | `responses` only; Responses coverage: 128/132 (97%) |
-| `responses` | `azure` | `responses` only; Responses coverage: 111/132 (84%) |
-| `reasoning` | `gpt-reasoning` | 4 roots; Responses coverage: 128/132 (97%) |
-| `responses` | `watsonx` | `responses` only; Responses coverage: 48/132 (36%) |
-| `responses` | `vertexai` | `responses` only; Responses coverage: 62/132 (47%) |
-| `bedrock-responses` | `bedrock` | 6 roots; Responses coverage: 22/132 (17%) |
+| `responses` | `gpt` | `responses` only; Responses coverage: 126/130 (97%) |
+| `responses` | `azure` | `responses` only; Responses coverage: 111/130 (85%) |
+| `reasoning` | `gpt` | 4 roots; Responses coverage: 126/130 (97%) |
+| `responses` | `watsonx` | `responses` only; Responses coverage: 48/130 (37%) |
+| `responses` | `vertexai` | `responses` only; Responses coverage: 62/130 (48%) |
+| `bedrock-responses` | `bedrock` | 6 roots; Responses coverage: 22/130 (17%) |
 | `inference` | `vllm` | `inference` only |
 | `inference` | `sglang` | `inference` only |
-| `reasoning` | `vllm` | 4 roots; Responses coverage: 3/132 (2%) |
-| `reasoning` | `ollama-reasoning` | 4 roots; Responses coverage: 4/132 (3%) |
+| `reasoning` | `vllm` | 4 roots; Responses coverage: 3/130 (2%) |
+| `reasoning` | `ollama-reasoning` | 4 roots; Responses coverage: 4/130 (3%) |
 | `messages` | `ollama` | `messages` only |
 | `messages` | `gpt` | `messages` only |
 | `messages` | `vllm` | `messages` only |
@@ -51,8 +51,7 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `deepseek` | deepseek/deepseek-chat | — | — | — | `messages` | — |
 | `fireworks` | fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `messages`, `base` | — |
 | `gemini` | gemini/gemini-2.5-flash-lite | — | gemini/text-embedding-004 | — | `interactions` | — |
-| `gpt` | openai/gpt-4o | openai/gpt-4o | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `responses`, `messages` | — |
-| `gpt-reasoning` | openai/o4-mini | — | openai/text-embedding-3-small | — | `reasoning` | — |
+| `gpt` | openai/gpt-5-nano | openai/gpt-5-nano | openai/text-embedding-3-small | — | `responses`, `reasoning`, `messages` | — |
 | `llama-cpp-server` | llama-cpp-server/qwen3-0.6b | — | llama-cpp-server/nomic-embed-text-v1.5 | — | `inference` | — |
 | `llama-cpp-server-systemone` | — | — | — | — | `systemone` | — |
 | `meta` | meta/muse-spark-1.3-contributor | — | — | — | `messages` | — |
@@ -88,12 +87,12 @@ This section is derived from the same replay recordings used to generate `docs/d
 
 | Provider | Tested | Passing | Coverage |
 |----------|--------|---------|----------|
-| OpenAI | 128 | 128 | 97% |
-| Azure | 111 | 111 | 84% |
-| Vertex AI | 62 | 62 | 47% |
-| WatsonX | 48 | 48 | 36% |
+| OpenAI | 126 | 126 | 97% |
+| Azure | 111 | 111 | 85% |
+| Vertex AI | 62 | 62 | 48% |
+| WatsonX | 48 | 48 | 37% |
 | Bedrock | 22 | 22 | 17% |
 | Ollama | 4 | 4 | 3% |
 | vLLM | 3 | 3 | 2% |
 
-Total Responses features counted: 132.
+Total Responses features counted: 130.
