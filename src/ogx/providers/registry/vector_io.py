@@ -13,7 +13,7 @@ from ogx_api import (
 )
 
 # Common dependencies for all vector IO providers that support document processing
-DEFAULT_VECTOR_IO_DEPS = ["chardet", "pypdf>=6.20.1"]
+DEFAULT_VECTOR_IO_DEPS = ["chardet", "pypdf>=6.21.2"]
 
 
 def available_providers() -> list[ProviderSpec]:
@@ -506,7 +506,7 @@ See [PGVector's documentation](https://github.com/pgvector/pgvector) for more de
             api=Api.vector_io,
             adapter_type="weaviate",
             provider_type="remote::weaviate",
-            pip_packages=["weaviate-client>=4.23.1"] + DEFAULT_VECTOR_IO_DEPS,
+            pip_packages=["weaviate-client>=4.24.0"] + DEFAULT_VECTOR_IO_DEPS,
             module="ogx.providers.remote.vector_io.weaviate",
             config_class="ogx.providers.remote.vector_io.weaviate.WeaviateVectorIOConfig",
             api_dependencies=[Api.inference],
