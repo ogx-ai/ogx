@@ -10,7 +10,7 @@ switch backends.
 | Benchmark | Type | Primary Metric | Description |
 |---|---|---|---|
 | **BEIR** | Retrieval-only | nDCG@10 | Standard IR benchmarks (nfcorpus, scifact, arguana, fiqa, trec-covid) |
-| **MultiHOP RAG** | End-to-end RAG | EM / F1 | Multi-hop reasoning over news articles |
+| **MultiHOP RAG** | End-to-end RAG | Containment (vs. constant-reply baseline) | Multi-hop reasoning over news articles |
 | **QReCC** | Conversational RAG | EM / F1 | Multi-turn conversational QA with scoped corpus per conversation |
 | **Doc2Dial** | Document-grounded dialogue | EM / F1 | Goal-oriented dialogues grounded in documents |
 
@@ -133,7 +133,7 @@ benchmarking/rag/
 ├── benchmarks/           # Benchmark adapters
 │   ├── base.py           # Abstract BenchmarkRunner
 │   ├── beir_bench.py     # BEIR (retrieval-only, nDCG@10)
-│   ├── multihop_bench.py # MultiHOP RAG (end-to-end, EM/F1)
+│   ├── multihop_bench.py # MultiHOP RAG (end-to-end, containment)
 │   ├── qrecc_bench.py    # QReCC (conversational, scoped corpus)
 │   └── doc2dial_bench.py # Doc2Dial (document-grounded dialogue)
 ├── run_benchmark.py      # CLI entry point
@@ -157,6 +157,19 @@ benchmarking/rag/
 3. **End-to-end RAG** (MultiHOP, QReCC, Doc2Dial): Queries are sent to the
    Responses API with the `file_search` tool. Answer quality is measured with
    Exact Match, token-level F1 (HuggingFace SQuAD metric), and ROUGE-L.
+   MultiHOP gold answers are ~1 word, so token-F1 there mostly measures reply
+   length; MultiHOP is instead scored by containment (does the normalized gold
+   answer appear, within a fixed word budget, in the reply) and reported next
+   to a constant-reply baseline (the highest-scoring query-independent reply
+   buildable within that same word budget, 0.9202 on MultiHOP). The budget
+   applies to both sides of that comparison so enumerating more candidate
+   answers than fit in it helps neither; see `lib/answer_match.py` for why
+   that matters. A run that does not beat the baseline is flagged by
+   `compare_results.py`. The budget is a tradeoff, not a free fix: the
+   `file_search` template asks for cited, multi-sentence replies, so a system
+   that opens with framing before stating its answer can push that answer
+   past the word budget and score 0 on an otherwise-correct reply. How often
+   that happens on real runs hasn't been measured.
 
 4. **Conversational RAG** (QReCC, Doc2Dial): Multi-turn conversations are
    threaded using `previous_response_id` to maintain context across turns.
