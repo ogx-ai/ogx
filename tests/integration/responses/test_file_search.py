@@ -21,7 +21,14 @@ from .helpers import assert_text_contains, new_vector_store, skip_if_provider_is
             "type": "json_schema",
             "name": "capitals",
             "description": "A schema for the capital of each country",
-            "schema": {"type": "object", "properties": {"capital": {"type": "string"}}},
+            # strict mode requires additionalProperties to be false and
+            # required to list every property
+            "schema": {
+                "type": "object",
+                "properties": {"capital": {"type": "string"}},
+                "required": ["capital"],
+                "additionalProperties": False,
+            },
             "strict": True,
         },
     ],

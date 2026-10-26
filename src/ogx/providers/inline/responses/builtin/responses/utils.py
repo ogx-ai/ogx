@@ -463,9 +463,14 @@ async def convert_response_text_to_chat_response_format(
         # Assert name exists for json_schema format
         assert text.format.get("name"), "json_schema format requires a name"
         schema_name: str = text.format["name"]  # type: ignore[assignment]
-        return OpenAIResponseFormatJSONSchema(
-            json_schema=OpenAIJSONSchema(name=schema_name, schema=text.format["schema"])
-        )
+        json_schema = OpenAIJSONSchema(name=schema_name, schema_=text.format["schema"])
+        # Only set fields the client explicitly provided; unset fields must
+        # stay out of the provider request (strict omitted = best-effort).
+        if (description := text.format.get("description")) is not None:
+            json_schema.description = description
+        if (strict := text.format.get("strict")) is not None:
+            json_schema.strict = strict
+        return OpenAIResponseFormatJSONSchema(json_schema=json_schema)
     raise ValueError(f"Unsupported text format: {text.format}")
 
 

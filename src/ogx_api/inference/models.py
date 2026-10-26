@@ -14,7 +14,6 @@ from enum import Enum, StrEnum
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from typing_extensions import TypedDict
 
 from ogx_api.common.content_types import InterleavedContent
 from ogx_api.common.responses import Order
@@ -468,18 +467,19 @@ class OpenAIResponseFormatText(BaseModel):
 
 
 @json_schema_type
-class OpenAIJSONSchema(TypedDict, total=False):
+class OpenAIJSONSchema(BaseModel):
     """JSON schema specification for OpenAI-compatible structured response format."""
 
-    name: str
-    description: str | None
-    strict: bool | None
+    # A field named "schema" would shadow BaseModel.schema(); the alias keeps
+    # the wire key, and serialize_by_alias makes it the serialization default
+    # so callers that dump without by_alias (e.g. provider SDKs) still emit
+    # "schema".
+    model_config = ConfigDict(serialize_by_alias=True, populate_by_name=True)
 
-    # Pydantic BaseModel cannot be used with a schema param, since it already
-    # has one. And, we don't want to alias here because then have to handle
-    # that alias when converting to OpenAI params. So, to support schema,
-    # we use a TypedDict.
-    schema: dict[str, Any] | None
+    name: str
+    description: str | None = None
+    strict: bool | None = None
+    schema_: dict[str, Any] | None = Field(default=None, alias="schema")
 
 
 @json_schema_type
