@@ -275,10 +275,12 @@ class InferenceRouter(Inference):
                 TypeAdapter(OpenAIChatCompletionToolParam).validate_python(tool)
 
         # Some providers make tool calls even when tool_choice is "none"
-        # so just clear them both out to avoid unexpected tool calls
+        # so just clear them both out to avoid unexpected tool calls.
+        # parallel_tool_calls is dropped too: it is invalid without tools.
         if params.tool_choice == "none" and params.tools is not None:
             params.tool_choice = None
             params.tools = None
+            params.parallel_tool_calls = None
 
         if params.stream:
             response_stream = await provider.openai_chat_completion(params)
