@@ -19,10 +19,10 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 112 | 112 | 0 | 86% |
+| azure | 112 | 112 | 0 | 85% |
 | bedrock | 22 | 22 | 0 | 17% |
 | ollama | 4 | 4 | 0 | 3% |
-| openai | 126 | 126 | 0 | 97% |
+| openai | 128 | 128 | 0 | 97% |
 | vllm | 3 | 3 | 0 | 2% |
 
 ## Provider Details
@@ -34,7 +34,7 @@ Models, endpoints, and versions used during test recordings.
 | azure | gpt-4o | llama-stack-test.openai.azure.com, lls-test.openai.azure.com, ogx-test.openai.azure.com | openai sdk: 2.43.0 |
 | bedrock | openai.gpt-oss-20b-1:0 | bedrock-runtime.us-west-2.amazonaws.com | openai sdk: 2.30.0 |
 | ollama | deepseek-r1:1.5b | — | openai sdk: 2.43.0 |
-| openai | gpt-4o, text-embedding-3-small | api.openai.com | openai sdk: 2.43.0 |
+| openai | gpt-4o, gpt-5-nano, text-embedding-3-small | api.openai.com | openai sdk: 2.43.0 |
 | vllm | Qwen/Qwen3-0.6B | — | openai sdk: 2.5.0, vllm server: 0.17.2rc1.dev79+g5ce2d10e4 |
 
 ## Basic Responses
@@ -110,6 +110,8 @@ Models, endpoints, and versions used during test recordings.
 | incomplete details max iterations exceeded | ✅ | — | — | ✅ | — |
 | incomplete details max iterations exceeded streaming | ✅ | — | — | ✅ | — |
 | incomplete details null when completed | ✅ | — | — | ✅ | — |
+| reasoning effort | ⏭️ | — | — | ✅ | — |
+| reasoning effort streaming | ⏭️ | — | — | ✅ | — |
 | streaming failed error code is spec compliant | ✅ | — | — | ✅ | — |
 | streaming includes usage | ✅ | — | — | ✅ | — |
 | streaming invalid base64 image failure code is spec compliant | ✅ | — | — | ✅ | — |

@@ -14,14 +14,14 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `bedrock` | `bedrock` | library client only; 3 roots |
 | `base` | `ollama-postgres` | server client only; Postgres store |
 | `vision` | `ollama-vision` | `test_vision_inference.py` only |
-| `responses` | `gpt` | `responses` only; Responses coverage: 126/130 (97%) |
-| `responses` | `azure` | `responses` only; Responses coverage: 112/130 (86%) |
-| `reasoning` | `gpt` | 4 roots; Responses coverage: 126/130 (97%) |
-| `bedrock-responses` | `bedrock` | 6 roots; Responses coverage: 22/130 (17%) |
+| `responses` | `gpt` | `responses` only; Responses coverage: 128/132 (97%) |
+| `responses` | `azure` | `responses` only; Responses coverage: 112/132 (85%) |
+| `reasoning` | `gpt` | 4 roots; Responses coverage: 128/132 (97%) |
+| `bedrock-responses` | `bedrock` | 6 roots; Responses coverage: 22/132 (17%) |
 | `inference` | `vllm` | `inference` only |
 | `inference` | `sglang` | `inference` only |
-| `reasoning` | `vllm` | 4 roots; Responses coverage: 3/130 (2%) |
-| `reasoning` | `ollama-reasoning` | 4 roots; Responses coverage: 4/130 (3%) |
+| `reasoning` | `vllm` | 4 roots; Responses coverage: 3/132 (2%) |
+| `reasoning` | `ollama-reasoning` | 4 roots; Responses coverage: 4/132 (3%) |
 | `messages` | `ollama` | `messages` only |
 | `messages` | `gpt` | `messages` only |
 | `messages` | `vllm` | `messages` only |
@@ -85,10 +85,10 @@ This section is derived from the same replay recordings used to generate `docs/d
 
 | Provider | Tested | Passing | Coverage |
 |----------|--------|---------|----------|
-| OpenAI | 126 | 126 | 97% |
-| Azure | 112 | 112 | 86% |
+| OpenAI | 128 | 128 | 97% |
+| Azure | 112 | 112 | 85% |
 | Bedrock | 22 | 22 | 17% |
 | Ollama | 4 | 4 | 3% |
 | vLLM | 3 | 3 | 2% |
 
-Total Responses features counted: 130.
+Total Responses features counted: 132.
