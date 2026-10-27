@@ -141,9 +141,17 @@ if __name__ == "__main__":
     parser.add_argument("--schedule", default="", help="GitHub schedule cron string")
     parser.add_argument("--test-setup", default="", help="Manual test setup input")
     parser.add_argument("--matrix-key", default="default", help="Matrix configuration key from ci_matrix.json")
-    parser.add_argument("--changed-files", default="", help="Newline-separated list of changed file paths")
+    parser.add_argument(
+        "--changed-files-file",
+        default="",
+        help="Path to a file with one changed file path per line",
+    )
 
     args = parser.parse_args()
 
-    changed = [f for f in args.changed_files.strip().split("\n") if f] if args.changed_files.strip() else None
+    changed = None
+    if args.changed_files_file:
+        changed_file = Path(args.changed_files_file)
+        if changed_file.is_file():
+            changed = [line.strip() for line in changed_file.read_text().splitlines() if line.strip()] or None
     print(generate_matrix(args.schedule, args.test_setup, args.matrix_key, changed))
