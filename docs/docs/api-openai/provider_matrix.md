@@ -19,7 +19,7 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 111 | 111 | 0 | 84% |
+| azure | 112 | 112 | 0 | 85% |
 | bedrock | 22 | 22 | 0 | 17% |
 | ollama | 4 | 4 | 0 | 3% |
 | openai | 128 | 128 | 0 | 97% |
@@ -112,7 +112,7 @@ Models, endpoints, and versions used during test recordings.
 | incomplete details null when completed | ✅ | — | — | ✅ | — |
 | reasoning effort | ⏭️ | — | — | ✅ | — |
 | reasoning effort streaming | ⏭️ | — | — | ✅ | — |
-| streaming failed error code is spec compliant | ⏭️ | — | — | ✅ | — |
+| streaming failed error code is spec compliant | ✅ | — | — | ✅ | — |
 | streaming includes usage | ✅ | — | — | ✅ | — |
 | streaming invalid base64 image failure code is spec compliant | ✅ | — | — | ✅ | — |
 | with max output tokens | ✅ | — | — | ✅ | — |
