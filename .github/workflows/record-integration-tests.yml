@@ -220,7 +220,10 @@ jobs:
   record-providers:
     needs: compute-pr-info
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # A full gpt responses record runs live against api.openai.com with a
+    # reasoning model (~5s per call, mostly reasoning tokens): the test
+    # phase alone measured 22m47s, which left no headroom under 30 min.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
