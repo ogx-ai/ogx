@@ -35,7 +35,7 @@ on:
         description: 'Comma-separated list of providers to record'
         type: string
         required: false
-        default: 'gpt,azure,watsonx,vertexai,fireworks'
+        default: 'gpt,azure,fireworks'
       suite:
         description: 'Test suite override (default: per-provider from matrix)'
         type: string
@@ -262,10 +262,6 @@ jobs:
             suite: bedrock
           - setup: bedrock
             suite: bedrock-responses
-          - setup: watsonx
-            suite: responses
-          - setup: vertexai
-            suite: responses
           - setup: gemini
             suite: interactions
           - setup: fireworks
