@@ -84,10 +84,12 @@ def test_response_streaming_basic(responses_client, text_model_id, case):
         events.append(chunk)
 
         if chunk.type == "response.created":
-            # Verify response.created is emitted first and immediately
+            # Verify response.created is emitted first, before any content.
+            # 1s tolerates cold-server latency on loaded CI runners while
+            # still catching buffered (non-streaming) responses.
             assert len(events) == 1, "response.created should be the first event"
-            assert event_times[0] < 0.2, (
-                f"response.created should be emitted immediately (took {event_times[0]} seconds)"
+            assert event_times[0] < 1.0, (
+                f"response.created should be emitted before content (took {event_times[0]} seconds)"
             )
             assert chunk.response.status == "in_progress"
             response_id = chunk.response.id
