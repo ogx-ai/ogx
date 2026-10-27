@@ -23,7 +23,7 @@ def available_providers() -> list[ProviderSpec]:
             api=Api.file_processors,
             provider_type="inline::auto",
             execution_mode="worker",
-            pip_packages=["chardet", "pypdf>=6.20.1", "markitdown[all]"],
+            pip_packages=["chardet", "pypdf>=6.21.2", "markitdown[all]"],
             module="ogx.providers.inline.file_processor.auto",
             config_class="ogx.providers.inline.file_processor.auto.AutoFileProcessorConfig",
             api_dependencies=[Api.files],
@@ -39,7 +39,7 @@ def available_providers() -> list[ProviderSpec]:
             api=Api.file_processors,
             provider_type="inline::pypdf",
             execution_mode="worker",
-            pip_packages=["chardet", "pypdf>=6.20.1"],
+            pip_packages=["chardet", "pypdf>=6.21.2"],
             module="ogx.providers.inline.file_processor.pypdf",
             config_class="ogx.providers.inline.file_processor.pypdf.PyPDFFileProcessorConfig",
             api_dependencies=[Api.files],
@@ -335,7 +335,7 @@ See [Docling Serve's documentation](https://github.com/docling-project/docling-s
             provider_type="remote::unstructured-api",
             adapter_type="unstructured-api",
             pip_packages=[
-                "unstructured-client>=0.46.2",  # >=0.25.0: supports full feature set (chunking + split_pdf_page_range)
+                "unstructured-client>=0.46.4",  # >=0.25.0: supports full feature set (chunking + split_pdf_page_range)
             ],
             module="ogx.providers.remote.file_processor.unstructured_api",
             config_class="ogx.providers.remote.file_processor.unstructured_api.UnstructuredApiFileProcessorConfig",
