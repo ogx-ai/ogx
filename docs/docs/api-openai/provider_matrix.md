@@ -19,10 +19,10 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 112 | 112 | 0 | 85% |
-| bedrock | 22 | 22 | 0 | 17% |
+| azure | 112 | 112 | 0 | 90% |
+| bedrock | 22 | 22 | 0 | 18% |
 | ollama | 4 | 4 | 0 | 3% |
-| openai | 128 | 128 | 0 | 97% |
+| openai | 111 | 111 | 0 | 89% |
 | vllm | 3 | 3 | 0 | 2% |
 
 ## Provider Details
@@ -34,17 +34,17 @@ Models, endpoints, and versions used during test recordings.
 | azure | gpt-4o | llama-stack-test.openai.azure.com, lls-test.openai.azure.com, ogx-test.openai.azure.com | openai sdk: 2.43.0 |
 | bedrock | openai.gpt-oss-20b-1:0 | bedrock-runtime.us-west-2.amazonaws.com | openai sdk: 2.30.0 |
 | ollama | deepseek-r1:1.5b | — | openai sdk: 2.43.0 |
-| openai | gpt-4o, gpt-5-nano, text-embedding-3-small | api.openai.com | openai sdk: 2.43.0 |
+| openai | gpt-5-nano, text-embedding-3-small | api.openai.com | openai sdk: 3.31.0 |
 | vllm | Qwen/Qwen3-0.6B | — | openai sdk: 2.5.0, vllm server: 0.17.2rc1.dev79+g5ce2d10e4 |
 
 ## Basic Responses
 
 | Feature | azure | bedrock | ollama | openai | vllm |
 | --- | --- | --- | --- | --- | --- |
-| include logprobs non streaming | ✅ | ✅ | — | ✅ | — |
-| include logprobs streaming | ✅ | ✅ | — | ✅ | — |
-| include logprobs with function tools | ✅ | ✅ | — | ✅ | — |
-| include logprobs with web search | ✅ | ⏭️ | — | ✅ | — |
+| include logprobs non streaming | ✅ | ✅ | — | ⏭️ | — |
+| include logprobs streaming | ✅ | ✅ | — | ⏭️ | — |
+| include logprobs with function tools | ✅ | ✅ | — | ⏭️ | — |
+| include logprobs with web search | ✅ | ⏭️ | — | ⏭️ | — |
 | non streaming basic | ✅ | ✅ | — | ✅ | — |
 | non streaming image | ✅ | ⏭️ | — | ✅ | — |
 | non streaming multi turn | ✅ | ✅ | — | ✅ | — |
@@ -76,7 +76,6 @@ Models, endpoints, and versions used during test recordings.
 | conversation backward compatibility | ✅ | ✅ | — | ✅ | — |
 | conversation basic workflow | ✅ | ✅ | — | ✅ | — |
 | conversation context loading | ✅ | ✅ | — | ✅ | — |
-| conversation error handling | ⏭️ | ⏭️ | — | ✅ | — |
 | conversation multi turn and streaming | ✅ | ✅ | — | ✅ | — |
 
 ## File Search
@@ -135,12 +134,12 @@ Models, endpoints, and versions used during test recordings.
 | with stream options and previous response | ✅ | — | — | ✅ | — |
 | with stream options includes usage | ✅ | — | — | ✅ | — |
 | with stream options non streaming | ✅ | — | — | ✅ | — |
-| with top logprobs | ✅ | — | — | ✅ | — |
-| with top logprobs and previous response | ✅ | — | — | ✅ | — |
-| with top logprobs streaming | ✅ | — | — | ✅ | — |
-| with top p | ✅ | — | — | ✅ | — |
-| with top p and previous response | ✅ | — | — | ✅ | — |
-| with top p streaming | ✅ | — | — | ✅ | — |
+| with top logprobs | ✅ | — | — | ⏭️ | — |
+| with top logprobs and previous response | ✅ | — | — | ⏭️ | — |
+| with top logprobs streaming | ✅ | — | — | ⏭️ | — |
+| with top p | ✅ | — | — | ⏭️ | — |
+| with top p and previous response | ✅ | — | — | ⏭️ | — |
+| with top p streaming | ✅ | — | — | ⏭️ | — |
 | with truncation and previous response | ✅ | — | — | ✅ | — |
 | with truncation auto | ✅ | — | — | ✅ | — |
 | with truncation disabled | ✅ | — | — | ✅ | — |
@@ -165,17 +164,6 @@ Models, endpoints, and versions used during test recordings.
 | reasoning multi turn passthrough | ⏭️ | — | ✅ | — | ✅ |
 | reasoning no summary without request | ⏭️ | — | ✅ | — | ⏭️ |
 | reasoning non streaming | ⏭️ | — | ✅ | — | ✅ |
-
-## Responses Access Control
-
-| Feature | azure | bedrock | ollama | openai | vllm |
-| --- | --- | --- | --- | --- | --- |
-| previous response id access control | — | — | — | ✅ | — |
-| user can access own resources after denial | — | — | — | ✅ | — |
-| user cannot access other users response input items | — | — | — | ✅ | — |
-| user cannot delete other users response | — | — | — | ✅ | — |
-| user cannot retrieve other users response | — | — | — | ✅ | — |
-| users have isolated responses | — | — | — | ✅ | — |
 
 ## Responses Errors
 
