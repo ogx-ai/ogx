@@ -9,7 +9,12 @@ import time
 import pytest
 
 from .fixtures.test_cases import basic_test_cases, image_test_cases, multi_turn_image_test_cases, multi_turn_test_cases
-from .helpers import assert_text_contains, provider_from_model, skip_if_provider_is_vertexai
+from .helpers import (
+    assert_text_contains,
+    provider_from_model,
+    skip_if_gpt_nano_limited_params,
+    skip_if_provider_is_vertexai,
+)
 from .streaming_assertions import StreamingValidator
 
 
@@ -25,6 +30,7 @@ def skip_if_chat_completions_logprobs_not_supported(client_with_models, text_mod
     provider_type = provider_from_model(client_with_models, text_model_id).provider_type
     if provider_type in ("remote::ollama", "remote::watsonx", "remote::vertexai"):
         pytest.skip(f"Model {text_model_id} hosted by {provider_type} doesn't support /v1/chat/completions logprobs.")
+    skip_if_gpt_nano_limited_params(text_model_id, "logprobs")
 
 
 @pytest.mark.parametrize("case", basic_test_cases)

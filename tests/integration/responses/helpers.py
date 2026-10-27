@@ -34,6 +34,18 @@ def skip_if_provider_is_vertexai(client_with_models, model_id, reason=""):
         pytest.skip(msg)
 
 
+def is_gpt_5_nano(model_id) -> bool:
+    return bool(model_id) and model_id.rsplit("/", 1)[-1] == "gpt-5-nano"
+
+
+# gpt-5-nano rejects the logprobs and top_p parameters in chat completions
+# ("You are not allowed to request logprobs from this model" / "Unsupported
+# parameter: 'top_p'"), so tests exercising those parameters skip for it.
+def skip_if_gpt_nano_limited_params(model_id, param):
+    if is_gpt_5_nano(model_id):
+        pytest.skip(f"Model {model_id} does not support {param}.")
+
+
 def new_vector_store(openai_client, name, embedding_model, embedding_dimension):
     """Create a new vector store, cleaning up any existing one with the same name."""
     # Ensure we don't reuse an existing vector store

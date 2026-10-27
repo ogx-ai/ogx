@@ -171,6 +171,8 @@ def test_response_file_search_filter_by_region(
         model=text_model_id,
         input="What are the updates from the US region?",
         tools=tools,
+        # Force the tool call so the test validates filter mechanics, not model judgment.
+        tool_choice="required",
         stream=False,
         include=["file_search_call.results"],
     )
@@ -260,6 +262,8 @@ def test_response_file_search_filter_by_date_range(
         model=text_model_id,
         input="What happened in Q1 2023?",
         tools=tools,
+        # Force the tool call so the test validates filter mechanics, not model judgment.
+        tool_choice="required",
         stream=False,
         include=["file_search_call.results"],
     )
@@ -302,6 +306,8 @@ def test_response_file_search_filter_compound_and(
         model=text_model_id,
         input="What are the engineering updates from the US?",
         tools=tools,
+        # Force the tool call so the test validates filter mechanics, not model judgment.
+        tool_choice="required",
         stream=False,
         include=["file_search_call.results"],
     )
@@ -378,6 +384,8 @@ def test_response_file_search_streaming_events(responses_client, text_model_id, 
         model=text_model_id,
         input="What are the marketing updates?",
         tools=tools,
+        # Force the tool call so the test validates filter mechanics, not model judgment.
+        tool_choice="required",
         stream=True,
     )
 

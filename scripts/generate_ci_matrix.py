@@ -31,7 +31,7 @@ PROVIDER_PATH_TO_SETUPS: list[tuple[str, list[str]]] = [
         "src/ogx/providers/remote/inference/ollama/",
         ["ollama", "ollama-vision", "ollama-postgres", "ollama-reasoning", "ollama-systemone"],
     ),
-    ("src/ogx/providers/remote/inference/openai/", ["gpt", "gpt-reasoning"]),
+    ("src/ogx/providers/remote/inference/openai/", ["gpt"]),
     ("src/ogx/providers/remote/inference/azure/", ["azure"]),
     ("src/ogx/providers/remote/inference/bedrock/", ["bedrock"]),
     ("src/ogx/providers/remote/inference/vllm/", ["vllm", "vllm-systemone"]),

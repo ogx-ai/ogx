@@ -46,7 +46,6 @@ PROVIDER_DISPLAY_NAMES = {
 
 SETUP_PROVIDER_ALIASES = {
     "gpt": "openai",
-    "gpt-reasoning": "openai",
     "azure": "azure",
     "bedrock": "bedrock",
     "vertexai": "vertexai",

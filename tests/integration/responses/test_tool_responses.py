@@ -745,6 +745,10 @@ def test_function_call_output_list_image(responses_client, client_with_models, v
         model=vision_model_id,
         input=inputs,
         tools=tools,
+        # The model may want to call the tool again; force a message so the
+        # test validates the list-form function_call_output round-trip, not
+        # the model's decision to stop calling tools.
+        tool_choice="none",
         stream=False,
         previous_response_id=response.id,
     )

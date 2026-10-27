@@ -47,6 +47,16 @@ _MODEL_MAX_OUTPUT_TOKENS: dict[str, int] = {
     "o4-mini": 100000,
 }
 
+# Output budget for the completion-based token count. The reply is
+# irrelevant (only usage.input_tokens is read), so this only needs to cover
+# the model's minimal output. 1 worked for every model until the gpt-5
+# family: reasoning models spend part of this budget on a mandatory
+# reasoning step, and gpt-5-nano 400s below a 3-token floor (verified
+# against api.openai.com: 1 and 2 fail, 3 completes with an empty reply).
+# If a future model raises the floor, up this value or migrate counting to
+# the native POST /v1/responses/input_tokens endpoint.
+_COUNT_MAX_OUTPUT_TOKENS = 3
+
 _WARNED_MODELS: set[str] = set()
 
 
@@ -74,15 +84,15 @@ class OpenAIInferenceAdapter(OpenAIMixin):
         self,
         params: AnthropicCountTokensRequest,
     ) -> AnthropicCountTokensResponse:
-        """Count via the max_tokens=1 fallback, suppressing tool calls when tools are
-        present. OpenAI 400s when a tool call cannot be constructed within max_tokens,
-        but only usage.input_tokens is needed from the reply, so tool_choice "none"
-        keeps the tool definitions in the counted prompt while the reply is plain text
-        that always fits in one token."""
+        """Count via a completion with a minimal output budget, suppressing tool calls
+        when tools are present. OpenAI 400s when the model cannot finish within the
+        budget, but only usage.input_tokens is needed from the reply, so tool_choice
+        "none" keeps the tool definitions in the counted prompt while the reply is
+        plain text that fits the small budget."""
         msg_request = AnthropicCreateMessageRequest(
             model=params.model,
             messages=params.messages,
-            max_tokens=1,
+            max_tokens=_COUNT_MAX_OUTPUT_TOKENS,
             system=params.system,
             tools=params.tools,
             tool_choice=_ToolChoiceNone() if params.tools else None,
