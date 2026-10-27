@@ -1,0 +1,96 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_double_compaction[openai_client-txt=openai/gpt-5-nano]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-5-nano",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Topic A discussion"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": "Another language model started to solve this problem and produced a summary of its thinking process. You also have access to the state of the tools that were used by that language model. Use this to build on the work that has already been done and avoid duplicating work. Here is the summary produced by the other language model, use the information in this summary to assist with your own analysis:\nHandoff Summary: CONTEXT CHECKPOINT COMPACTION\n\n1) Task context and current status\n- Task title: Topic A discussion\n- Status: No substantive content produced yet. The prior assistant output was a placeholder (\"Response about A\") with no actionable material.\n- Current understanding: We need to initiate a structured discussion on Topic A, but the scope, goals, audience, and desired deliverables are not yet defined.\n\n2) Progress to date\n- Received user prompt: \"Topic A discussion\"\n- Output generated: Non-substantive placeholder\n- No user preferences or constraints captured beyond the general request for a concise handoff\n\n3) Key decisions (to date)\n- None established yet. Requires clarification from user to proceed.\n\n4) Important context, constraints, and user preferences\n- Context: Topic A is unspecified; proceed by clarifying scope and goals.\n- Constraints: Output should be concise, structured, and enable seamless continuation by another LLM.\n- User preferences (inferred): Produce a clear handoff to minimize friction; gather essential details for future work.\n- Assumptions for now (to be confirmed): Target audience, deliverables (e.g., outline, meeting notes, summary), desired length, tone.\n\n5) What remains to be done (clear next steps)\n- Step 1: Gather clarifications from user:\n  - What exactly is Topic A? Any domain or domain-specific constraints?\n  - What is the objective of the discussion (inform, decide, brainstorm, summarize)?\n  - Who is the intended audience?\n  - What deliverables are expected (outline, agenda, notes, conclusions, action items)?\n  - Any length, formatting, or tone requirements?\n  - Any references or materials to incorporate?\n- Step 2: Establish a working structure once clarified (e.g., agenda, key questions, roles, success criteria).\n- Step 3: Produce initial content (e.g., an agenda and starter questions) to bootstrap the discussion, then iteratively expand.\n\n6) Critical data, examples, or references needed to continue\n- User-provided definitions for Topic A\n- Desired deliverables and format specifications\n- Any relevant documents, sources, or materials to integrate\n- Sample outline or example of the expected output (if available)\n\n7) Suggested starter structure for Topic A (to be confirmed)\n- Objective: State the purpose of the Topic A discussion\n- Scope: Define boundaries and exclusions\n- Stakeholders: Identify participants or audience\n- Key questions: List 5\u201310 central questions to address\n- Pro/Con or perspectives: Outline major positions or viewpoints\n- Evidence/arguments: Flag required data or references\n- Deliverables: Outline, notes, decisions, and action items\n- Next steps: Proposed follow-up tasks and timeline\n\n8) Questions for the user to accelerate handoff\n- Please define Topic A: domain, scope, and any constraints\n- What is the intended outcome of the discussion?\n- Who is the audience, and what format is preferred for outputs?\n- What deliverables are expected (e.g., agenda, notes, conclusions)?\n- Any documents or references to include or align with?\n\nOptional starter for the next LLM (to begin immediately once clarifications are provided)\n- If Topic A remains general, draft:\n  - Objective: Clarify and frame Topic A\n  - Proposed agenda: 1) Context, 2) Questions, 3) Perspectives, 4) Evidence, 5) Conclusions, 6) Actions\n  - Initial questions: [provide a generic list of 8\u201312 questions applicable to many topics]\n  - Output format: A concise outline plus a set of discussion notes\n\nThis handoff is designed to be lightweight to enable rapid continuation once clarifications are provided."
+        },
+        {
+          "role": "user",
+          "content": "Topic B discussion"
+        },
+        {
+          "role": "assistant",
+          "content": "Response about B"
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-5-nano",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-82e8fd75f38e",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Topic B Discussion \u2014 CONTEXT CHECKPOINT HANDOFF\n\n1) Current progress\n- User prompt received: \"Topic B discussion\"\n- Prior assistant output: non-substantive placeholder (\"Response about B\")\n- Status: No actionable content produced yet\n- Implication: Clarifications required to proceed; prepare a kickoff structure once clarified\n\n2) Key decisions (to date)\n- None established yet\n\n3) Important context, constraints, and user preferences\n- Topic B is unspecified; scope, goals, audience, and deliverables are not defined\n- Constraints: Handoff should be concise, structured, and easy for another LLM to pick up\n- Inferred preferences: Quick bootstrap content (agenda, starter questions) once clarifications are provided\n- Assumptions to confirm (will be updated by user): target audience, deliverables (outline, agenda, notes, conclusions, action items), desired length, tone, and any references or materials to include\n\n4) What remains to be done (clear next steps)\n- Step 1: Obtain clarifications from user:\n  - Define Topic B (domain, scope, constraints)\n  - Objective of the discussion (inform, decide, brainstorm, summarize)\n  - Intended audience\n  - Desired deliverables and formats (agenda, outline, notes, conclusions, actions)\n  - Length, formatting, and tone requirements\n  - Any references or materials to integrate\n- Step 2: Establish a working kickoff structure (agenda, key questions, roles, success criteria)\n- Step 3: Generate initial kickoff content (recommended agenda and starter questions) to bootstrap the discussion; iterate based on user feedback\n\n5) Critical data, examples, or references needed to continue\n- User-provided definition of Topic B (domain and scope)\n- Deliverables and format preferences\n- Relevant documents, sources, or materials to incorporate\n- Any example outlines or outputs to model\n\n6) Starter structure for Topic B (ready to adapt once clarified)\n- Objective: Clarify and frame Topic B\n- Scope: Boundaries and exclusions\n- Stakeholders: Participants or audience\n- Key questions: 6\u201312 central questions\n- Perspectives: Major positions or viewpoints to consider\n- Evidence/arguments: Required data or references\n- Deliverables: Agenda, notes, conclusions, action items\n- Next steps: Proposed follow-up tasks and timeline\n\n7) Optional starter for the next LLM (if Topic B remains general)\n- Provide a concise kickoff pack including:\n  - A succinct objective\n  - A brief agenda (Context, Questions, Perspectives, Evidence, Conclusions, Actions)\n  - 8\u201312 generic starter questions applicable to many topics\n  - Desired output format: concise outline plus discussion notes\n\nIf you provide the clarifications above, I can output a concrete kickoff pack (agenda, questions, and initial deliverables) immediately.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-5-nano-2025-08-07",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": "default",
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 2000,
+          "prompt_tokens": 969,
+          "total_tokens": 2969,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 1408,
+            "rejected_prediction_tokens": 0,
+            "text_tokens": null
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -1,0 +1,79 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_single_message[openai_client-txt=openai/gpt-5-nano]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-5-nano",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello!"
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-5-nano",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-725bf03a3f6c",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "CONTEXT CHECKPOINT COMPACTION \u2013 HANDOFF SUMMARY\n\n1) Overview\n- Purpose: Provide a concise handoff for resuming a context checkpoint compaction task. The next LLM should continue designing and producing compacted context checkpoints while preserving essential information and user preferences.\n- Current status: No substantive compaction work executed yet. This summary defines the plan, constraints, and next steps for seamless continuation.\n\n2) Current progress\n- Task understanding: Define a compacted, minimal context representation that preserves critical facts, intents, and user preferences while discarding redundant or non-essential context.\n- Deliverable target: A usable, auditable compacted context checkpoint plus a rationale and a changelog highlighting what was pruned.\n- Decisions made so far: \n  - Use a structured, human-readable compacted snapshot (not just token count reduction).\n  - Preserve entities, goals, constraints, and recent user preferences.\n  - Provide a clear diff/log of what was removed and why.\n  - Output should be ready for integration into downstream LLM workflows (testable and reproducible).\n\n3) Important context, constraints, and user preferences\n- Context constraints:\n  - Maintain essential facts: user goals, constraints, preferences, and any mission-critical data (names, dates, priorities).\n  - Respect privacy; avoid leaking or exposing sensitive info in the compacted output.\n  - Keep outputs concise, but with enough detail to enable accurate reconstruction if needed.\n- User preferences:\n  - Prioritize conciseness and structured, readable formatting.\n  - Output should be easily consumable by another LLM (clear fields, minimal ambiguity).\n  - Prefer explicit justification for any removal (what was pruned and why).\n- Assumptions:\n  - The next LLM may need to reconstruct or reason about the original context; include enough signals to do so.\n\n4) What remains to be done (clear next steps)\n- Step 1: Define the compacted-context schema\n  - Fields to include: checkpoint_id, version, timestamp, source_context, preserved_entities, preserved_goals, preserved_preferences, compacted_summary, removed_items_log, justification, validation_notes.\n- Step 2: Establish pruning rules and criteria\n  - Criteria examples: non-critical tangents, redundancy across recent turns, duplicate mentions, aged references beyond a threshold.\n  - Preserve: core goals, constraints, user preferences, critical entities (names, projects, deadlines), recent decisions.\n- Step 3: Implement a draft compaction workflow\n  - Input: full or partial context history.\n  - Output: compacted_checkpoint object + removal log + rationale.\n  - Validation: attempt to reconstruct core meaning from the compacted version; ensure key goals/entities remain intact.\n- Step 4: Produce the handoff artifacts\n  - A) Compact checkpoint snapshot (structured, machine-readable).\n  - B) Change/log of what was removed (with justifications).\n  - C) A short rationale summarizing the compaction approach and any trade-offs.\n- Step 5: Define acceptance criteria\n  - The compacted snapshot must preserve all preserved_fields without loss of intent.\n  - The removal log should enable traceability and explainability.\n  - A lightweight reconstruction prompt should yield a faithful reexpansion if needed.\n- Step 6: Prepare prompts/templates for the next LLM\n  - Provide a ready-to-run prompt that instructs the LLM to consume the compacted snapshot and continue any pending tasks (e.g., further condensation, validation, or integration steps).\n- Step 7: Gather or simulate test data\n  - If available, collect an example full context and create a corresponding expected compacted version to validate the process.\n  - If not available, provide a synthetic example illustrating preserved vs removed items and the resulting compacted snapshot.\n\n5) Critical data, examples, or references needed to continue\n- Required inputs (from upstream or the user session):\n  - Complete or partial context history relevant to the current task.\n  - Any user preferences or constraints not yet captured (tone, verbosity, topic exclusions).\n  - List of critical entities (names, dates, projects) that must be preserved.\n- Suggested data schema (for use by the next LLM):\n  - Checkpoint object fields:\n    - checkpoint_id\n    - version\n    - timestamp\n    - source_context (description or pointer to original context)\n    - preserved_entities (list)\n    - preserved_goals (list)\n    - preserved_preferences (list)\n    - compacted_summary (text block)\n    - removed_items_log (list of items with justification)\n    - justification (short rationale for design choices)\n    - validation_notes (results of any reconstruction checks)\n- References to rely on (placeholders if not yet provided):\n  - Any prior compaction guidelines or policy documents.\n  - A sample full-context-to-compacted-context example (if you have one).\n  - A template for the compacted snapshot and for the removal-log.\n- Example outputs (templates you can reuse):\n  - Compact snapshot (pseudo-structure):\n    - checkpoint_id: CCH-2026-001\n    - version: 1.0\n    - timestamp: 2026-10-27T12:00:00Z\n    - preserved_entities: [Alice, ProjectX, 2026-12-31, \"deadline\"]\n    - preserved_goals: [\"Complete user task A\", \"Respect privacy constraints\"]\n    - preserved_preferences: [\"concise\", \"structured\", \"no heavy formatting\"]\n    - compacted_summary: \"Summary of essential context with key goals and constraints.\"\n    - removed_items_log: [\n        {item: \"Discussion about non-critical hobby topic\", justification: \"Non-essential to task goals\"},\n        {item: \"Old deadlines beyond horizon\", justification: \"Outdated timestamps\"}\n      ]\n    - justification: \"Focused on maintaining core intent and actionable items.\"\n    - validation_notes: \"Reconstruction test passed for core goals and entities.\"\n  - Removal-log entry example: see above.\n\n6) Suggested next communication style and outputs for the next LLM\n- Start with a brief reaffirmation of scope and goals.\n- Present the compacted_snapshot in a clear, machine-readable form.\n- Include a concise removal_log with justifications.\n- Provide a short rationale explaining the compaction approach and any trade-offs.\n- End with explicit next-step prompts (e.g., \u201cProceed to validate reconstruction, then generate a test prompt for downstream tasks.\u201d).\n\n7) Risks and mitigations\n- Risk: Over-pruning essential context, breaking downstream tasks.\n  - Mitigation: Include a robust preserved_entities/goals/preferred_patters list; run a lightweight reconstruction test.\n- Risk: Ambiguity in removalJustifications.\n  - Mitigation: Use explicit criteria and keep removal_log entries that map to those criteria.\n- Risk: Format drift between teams or tools.\n  - Mitigation: Enforce a strict schema and provide templates for both human-readable and machine-readable outputs.\n\n8) Handoff identifiers\n- Proposed name: CONTEXT_CHECKPOINT_COMPACTION_Q3_2026\n- Recommended owner: [Assign to the next LLM or team]\n- Expected deliverables: compacted_checkpoint object, removal_log, rationale, test prompts/templates\n\nIf you\u2019d like, I can tailor this handoff to a specific platform or provide concrete templates in a particular format (JSON, YAML, or plain text) to match your workflow.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-5-nano-2025-08-07",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": "default",
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 3129,
+          "prompt_tokens": 101,
+          "total_tokens": 3230,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 1600,
+            "rejected_prediction_tokens": 0,
+            "text_tokens": null
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}
