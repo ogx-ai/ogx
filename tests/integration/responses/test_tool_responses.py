@@ -110,6 +110,8 @@ def test_response_non_streaming_file_search(
         model=text_model_id,
         input=case.input,
         tools=tools,
+        # Force the tool call so the test validates file search mechanics, not model judgment.
+        tool_choice="required",
         stream=False,
         include=["file_search_call.results"],
     )
@@ -140,6 +142,8 @@ def test_response_non_streaming_file_search_empty_vector_store(
         model=text_model_id,
         input="How many experts does the Llama 4 Maverick model have?",
         tools=[{"type": "file_search", "vector_store_ids": [vector_store.id]}],
+        # Force the tool call so the test validates file search mechanics, not model judgment.
+        tool_choice="required",
         stream=False,
         include=["file_search_call.results"],
     )
