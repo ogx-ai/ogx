@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from .helpers import skip_if_gpt_nano_limited_params, skip_if_provider_is_vertexai
+from .helpers import is_gpt_5_nano, skip_if_gpt_nano_limited_params, skip_if_provider_is_vertexai
 from .streaming_assertions import StreamingValidator
 
 
@@ -834,6 +834,8 @@ class TestOpenAIResponses:
     def test_openai_response_with_service_tier(self, openai_client, client_with_models, text_model_id, service_tier):
         """Test OpenAI response with explicit service_tier values that should be preserved."""
         self._skip_service_tier_for_unsupported(client_with_models, text_model_id)
+        if service_tier == "priority" and is_gpt_5_nano(text_model_id):
+            pytest.skip("gpt-5-nano does not support the priority service tier (OpenAI downgrades it to default).")
 
         response = openai_client.responses.create(
             model=text_model_id,
@@ -898,6 +900,8 @@ class TestOpenAIResponses:
     ):
         """Test OpenAI response with explicit service_tier values in streaming mode."""
         self._skip_service_tier_for_unsupported(client_with_models, text_model_id)
+        if service_tier == "priority" and is_gpt_5_nano(text_model_id):
+            pytest.skip("gpt-5-nano does not support the priority service tier (OpenAI downgrades it to default).")
 
         stream = openai_client.responses.create(
             model=text_model_id,
@@ -981,6 +985,8 @@ class TestOpenAIResponses:
     ):
         """Test that explicit service_tier values are preserved with previous_response_id."""
         self._skip_service_tier_for_unsupported(client_with_models, text_model_id)
+        if service_tier == "priority" and is_gpt_5_nano(text_model_id):
+            pytest.skip("gpt-5-nano does not support the priority service tier (OpenAI downgrades it to default).")
 
         response1 = openai_client.responses.create(
             model=text_model_id,
