@@ -411,6 +411,22 @@ def analyze_model_list_recordings(
     return legacy, redundant
 
 
+# Tool-call recordings store a request of ``{test_id, provider, tool_name, kwargs}``
+# (no ``method``) and are replayed by a hash over (provider, tool_name, kwargs)
+# alone, with no test_id. Any test issuing the same call can replay them, and the
+# call kwargs are model-generated and unpredictable, so a stale test_id does not
+# make a tool-call recording unused.
+_TOOL_PROVIDER_RE = re.compile(rb'"provider"\s*:\s*"')
+_TOOL_METHOD_RE = re.compile(rb'"method"\s*:')
+
+
+def _is_tool_call_recording(json_file: Path) -> bool:
+    """Return whether a recording is a tool-call recording, shared across tests."""
+    with open(json_file, "rb") as f:
+        prefix = f.read(65536)
+    return bool(_TOOL_PROVIDER_RE.search(prefix)) and _TOOL_METHOD_RE.search(prefix) is None
+
+
 def _read_test_id(json_file: Path) -> str | None:
     """Return a recording's top-level ``test_id`` without parsing its body.
 
@@ -455,6 +471,10 @@ def analyze_recordings(ci_test_ids, dry_run=True, model_only=False):
                 shared_recordings.append(json_file)
                 continue
 
+            if _is_tool_call_recording(json_file):
+                shared_recordings.append(json_file)
+                continue
+
             # Match exact test_id (with full parameterization)
             if test_id in ci_test_ids:
                 used_recordings.append(json_file)
@@ -484,7 +504,7 @@ def analyze_recordings(ci_test_ids, dry_run=True, model_only=False):
         print(f"  Used in CI:        {len(used_recordings)}")
     print(f"  Model-list:        {len(model_files)}")
     if not model_only:
-        print(f"  Shared (no ID):    {len(shared_recordings)}")
+        print(f"  Shared (no ID or tool-call): {len(shared_recordings)}")
     print(f"  UNUSED:            {len(unused_recordings) + len(legacy_model_files) + len(redundant_model_files)}")
     if not model_only:
         print(f"    stale test ID:           {len(unused_recordings)}")
