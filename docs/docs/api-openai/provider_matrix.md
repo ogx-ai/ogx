@@ -19,10 +19,10 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 112 | 112 | 0 | 90% |
-| bedrock | 22 | 22 | 0 | 18% |
+| azure | 112 | 112 | 0 | 86% |
+| bedrock | 22 | 22 | 0 | 17% |
 | ollama | 4 | 4 | 0 | 3% |
-| openai | 111 | 111 | 0 | 89% |
+| openai | 117 | 117 | 0 | 89% |
 | vllm | 3 | 3 | 0 | 2% |
 
 ## Provider Details
@@ -164,6 +164,17 @@ Models, endpoints, and versions used during test recordings.
 | reasoning multi turn passthrough | ⏭️ | — | ✅ | — | ✅ |
 | reasoning no summary without request | ⏭️ | — | ✅ | — | ⏭️ |
 | reasoning non streaming | ⏭️ | — | ✅ | — | ✅ |
+
+## Responses Access Control
+
+| Feature | azure | bedrock | ollama | openai | vllm |
+| --- | --- | --- | --- | --- | --- |
+| previous response id access control | — | — | — | ✅ | — |
+| user can access own resources after denial | — | — | — | ✅ | — |
+| user cannot access other users response input items | — | — | — | ✅ | — |
+| user cannot delete other users response | — | — | — | ✅ | — |
+| user cannot retrieve other users response | — | — | — | ✅ | — |
+| users have isolated responses | — | — | — | ✅ | — |
 
 ## Responses Errors
 
