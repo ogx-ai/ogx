@@ -1,4 +1,4 @@
-name: Integration Responses, Conversations & Prompts Auth Tests
+name: Integration Responses, Conversations, Prompts & Vector Stores Auth Tests
 
 run-name: Run responses, conversations, and prompts auth tests with Kubernetes authentication
 
@@ -48,6 +48,14 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/setup-runner
 
+      - name: Resolve auth lane model
+        id: auth-model
+        run: |
+          # The auth lane's text model is defined by the `auth` setup in
+          # tests/integration/suites.py (single source of truth for the lane).
+          MODEL="$(uv run python -c 'from tests.integration.suites import SETUP_DEFINITIONS; print(SETUP_DEFINITIONS["auth"].defaults["text_model"])')"
+          echo "model=$MODEL" >> "$GITHUB_OUTPUT"
+
       - name: Install minikube
         if: ${{ matrix.auth-provider == 'kubernetes' }}
         uses: medyagh/setup-minikube@e9e035a86bbc3caea26a450bd4dbf9d0c453682e # v0.0.21
@@ -91,6 +99,8 @@ jobs:
           OGX_TEST_INFERENCE_MODE: "replay"
           # Pin recording dir to workspace so the server finds tests/integration/*/recordings/
           OGX_TEST_RECORDING_DIR: ${{ github.workspace }}/tests/integration/common
+          # The auth lane's text model, resolved from the `auth` setup above
+          AUTH_TEXT_MODEL: ${{ steps.auth-model.outputs.model }}
         if: ${{ matrix.auth-provider == 'oauth2_token' }}
         run: |
           run_dir=$(mktemp -d)
@@ -166,7 +176,7 @@ jobs:
                 table_name: vector_store_metadata
                 backend: sql_default
           models:
-          - model_id: openai/gpt-4o
+          - model_id: $AUTH_TEXT_MODEL
             model_type: llm
             provider_id: openai
           - model_id: sentence-transformers/nomic-ai/nomic-embed-text-v1.5
@@ -320,8 +330,7 @@ jobs:
 
       - name: Test auth
         run: |
-          export INFERENCE_MODEL=openai/gpt-4o
-          # Run the auth tests
+          # Run the auth tests (suite/setup/model come from tests/integration/suites.py)
           ./scripts/integration-responses-conversations-auth-tests.sh
 
       - name: Server log on failure

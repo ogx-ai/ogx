@@ -41,6 +41,12 @@ class Setup(BaseModel):
     description: str
     defaults: dict[str, str | int] = Field(default_factory=dict)
     env: dict[str, str] = Field(default_factory=dict)
+    # Set for setups that only run under a dedicated workflow (e.g. the k8s auth
+    # lane) rather than the standard CI matrix. Such setups must not appear in
+    # ci_matrix.json (enforced by tests/unit/test_ci_matrix.py), but their
+    # recordings are still referenced: cleanup_recordings.py collects the suites
+    # that default to an excluded setup when computing orphans.
+    matrix_excluded: bool = False
 
 
 # Global setups - can be used with any suite "technically" but in reality, some setups might work
@@ -196,6 +202,21 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "text_model": "openai/o4-mini",
             "embedding_model": "openai/text-embedding-3-small",
             "embedding_dimension": 1536,
+        },
+    ),
+    # Kubernetes-auth access-control lane. Run only by
+    # .github/workflows/integration-responses-conversations-auth-tests.yml, which
+    # stands up a k8s auth provider the standard runner cannot; matrix_excluded
+    # keeps it out of ci_matrix.json. Recording happens through the same workflow
+    # in record mode (see record-integration-tests.yml).
+    "auth": Setup(
+        name="gpt",
+        description="OpenAI text model for the kubernetes-auth access-control lane",
+        matrix_excluded=True,
+        defaults={
+            "text_model": "openai/gpt-4o",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
+            "embedding_dimension": 768,
         },
     ),
     "azure": Setup(
@@ -476,6 +497,20 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         name="interactions",
         roots=["tests/integration/interactions"],
         default_setup="gemini",
+    ),
+    # Kubernetes-auth access-control tests. Consumed only by the dedicated auth
+    # workflow (scripts/integration-responses-conversations-auth-tests.sh); the
+    # auth setup is matrix_excluded so this suite never runs in the standard CI
+    # matrix against a non-auth server.
+    "auth": Suite(
+        name="auth",
+        roots=[
+            "tests/integration/conversations/test_openai_conversations.py::TestConversationAccessControl",
+            "tests/integration/responses/test_prompts_access_control.py::TestPromptsAccessControl",
+            "tests/integration/vector_io/test_vector_stores_access_control.py::TestVectorStoresAccessControl",
+            "tests/integration/responses/test_responses_access_control.py::TestResponsesAccessControl",
+        ],
+        default_setup="auth",
     ),
     # Bedrock-specific tests with pre-recorded responses (no live API calls in CI)
     "bedrock": Suite(

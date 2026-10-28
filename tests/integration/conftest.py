@@ -353,8 +353,9 @@ def _item_rel_parts(item: pytest.Item, rootpath: Path) -> tuple[str, ...] | None
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Filter collected tests to only those matching suite roots with ::test_function specifiers,
-    and skip the handful of tests that are only valid in one stack-config mode."""
+    """Filter collected tests to only those matching suite roots with ::test_function or
+    ::TestClass specifiers, and skip the handful of tests that are only valid in one
+    stack-config mode."""
     is_server = is_server_stack_config(config.getoption("--stack-config", default=None))
     for item in items:
         rel_parts = _item_rel_parts(item, config.rootpath)
@@ -374,16 +375,22 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     if not roots:
         return
 
-    # Check if any roots have ::test_function specifiers
-    test_specifiers = [r for r in roots if "::" in r]
-    if not test_specifiers:
+    # Check if any roots have ::test_function or ::TestClass specifiers
+    specifiers = [r for r in roots if "::" in r]
+    if not specifiers:
         return  # No filtering needed for directory/file-only roots
 
-    # Build set of allowed (file, test_function) tuples
+    # Build sets of allowed (file, test_function) and (file, TestClass) tuples.
+    # A specifier is a class when it follows the Test* naming convention,
+    # otherwise it is an individual test function (test_*).
     allowed_tests: set[tuple[str, str]] = set()
-    for r in test_specifiers:
-        file_path, test_name = r.split("::", 1)
-        allowed_tests.add((file_path, test_name))
+    allowed_classes: set[tuple[str, str]] = set()
+    for r in specifiers:
+        file_path, name = r.split("::", 1)
+        if name.startswith("Test"):
+            allowed_classes.add((file_path, name))
+        else:
+            allowed_tests.add((file_path, name))
 
     allowed_roots: list[Path] = []
     for r in roots:
@@ -399,6 +406,11 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         test_name = item.originalname if hasattr(item, "originalname") else item.name.split("[")[0]
 
         if (rel_path, test_name) in allowed_tests:
+            selected.append(item)
+            continue
+
+        class_name = item.cls.__name__ if item.cls is not None else None
+        if class_name is not None and (rel_path, class_name) in allowed_classes:
             selected.append(item)
             continue
 
