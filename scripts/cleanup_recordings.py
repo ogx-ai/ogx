@@ -45,6 +45,7 @@ import concurrent.futures
 import json
 import os
 import re
+import runpy
 import subprocess
 import tempfile
 from collections import defaultdict
@@ -100,10 +101,26 @@ def _unique_configs(entries):
 
 
 def iter_all_ci_configs() -> list[dict[str, str]]:
-    """Return unique CI configs across default and scheduled matrices."""
+    """Return unique CI configs across default and scheduled matrices.
+
+    Also includes the suites that default to matrix-excluded setups (e.g. the
+    k8s auth lane): those runs never appear in ci_matrix.json but their
+    recordings must still count as referenced.
+    """
     combined = list(DEFAULT_CI_MATRIX)
     for configs in SCHEDULED_MATRICES.values():
         combined.extend(configs)
+    # runpy avoids depending on how this script is launched (sys.path may not
+    # include the repo root); same pattern as generate_target_models_docs.py.
+    suites_data = runpy.run_path(str(REPO_ROOT / "tests" / "integration" / "suites.py"))
+    setups: dict[str, object] = suites_data["SETUP_DEFINITIONS"]
+    for suite in suites_data["SUITE_DEFINITIONS"].values():
+        default_setup = suite.default_setup
+        if default_setup is None:
+            continue
+        setup = setups.get(default_setup)
+        if setup is not None and getattr(setup, "matrix_excluded", False):
+            combined.append({"suite": suite.name, "setup": default_setup})
     return list(_unique_configs(combined))
 
 

@@ -69,6 +69,7 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 
 | Setup | Text Model | Vision Model | Embedding Model | Safety Model | Default CI | Scheduled CI |
 |-------|------------|--------------|-----------------|--------------|------------|--------------|
+| `auth` | openai/gpt-4o | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | — | — |
 | `cerebras` | cerebras/gpt-oss-120b | — | — | — | — | — |
 | `databricks` | databricks/databricks-meta-llama-3-3-70b-instruct | — | databricks/databricks-bge-large-en | — | — | — |
 | `groq` | groq/llama-3.3-70b-versatile | — | — | — | — | — |
