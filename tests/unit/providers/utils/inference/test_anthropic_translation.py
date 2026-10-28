@@ -592,6 +592,27 @@ class TestResponseTranslation:
         assert result.content[0].name == "get_weather"
         assert result.content[0].input == {"location": "SF"}
 
+    @pytest.mark.parametrize("arguments", ["[1, 2]", "null", '"text"'])
+    def test_tool_call_with_non_object_arguments_uses_empty_input(self, arguments):
+        """tool_use.input must be an object; valid JSON that is not one must not fail the response."""
+        tc = MagicMock()
+        tc.id = "call_123"
+        tc.function.name = "get_weather"
+        tc.function.arguments = arguments
+
+        openai_resp = MagicMock()
+        openai_resp.choices = [MagicMock()]
+        openai_resp.choices[0].message = MagicMock()
+        openai_resp.choices[0].message.content = None
+        openai_resp.choices[0].message.tool_calls = [tc]
+        openai_resp.choices[0].finish_reason = "tool_calls"
+        openai_resp.usage = None
+
+        result = openai_response_to_anthropic(openai_resp, "m")
+
+        assert result.content[0].type == "tool_use"
+        assert result.content[0].input == {}
+
     def test_length_stop_reason(self):
         openai_resp = MagicMock()
         openai_resp.choices = [MagicMock()]

@@ -19,6 +19,8 @@ from ogx.providers.inline.responses.builtin.responses.tool_executor import (
 from ogx_api import (
     OpenAIChatCompletionContentPartImageParam,
     OpenAIChatCompletionContentPartTextParam,
+    OpenAIChatCompletionToolCall,
+    OpenAIChatCompletionToolCallFunction,
     OpenAIImageURL,
     OpenAIResponseInputToolMCP,
     TextContentItem,
@@ -233,3 +235,81 @@ class TestEmptyToolResultNotReportedAsFailure:
         )
 
         assert input_message.content == "Tool execution failed"
+
+
+class TestMalformedToolCallArguments:
+    """Regression tests for #6819: a malformed tool-call arguments string crashed
+    execute_tool_call (JSONDecodeError/AttributeError escaping with no try/except)
+    instead of being reported back to the model as a retriable tool error, the same
+    way every other tool execution failure already is.
+    """
+
+    async def test_unparsable_json_never_reaches_the_tool_runtime(self, tool_executor):
+        tool_call = OpenAIChatCompletionToolCall(
+            id="call_1",
+            function=OpenAIChatCompletionToolCallFunction(name="web_search", arguments='{"query": "weather in Bos'),
+        )
+
+        results = [
+            r
+            async for r in tool_executor.execute_tool_call(
+                tool_call, ctx=None, sequence_number=0, output_index=0, item_id="item_1"
+            )
+        ]
+
+        tool_executor.tool_runtime_api.invoke_tool.assert_not_called()
+        final = next(r for r in results if r.final_input_message is not None)
+        assert "Failed to parse tool call arguments as a JSON object" in final.final_input_message.content
+        assert final.final_output_message.status == "failed"
+
+    async def test_non_object_json_never_reaches_the_tool_runtime(self, tool_executor):
+        """Valid JSON that isn't an object (e.g. a bare list) must be caught the same
+        way -- it would otherwise crash a downstream tool_kwargs.get(...) call instead.
+        """
+        tool_call = OpenAIChatCompletionToolCall(
+            id="call_1",
+            function=OpenAIChatCompletionToolCallFunction(name="web_search", arguments="[1, 2, 3]"),
+        )
+
+        results = [
+            r
+            async for r in tool_executor.execute_tool_call(
+                tool_call, ctx=None, sequence_number=0, output_index=0, item_id="item_1"
+            )
+        ]
+
+        tool_executor.tool_runtime_api.invoke_tool.assert_not_called()
+        final = next(r for r in results if r.final_input_message is not None)
+        assert "Failed to parse tool call arguments as a JSON object" in final.final_input_message.content
+        assert "list" in final.final_input_message.content
+
+    async def test_malformed_arguments_for_an_mcp_tool_never_reach_invoke_mcp_tool(self, tool_executor, monkeypatch):
+        """The issue explicitly calls out MCP tool calls as affected; confirm the fix
+        covers that path too, not just the tool_runtime_api.invoke_tool path.
+        """
+        invoke_mcp_tool = AsyncMock()
+        monkeypatch.setattr("ogx.providers.utils.tools.mcp.invoke_mcp_tool", invoke_mcp_tool)
+
+        tool_call = OpenAIChatCompletionToolCall(
+            id="call_1",
+            function=OpenAIChatCompletionToolCallFunction(name="my_mcp_tool", arguments="{not valid json"),
+        )
+        mcp_tool_to_server = {
+            "my_mcp_tool": OpenAIResponseInputToolMCP(server_label="label", server_url="https://example.com/mcp")
+        }
+
+        results = [
+            r
+            async for r in tool_executor.execute_tool_call(
+                tool_call,
+                ctx=None,
+                sequence_number=0,
+                output_index=0,
+                item_id="item_1",
+                mcp_tool_to_server=mcp_tool_to_server,
+            )
+        ]
+
+        invoke_mcp_tool.assert_not_called()
+        final = next(r for r in results if r.final_input_message is not None)
+        assert "Failed to parse tool call arguments as a JSON object" in final.final_input_message.content
