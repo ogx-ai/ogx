@@ -54,7 +54,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
     def get_base_url(self) -> str:
         """Get the base URL from config."""
         if not self.config.base_url:
-            raise ValueError("No base URL configured")
+            raise ValueError("No base URL configured, opps")
         return str(self.config.base_url)
 
     async def initialize(self) -> None:
