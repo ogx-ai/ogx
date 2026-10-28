@@ -205,7 +205,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         description="OpenAI text model for the kubernetes-auth access-control lane",
         matrix_excluded=True,
         defaults={
-            "text_model": "openai/gpt-4o",
+            "text_model": "openai/gpt-5-nano",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
             "embedding_dimension": 768,
         },
