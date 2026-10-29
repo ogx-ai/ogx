@@ -26,10 +26,12 @@ class TestPrompts:
         assert prompt.version == 1
         assert prompt.prompt_id.startswith("pmpt_")
         assert prompt.variables == ["name"]
+        assert prompt.is_default
 
         retrieved = await temp_prompt_store.get_prompt(GetPromptRequest(prompt_id=prompt.prompt_id))
         assert retrieved.prompt_id == prompt.prompt_id
         assert retrieved.prompt == prompt.prompt
+        assert retrieved.is_default
 
     async def test_update_prompt(self, temp_prompt_store):
         prompt = await temp_prompt_store.create_prompt(CreatePromptRequest(prompt="Original"))
@@ -38,6 +40,7 @@ class TestPrompts:
         )
         assert updated.version == 2
         assert updated.prompt == "Updated"
+        assert updated.is_default
 
     async def test_update_prompt_with_version(self, temp_prompt_store):
         version_for_update = 1
@@ -178,10 +181,17 @@ class TestPrompts:
             UpdatePromptRequest(prompt_id=prompt.prompt_id, prompt="V2", version=1, variables=[], set_as_default=True)
         )
         assert prompt_v2.version == 2
+        assert prompt_v2.is_default
         assert (await temp_prompt_store.get_prompt(GetPromptRequest(prompt_id=prompt.prompt_id))).version == 2
 
         prompt_v3 = await temp_prompt_store.update_prompt(
             UpdatePromptRequest(prompt_id=prompt.prompt_id, prompt="V3", version=2, variables=[], set_as_default=False)
         )
         assert prompt_v3.version == 3
+        assert not prompt_v3.is_default
         assert (await temp_prompt_store.get_prompt(GetPromptRequest(prompt_id=prompt.prompt_id))).version == 2
+
+        versions = (
+            await temp_prompt_store.list_prompt_versions(ListPromptVersionsRequest(prompt_id=prompt.prompt_id))
+        ).data
+        assert [v.is_default for v in versions] == [False, True, False]
