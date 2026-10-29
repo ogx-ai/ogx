@@ -256,6 +256,7 @@ const sidebars: SidebarsConfig = {
             'providers/tool_runtime/remote_exa-search',
             'providers/tool_runtime/remote_model-context-protocol',
             'providers/tool_runtime/remote_nimble-search',
+            'providers/tool_runtime/remote_searchapi-search',
             'providers/tool_runtime/remote_serply-search',
             'providers/tool_runtime/remote_tavily-search'
           ],
