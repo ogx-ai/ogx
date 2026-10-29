@@ -32,6 +32,10 @@ from ogx.core.request_headers import get_authenticated_user
 from ogx.log import get_logger
 from ogx.providers.utils.inference.http_client import build_network_client_kwargs
 from ogx.providers.utils.inference.network_config import NetworkConfig
+from ogx.providers.utils.inference.openai_compat import (
+    ToolCallArgumentsStreamFilter,
+    normalize_tool_call_arguments,
+)
 from ogx.providers.utils.interactions.interactions_store import InteractionsStore
 from ogx_api import (
     Inference,
@@ -519,12 +523,7 @@ class BuiltinInteractionsImpl(Interactions):
                 for tc in message.tool_calls:
                     if not hasattr(tc, "function") or tc.function is None:
                         continue
-                    try:
-                        args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-                    except json.JSONDecodeError:
-                        args = {}
-                    if not isinstance(args, dict):
-                        args = {}
+                    args = normalize_tool_call_arguments(tc.function.arguments, tool_name=tc.function.name or "")
                     outputs.append(
                         GoogleFunctionCallOutput(
                             id=tc.id or f"call_{uuid.uuid4().hex[:24]}",
@@ -593,6 +592,7 @@ class BuiltinInteractionsImpl(Interactions):
         collected_text: list[str] = []
         tool_call_blocks: dict[int, bool] = {}  # tc_index -> started
         tool_call_index_to_block_index: dict[int, int] = {}
+        tool_call_arg_filters: dict[int, ToolCallArgumentsStreamFilter] = {}
         output_tokens = 0
         input_tokens = 0
 
@@ -632,22 +632,28 @@ class BuiltinInteractionsImpl(Interactions):
                         # Start new function_call block
                         tool_call_blocks[tc_idx] = True
                         tool_call_index_to_block_index[tc_idx] = content_block_index
+                        tool_name = tc_delta.function.name if tc_delta.function and tc_delta.function.name else None
+                        tool_call_arg_filters[tc_idx] = ToolCallArgumentsStreamFilter(tool_name or "")
 
                         yield ContentStartEvent(
                             index=content_block_index,
                             content=_FunctionCallContentRef(
                                 id=tc_delta.id or f"call_{uuid.uuid4().hex[:24]}",
-                                name=tc_delta.function.name if tc_delta.function and tc_delta.function.name else None,
+                                name=tool_name,
                             ),
                         )
                         content_block_index += 1
 
                     if tc_delta.function and tc_delta.function.arguments:
                         block_idx = tool_call_index_to_block_index[tc_idx]
-                        yield ContentDeltaEvent(
-                            index=block_idx,
-                            delta=_FunctionCallDelta(args=tc_delta.function.arguments),
-                        )
+                        # Keeps args an object, as on Google's real API, without
+                        # buffering the whole argument string -- see ToolCallArgumentsStreamFilter.
+                        to_forward = tool_call_arg_filters[tc_idx].feed(tc_delta.function.arguments)
+                        if to_forward is not None:
+                            yield ContentDeltaEvent(
+                                index=block_idx,
+                                delta=_FunctionCallDelta(args=to_forward),
+                            )
 
             if chunk.usage:
                 input_tokens = chunk.usage.prompt_tokens or 0
@@ -657,7 +663,13 @@ class BuiltinInteractionsImpl(Interactions):
         if text_block_started:
             yield ContentStopEvent(index=content_block_index)
 
-        for _tc_idx, block_idx in tool_call_index_to_block_index.items():
+        for tc_idx, block_idx in tool_call_index_to_block_index.items():
+            # A tool call whose arguments never produced a non-whitespace character (e.g.
+            # truly empty arguments) never got a chance to decide; close it out as {},
+            # matching normalize_tool_call_arguments' own empty-arguments case.
+            trailing = tool_call_arg_filters[tc_idx].finalize()
+            if trailing is not None:
+                yield ContentDeltaEvent(index=block_idx, delta=_FunctionCallDelta(args=trailing))
             yield ContentStopEvent(index=block_idx)
 
         # Store the interaction for conversation chaining
