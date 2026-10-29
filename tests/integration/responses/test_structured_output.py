@@ -8,6 +8,16 @@ import json
 
 import pytest
 
+from .helpers import skip_if_text_model_prefix
+
+
+@pytest.fixture(autouse=True)
+def _skip_structured_output_for_bedrock(request):
+    """Skip all structured output tests for Bedrock — JSON schema output is unreliable."""
+    skip_if_text_model_prefix(
+        request, "bedrock/", "Bedrock GPT-OSS does not reliably produce valid structured JSON output"
+    )
+
 
 def test_json_schema_string_types(responses_client, text_model_id):
     """Test json schema with string types."""

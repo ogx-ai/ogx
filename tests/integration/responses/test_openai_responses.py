@@ -8,8 +8,23 @@ import time
 
 import pytest
 
-from .helpers import is_gpt_5_nano, skip_if_gpt_nano_limited_params, skip_if_provider_is_vertexai
+from .helpers import (
+    is_gpt_5_nano,
+    skip_if_gpt_nano_limited_params,
+    skip_if_provider_is_vertexai,
+    skip_if_text_model_prefix,
+)
 from .streaming_assertions import StreamingValidator
+
+
+@pytest.fixture(autouse=True)
+def _skip_responses_tests_for_bedrock(request):
+    """Skip these tests for Bedrock — parallel tool calls and multi-turn tool execution are unreliable."""
+    skip_if_text_model_prefix(
+        request,
+        "bedrock/",
+        "Bedrock GPT-OSS does not reliably support parallel tool calls and multi-turn tool execution",
+    )
 
 
 @pytest.mark.integration

@@ -17,6 +17,7 @@ __all__ = [
     "new_vector_store",
     "provider_from_model",
     "skip_if_provider_is_vertexai",
+    "skip_if_text_model_prefix",
     "upload_file",
     "wait_for_file_attachment",
     "setup_mcp_tools",
@@ -44,6 +45,19 @@ def is_gpt_5_nano(model_id) -> bool:
 def skip_if_gpt_nano_limited_params(model_id, param):
     if is_gpt_5_nano(model_id):
         pytest.skip(f"Model {model_id} does not support {param}.")
+
+
+def skip_if_text_model_prefix(request, prefix, reason):
+    """Skip the test when the text model ID starts with the given provider prefix.
+
+    Intended for module-level autouse fixtures that exclude a whole file for
+    models that cannot reliably run a category of tests (e.g. WatsonX and
+    Bedrock GPT-OSS tool calling).
+    """
+    if "text_model_id" in request.fixturenames:
+        text_model_id = request.getfixturevalue("text_model_id")
+        if text_model_id and text_model_id.startswith(prefix):
+            pytest.skip(reason)
 
 
 def new_vector_store(openai_client, name, embedding_model, embedding_dimension):

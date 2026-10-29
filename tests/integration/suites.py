@@ -513,19 +513,4 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         ],
         default_setup="bedrock",
     ),
-    # Bedrock responses suite — subset of tests that reliably pass with GPT-OSS via
-    # the Mantle API. Structured output, parallel tool calls, and some multi-turn
-    # tool tests are excluded due to model capability gaps.
-    "bedrock-responses": Suite(
-        name="bedrock-responses",
-        roots=[
-            "tests/integration/responses/test_basic_responses.py",
-            "tests/integration/responses/test_conversation_responses.py",
-            "tests/integration/responses/test_mcp_authentication.py",
-            "tests/integration/responses/test_prompt_templates.py",
-            "tests/integration/responses/test_reasoning.py",
-            "tests/integration/responses/test_responses_errors.py",
-        ],
-        default_setup="bedrock",
-    ),
 }

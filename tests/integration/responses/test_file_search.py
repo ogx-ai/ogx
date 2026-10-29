@@ -9,7 +9,19 @@ import time
 
 import pytest
 
-from .helpers import assert_text_contains, new_vector_store, skip_if_provider_is_vertexai, upload_file
+from .helpers import (
+    assert_text_contains,
+    new_vector_store,
+    skip_if_provider_is_vertexai,
+    skip_if_text_model_prefix,
+    upload_file,
+)
+
+
+@pytest.fixture(autouse=True)
+def _skip_file_search_for_bedrock(request):
+    """Skip file search tests for Bedrock — file search is a tool and tool calling is unreliable."""
+    skip_if_text_model_prefix(request, "bedrock/", "Bedrock GPT-OSS does not reliably support tool calling")
 
 
 @pytest.mark.parametrize(

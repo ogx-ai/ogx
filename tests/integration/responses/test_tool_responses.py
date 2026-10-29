@@ -31,6 +31,7 @@ from .helpers import (
     normalize_text,
     setup_mcp_tools,
     skip_if_provider_is_vertexai,
+    skip_if_text_model_prefix,
     upload_file,
     wait_for_file_attachment,
 )
@@ -38,13 +39,10 @@ from .streaming_assertions import StreamingValidator
 
 
 @pytest.fixture(autouse=True)
-def _skip_tool_tests_for_watsonx(request):
-    """Skip all tool tests for WatsonX — tool calling is unreliable."""
-    # Get text_model_id from the test's fixturenames if available
-    if "text_model_id" in request.fixturenames:
-        text_model_id = request.getfixturevalue("text_model_id")
-        if text_model_id and text_model_id.startswith("watsonx/"):
-            pytest.skip("WatsonX does not reliably support tool calling")
+def _skip_tool_tests_for_unreliable_tool_calling(request):
+    """Skip all tool tests for models with unreliable tool calling."""
+    skip_if_text_model_prefix(request, "watsonx/", "WatsonX does not reliably support tool calling")
+    skip_if_text_model_prefix(request, "bedrock/", "Bedrock GPT-OSS does not reliably support tool calling")
 
 
 @pytest.mark.parametrize("case", web_search_test_cases)
