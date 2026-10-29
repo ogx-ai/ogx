@@ -54,7 +54,7 @@ ogx connect opencode
 ## CLI Reference
 
 ```bash
-ogx connect opencode [--model MODEL] [--host HOST] [--port PORT]
+ogx connect [--url URL] opencode [--model MODEL]
 ```
 
 **Options:**
@@ -62,8 +62,7 @@ ogx connect opencode [--model MODEL] [--host HOST] [--port PORT]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--model` | First available model | Model to pre-select as the default in OpenCode |
-| `--host` | `localhost` | OGX server host |
-| `--port` | `8321` | OGX server port (also reads `OGX_PORT` env var) |
+| `--url` (group) | `http://localhost:8321/v1` | OGX server base URL, including `/v1`. Applies to all `ogx connect` subcommands (port defaults from `OGX_PORT` env var) |
 
 All discovered LLM models are available in OpenCode regardless of which model is set as the default. You can switch models inside OpenCode at any time.
 
@@ -78,7 +77,7 @@ ogx connect opencode --model openai/gpt-4o
 ### With a remote OGX server
 
 ```bash
-ogx connect opencode --host 192.168.1.100 --port 9000
+ogx connect --url http://192.168.1.100:9000/v1 opencode
 ```
 
 ### With Ollama backend

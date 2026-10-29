@@ -16,6 +16,8 @@ from openai import APIConnectionError, APIStatusError
 
 from ogx.cli.connect.opencode import ConnectOpenCode
 
+from .connect_helpers import parse_group_args
+
 
 @pytest.fixture
 def connect_opencode() -> ConnectOpenCode:
@@ -39,56 +41,46 @@ def _make_mock_client(models: list[MagicMock]) -> MagicMock:
 
 
 class TestArguments:
-    def test_defaults(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args([])
-        assert args.port is None
-        assert args.host is None
+    def test_defaults(self, connect_opencode: ConnectOpenCode, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OGX_BASE_URL", raising=False)
+        args = parse_group_args(["opencode"])
         assert args.model is None
-        assert ConnectOpenCode._resolve_base_url(args) == "http://localhost:8321/v1"
+        assert args.connect_url == "http://localhost:8321/v1"
 
-    def test_group_url_takes_precedence_over_host_port(self) -> None:
-        args = argparse.Namespace(connect_url="https://group.example.com/v1", host="other.example.com", port=9999)
-        assert ConnectOpenCode._resolve_base_url(args) == "https://group.example.com/v1"
+    def test_group_url_is_used(self) -> None:
+        args = parse_group_args(["--url", "https://group.example.com/v1", "opencode"])
+        assert args.connect_url == "https://group.example.com/v1"
 
-    def test_resolve_base_url_uses_explicit_host_port(self) -> None:
-        args = argparse.Namespace(host="other.example.com", port=9999)
-        assert ConnectOpenCode._resolve_base_url(args) == "http://other.example.com:9999/v1"
-
-    def test_resolve_base_url_fills_missing_host_or_port(self) -> None:
-        assert ConnectOpenCode._resolve_base_url(argparse.Namespace(host="other.example.com", port=None)) == (
-            "http://other.example.com:8321/v1"
-        )
-        assert ConnectOpenCode._resolve_base_url(argparse.Namespace(host=None, port=9999)) == "http://localhost:9999/v1"
-
-    def test_port_override(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args(["--port", "9000"])
-        assert args.port == 9000
-
-    def test_host_override(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args(["--host", "0.0.0.0"])
-        assert args.host == "0.0.0.0"
+    def test_agent_level_host_port_flags_removed(self, connect_opencode: ConnectOpenCode) -> None:
+        with pytest.raises(SystemExit):
+            parse_group_args(["opencode", "--host", "0.0.0.0"])
+        with pytest.raises(SystemExit):
+            parse_group_args(["opencode", "--port", "9000"])
 
     def test_model_override(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args(["--model", "gpt-4o"])
+        args = parse_group_args(["opencode", "--model", "gpt-4o"])
         assert args.model == "gpt-4o"
 
     def test_port_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OGX_BASE_URL", raising=False)
         monkeypatch.setenv("OGX_PORT", "9999")
-        subparsers = argparse.ArgumentParser().add_subparsers()
-        instance = ConnectOpenCode(subparsers)
-        args = instance.parser.parse_args([])
-        assert ConnectOpenCode._resolve_base_url(args) == "http://localhost:9999/v1"
+        args = parse_group_args(["opencode"])
+        assert args.connect_url == "http://localhost:9999/v1"
 
 
 class TestOpenCodeDetection:
     def test_exits_when_opencode_not_in_path(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args([])
+        args = parse_group_args(
+            [
+                "opencode",
+            ]
+        )
         with patch("ogx.cli.connect.opencode.shutil.which", return_value=None):
             with pytest.raises(SystemExit):
                 connect_opencode._run_connect_opencode_cmd(args)
 
     def test_continues_when_opencode_found(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args(["--model", "gpt-4o"])
+        args = parse_group_args(["opencode", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (
@@ -213,7 +205,7 @@ class TestConfigGeneration:
 
 class TestConnect:
     def test_connects_opencode_with_config_env(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args(["--model", "gpt-4o"])
+        args = parse_group_args(["opencode", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (
@@ -232,7 +224,7 @@ class TestConnect:
             assert config["provider"]["ogx"]["options"]["baseURL"] == "http://localhost:8321/v1"
 
     def test_propagates_exit_code(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args(["--model", "gpt-4o"])
+        args = parse_group_args(["opencode", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (

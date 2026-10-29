@@ -15,6 +15,8 @@ from openai import APIConnectionError, APIStatusError
 
 from ogx.cli.connect.claude import ConnectClaude, _detect_tier_models, _strip_leading_separator
 
+from .connect_helpers import parse_group_args
+
 
 @pytest.fixture
 def connect_claude() -> ConnectClaude:
@@ -38,71 +40,69 @@ def _make_mock_client(models: list[MagicMock]) -> MagicMock:
 
 
 class TestArguments:
-    def test_defaults(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args([])
-        assert args.url is None
+    def test_defaults(self, connect_claude: ConnectClaude, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OGX_BASE_URL", raising=False)
+        args = parse_group_args(["claude"])
         assert args.model is None
         assert args.haiku_model is None
         assert args.sonnet_model is None
         assert args.opus_model is None
         assert args.print_env is False
         assert args.claude_args == []
+        assert args.connect_url == "http://localhost:8321/v1"
 
-    def test_url_override(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--url", "https://ogx.example.com"])
-        assert args.url == "https://ogx.example.com"
+    def test_group_url_is_used(self) -> None:
+        args = parse_group_args(["--url", "https://group.example.com/v1", "claude"])
+        assert args.connect_url == "https://group.example.com/v1"
 
-    def test_group_url_takes_precedence_over_agent_url(self) -> None:
-        args = argparse.Namespace(connect_url="https://group.example.com/v1", url="http://agent.example.com/v1")
-        assert ConnectClaude._resolve_base_url(args) == "https://group.example.com/v1"
-
-    def test_resolve_base_url_falls_back_to_agent_url_then_default(self) -> None:
-        assert ConnectClaude._resolve_base_url(argparse.Namespace(url="http://agent.example.com/v1")) == (
-            "http://agent.example.com/v1"
-        )
-        assert ConnectClaude._resolve_base_url(argparse.Namespace(url=None)) == "http://localhost:8321/v1"
+    def test_agent_level_url_flag_removed(self, connect_claude: ConnectClaude) -> None:
+        with pytest.raises(SystemExit):
+            parse_group_args(["claude", "--url", "https://ogx.example.com/v1"])
 
     def test_model_override(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--model", "gpt-4o"])
+        args = parse_group_args(["claude", "--model", "gpt-4o"])
         assert args.model == "gpt-4o"
 
     def test_haiku_model_override(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--haiku-model", "gpt-4o-mini"])
+        args = parse_group_args(["claude", "--haiku-model", "gpt-4o-mini"])
         assert args.haiku_model == "gpt-4o-mini"
 
     def test_sonnet_model_override(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--sonnet-model", "gpt-4o"])
+        args = parse_group_args(["claude", "--sonnet-model", "gpt-4o"])
         assert args.sonnet_model == "gpt-4o"
 
     def test_opus_model_override(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--opus-model", "o1"])
+        args = parse_group_args(["claude", "--opus-model", "o1"])
         assert args.opus_model == "o1"
 
     def test_print_env_flag(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--print-env"])
+        args = parse_group_args(["claude", "--print-env"])
         assert args.print_env is True
 
-    def test_url_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_port_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OGX_BASE_URL", raising=False)
         monkeypatch.setenv("OGX_PORT", "9999")
-        subparsers = argparse.ArgumentParser().add_subparsers()
-        instance = ConnectClaude(subparsers)
-        args = instance.parser.parse_args([])
-        assert ConnectClaude._resolve_base_url(args) == "http://localhost:9999/v1"
+        args = parse_group_args(["claude"])
+        assert args.connect_url == "http://localhost:9999/v1"
 
     def test_claude_args_after_separator(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--", "-p", "hello world"])
+        args = parse_group_args(["claude", "--", "-p", "hello world"])
         assert args.claude_args == ["--", "-p", "hello world"]
 
 
 class TestClaudeDetection:
     def test_exits_when_claude_not_in_path(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args([])
+        args = parse_group_args(
+            [
+                "claude",
+            ]
+        )
         with patch("ogx.cli.connect.claude.shutil.which", return_value=None):
             with pytest.raises(SystemExit):
                 connect_claude._run_connect_claude_cmd(args)
 
     def test_continues_when_claude_found(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--model", "gpt-4o"])
+        args = parse_group_args(["claude", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (
@@ -311,7 +311,7 @@ class TestEnvironment:
 
 class TestPrintEnv:
     def test_prints_export_statements(self, connect_claude: ConnectClaude, capsys: pytest.CaptureFixture[str]) -> None:
-        args = connect_claude.parser.parse_args(["--print-env", "--model", "gpt-4o"])
+        args = parse_group_args(["claude", "--print-env", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
@@ -327,9 +327,7 @@ class TestPrintEnv:
         assert "unset CLAUDE_CODE_USE_BEDROCK" in output
 
     def test_prints_https_url(self, connect_claude: ConnectClaude, capsys: pytest.CaptureFixture[str]) -> None:
-        args = connect_claude.parser.parse_args(
-            ["--print-env", "--url", "https://ogx.example.com", "--model", "gpt-4o"]
-        )
+        args = parse_group_args(["--url", "https://ogx.example.com/v1", "claude", "--print-env", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
@@ -341,7 +339,7 @@ class TestPrintEnv:
     def test_auto_detects_models_in_print_env(
         self, connect_claude: ConnectClaude, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        args = connect_claude.parser.parse_args(["--print-env"])
+        args = parse_group_args(["claude", "--print-env"])
         mock_client = _make_mock_client(
             [_make_model("claude-haiku-4-5"), _make_model("claude-sonnet-4-6"), _make_model("claude-opus-4-7")]
         )
@@ -355,7 +353,7 @@ class TestPrintEnv:
         assert "export ANTHROPIC_DEFAULT_OPUS_MODEL=claude-opus-4-7" in output
 
     def test_does_not_launch_subprocess(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--print-env", "--model", "gpt-4o"])
+        args = parse_group_args(["claude", "--print-env", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (
@@ -366,7 +364,7 @@ class TestPrintEnv:
             mock_run.assert_not_called()
 
     def test_skips_claude_binary_check(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--print-env", "--model", "gpt-4o"])
+        args = parse_group_args(["claude", "--print-env", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (
@@ -379,7 +377,7 @@ class TestPrintEnv:
 
 class TestConnect:
     def test_launches_claude_with_env(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--model", "gpt-4o"])
+        args = parse_group_args(["claude", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (
@@ -398,7 +396,7 @@ class TestConnect:
             assert call_env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "gpt-4o"
 
     def test_forwards_extra_args(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--model", "gpt-4o", "--", "-p", "hello"])
+        args = parse_group_args(["claude", "--model", "gpt-4o", "--", "-p", "hello"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (
@@ -414,7 +412,7 @@ class TestConnect:
             assert cmd == ["claude", "-p", "hello"]
 
     def test_propagates_exit_code(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--model", "gpt-4o"])
+        args = parse_group_args(["claude", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (

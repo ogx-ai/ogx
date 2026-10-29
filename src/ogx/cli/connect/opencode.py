@@ -41,31 +41,6 @@ class ConnectOpenCode(Subcommand):
             default=None,
             help="Default model ID. If omitted, the first available model is used.",
         )
-        self.parser.add_argument(
-            "--port",
-            type=int,
-            help="OGX server port. Prefer the group-level 'ogx connect --url' flag.",
-            default=None,
-        )
-        self.parser.add_argument(
-            "--host",
-            type=str,
-            default=None,
-            help="OGX server host. Prefer the group-level 'ogx connect --url' flag.",
-        )
-
-    @staticmethod
-    def _resolve_base_url(args: argparse.Namespace) -> str:
-        # Group-level --url (dest=connect_url) > per-agent --host/--port > localhost:OGX_PORT.
-        # getattr: per-agent unit-test namespaces are built without the group parser.
-        url: str | None = getattr(args, "connect_url", None)
-        if url:
-            return url
-        if args.host is not None or args.port is not None:
-            host = args.host or "localhost"
-            port = args.port or int(os.getenv("OGX_PORT", 8321))
-            return f"http://{host}:{port}/v1"
-        return f"http://localhost:{os.getenv('OGX_PORT', 8321)}/v1"
 
     def _run_connect_opencode_cmd(self, args: argparse.Namespace) -> None:
         if not shutil.which("opencode"):
@@ -76,7 +51,8 @@ class ConnectOpenCode(Subcommand):
             )
             sys.exit(1)
 
-        base_url = self._resolve_base_url(args)
+        # The connect group resolves and validates the server URL into args.connect_url.
+        base_url = args.connect_url
 
         models = self._fetch_models(base_url)
         if not models:

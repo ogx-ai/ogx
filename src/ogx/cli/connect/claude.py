@@ -66,12 +66,6 @@ class ConnectClaude(Subcommand):
             help="Model ID for the opus (capable) tier. Overrides --model for this tier.",
         )
         self.parser.add_argument(
-            "--url",
-            type=str,
-            default=None,
-            help="OGX server URL. Prefer the group-level 'ogx connect --url' flag.",
-        )
-        self.parser.add_argument(
             "--print-env",
             action="store_true",
             default=False,
@@ -83,12 +77,6 @@ class ConnectClaude(Subcommand):
             help="Additional arguments forwarded to the claude command (place after --).",
         )
 
-    @staticmethod
-    def _resolve_base_url(args: argparse.Namespace) -> str:
-        # Group-level --url (dest=connect_url) > per-agent --url > localhost:OGX_PORT.
-        # getattr: per-agent unit-test namespaces are built without the group parser.
-        return getattr(args, "connect_url", None) or args.url or f"http://localhost:{os.getenv('OGX_PORT', '8321')}/v1"
-
     def _run_connect_claude_cmd(self, args: argparse.Namespace) -> None:
         if not args.print_env and not shutil.which("claude"):
             cprint(
@@ -98,7 +86,8 @@ class ConnectClaude(Subcommand):
             )
             sys.exit(1)
 
-        base_url = self._resolve_base_url(args).rstrip("/")
+        # The connect group resolves and validates the server URL into args.connect_url.
+        base_url = args.connect_url
 
         models = self._fetch_models(base_url)
         if not models:

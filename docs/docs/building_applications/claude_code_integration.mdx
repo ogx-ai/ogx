@@ -92,9 +92,8 @@ Claude Code sends requests to the Anthropic Messages API (`/v1/messages`). OGX i
 ## CLI Reference
 
 ```bash
-ogx connect claude [--model MODEL] [--haiku-model MODEL] [--sonnet-model MODEL]
-                   [--opus-model MODEL] [--host HOST] [--port PORT]
-                   [--print-env] [-- CLAUDE_ARGS...]
+ogx connect [--url URL] claude [--model MODEL] [--haiku-model MODEL] [--sonnet-model MODEL]
+            [--opus-model MODEL] [--print-env] [-- CLAUDE_ARGS...]
 ```
 
 **Options:**
@@ -105,8 +104,7 @@ ogx connect claude [--model MODEL] [--haiku-model MODEL] [--sonnet-model MODEL]
 | `--haiku-model` | `--model` value | Model ID for the haiku (fast) tier. Overrides `--model` |
 | `--sonnet-model` | `--model` value | Model ID for the sonnet (balanced) tier. Overrides `--model` |
 | `--opus-model` | `--model` value | Model ID for the opus (capable) tier. Overrides `--model` |
-| `--host` | `localhost` | OGX server host |
-| `--port` | `8321` | OGX server port (also reads `OGX_PORT` env var) |
+| `--url` (group) | `http://localhost:8321/v1` | OGX server base URL, including `/v1`. Applies to all `ogx connect` subcommands (port defaults from `OGX_PORT` env var) |
 | `--print-env` | off | Print shell `export`/`unset` statements instead of launching Claude Code |
 
 Arguments after `--` are forwarded to the `claude` command.
@@ -268,7 +266,7 @@ ogx connect claude \
 ### With a Remote OGX Server
 
 ```bash
-ogx connect claude --host 192.168.1.100 --port 9000
+ogx connect --url http://192.168.1.100:9000/v1 claude
 ```
 
 ## Prerequisites
