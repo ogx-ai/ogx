@@ -68,12 +68,22 @@ def _make_mock_client(models: list[MagicMock]) -> MagicMock:
 class TestArguments:
     def test_defaults(self, connect_codex: ConnectCodex) -> None:
         args = connect_codex.parser.parse_args([])
-        assert args.url == connect_codex.DEFAULT_BASE_URL
+        assert args.url is None
         assert args.model is None
 
     def test_url_override(self, connect_codex: ConnectCodex) -> None:
         args = connect_codex.parser.parse_args(["--url", "https://ogx.example.com/v1"])
         assert args.url == "https://ogx.example.com/v1"
+
+    def test_group_url_takes_precedence_over_agent_url(self) -> None:
+        args = argparse.Namespace(connect_url="https://group.example.com/v1", url="http://agent.example.com/v1")
+        assert ConnectCodex._resolve_base_url(args) == "https://group.example.com/v1"
+
+    def test_resolve_base_url_falls_back_to_agent_url_then_default(self) -> None:
+        assert ConnectCodex._resolve_base_url(argparse.Namespace(url="http://agent.example.com/v1")) == (
+            "http://agent.example.com/v1"
+        )
+        assert ConnectCodex._resolve_base_url(argparse.Namespace(url=None)) == "http://localhost:8321/v1"
 
     def test_model_override(self, connect_codex: ConnectCodex) -> None:
         args = connect_codex.parser.parse_args(["--model", "openai/gpt-4o"])
@@ -88,7 +98,7 @@ class TestArguments:
         subparsers = argparse.ArgumentParser().add_subparsers()
         instance = ConnectCodex(subparsers)
         args = instance.parser.parse_args([])
-        assert args.url == "https://ogx.example.com/custom/v1"
+        assert ConnectCodex._resolve_base_url(args) == "https://ogx.example.com/custom/v1"
 
 
 class TestBaseUrlNormalization:

@@ -40,7 +40,7 @@ def _make_mock_client(models: list[MagicMock]) -> MagicMock:
 class TestArguments:
     def test_defaults(self, connect_claude: ConnectClaude) -> None:
         args = connect_claude.parser.parse_args([])
-        assert args.url == "http://localhost:8321/v1"
+        assert args.url is None
         assert args.model is None
         assert args.haiku_model is None
         assert args.sonnet_model is None
@@ -51,6 +51,16 @@ class TestArguments:
     def test_url_override(self, connect_claude: ConnectClaude) -> None:
         args = connect_claude.parser.parse_args(["--url", "https://ogx.example.com"])
         assert args.url == "https://ogx.example.com"
+
+    def test_group_url_takes_precedence_over_agent_url(self) -> None:
+        args = argparse.Namespace(connect_url="https://group.example.com/v1", url="http://agent.example.com/v1")
+        assert ConnectClaude._resolve_base_url(args) == "https://group.example.com/v1"
+
+    def test_resolve_base_url_falls_back_to_agent_url_then_default(self) -> None:
+        assert ConnectClaude._resolve_base_url(argparse.Namespace(url="http://agent.example.com/v1")) == (
+            "http://agent.example.com/v1"
+        )
+        assert ConnectClaude._resolve_base_url(argparse.Namespace(url=None)) == "http://localhost:8321/v1"
 
     def test_model_override(self, connect_claude: ConnectClaude) -> None:
         args = connect_claude.parser.parse_args(["--model", "gpt-4o"])
@@ -77,7 +87,7 @@ class TestArguments:
         subparsers = argparse.ArgumentParser().add_subparsers()
         instance = ConnectClaude(subparsers)
         args = instance.parser.parse_args([])
-        assert args.url == "http://localhost:9999/v1"
+        assert ConnectClaude._resolve_base_url(args) == "http://localhost:9999/v1"
 
     def test_claude_args_after_separator(self, connect_claude: ConnectClaude) -> None:
         args = connect_claude.parser.parse_args(["--", "-p", "hello world"])

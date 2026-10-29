@@ -41,9 +41,24 @@ def _make_mock_client(models: list[MagicMock]) -> MagicMock:
 class TestArguments:
     def test_defaults(self, connect_opencode: ConnectOpenCode) -> None:
         args = connect_opencode.parser.parse_args([])
-        assert args.port == 8321
-        assert args.host == "localhost"
+        assert args.port is None
+        assert args.host is None
         assert args.model is None
+        assert ConnectOpenCode._resolve_base_url(args) == "http://localhost:8321/v1"
+
+    def test_group_url_takes_precedence_over_host_port(self) -> None:
+        args = argparse.Namespace(connect_url="https://group.example.com/v1", host="other.example.com", port=9999)
+        assert ConnectOpenCode._resolve_base_url(args) == "https://group.example.com/v1"
+
+    def test_resolve_base_url_uses_explicit_host_port(self) -> None:
+        args = argparse.Namespace(host="other.example.com", port=9999)
+        assert ConnectOpenCode._resolve_base_url(args) == "http://other.example.com:9999/v1"
+
+    def test_resolve_base_url_fills_missing_host_or_port(self) -> None:
+        assert ConnectOpenCode._resolve_base_url(argparse.Namespace(host="other.example.com", port=None)) == (
+            "http://other.example.com:8321/v1"
+        )
+        assert ConnectOpenCode._resolve_base_url(argparse.Namespace(host=None, port=9999)) == "http://localhost:9999/v1"
 
     def test_port_override(self, connect_opencode: ConnectOpenCode) -> None:
         args = connect_opencode.parser.parse_args(["--port", "9000"])
@@ -62,7 +77,7 @@ class TestArguments:
         subparsers = argparse.ArgumentParser().add_subparsers()
         instance = ConnectOpenCode(subparsers)
         args = instance.parser.parse_args([])
-        assert args.port == 9999
+        assert ConnectOpenCode._resolve_base_url(args) == "http://localhost:9999/v1"
 
 
 class TestOpenCodeDetection:

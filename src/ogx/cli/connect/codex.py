@@ -341,8 +341,8 @@ class ConnectCodex(Subcommand):
         self.parser.add_argument(
             "--url",
             type=str,
-            default=os.getenv("OGX_BASE_URL", self.DEFAULT_BASE_URL),
-            help="OGX OpenAI-compatible API base URL, including /v1.",
+            default=None,
+            help="OGX OpenAI-compatible API base URL, including /v1. Prefer the group-level 'ogx connect --url' flag.",
         )
         self.parser.add_argument(
             "--exec",
@@ -352,11 +352,19 @@ class ConnectCodex(Subcommand):
             help="Run Codex non-interactively with the provided prompt.",
         )
 
+    @staticmethod
+    def _resolve_base_url(args: argparse.Namespace) -> str:
+        # Group-level --url (dest=connect_url) > per-agent --url > OGX_BASE_URL > localhost default.
+        # getattr: per-agent unit-test namespaces are built without the group parser.
+        return (
+            getattr(args, "connect_url", None) or args.url or os.getenv("OGX_BASE_URL", ConnectCodex.DEFAULT_BASE_URL)
+        )
+
     def _run_connect_codex_cmd(self, args: argparse.Namespace) -> None:
         if not shutil.which("codex"):
             _exit_with_error("Failed to find 'codex' in PATH. Install it from https://github.com/openai/codex")
 
-        base_url = self.discovery.normalize_base_url(args.url)
+        base_url = self.discovery.normalize_base_url(self._resolve_base_url(args))
 
         models = self.discovery.fetch_models(base_url)
         if not models:

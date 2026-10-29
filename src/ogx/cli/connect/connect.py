@@ -30,6 +30,16 @@ class ConnectParser(Subcommand):
         )
 
         self.parser.set_defaults(func=lambda args: self.parser.print_help())
+        self.parser.add_argument(
+            "--url",
+            dest="connect_url",
+            type=str,
+            default=None,
+            help=(
+                "Base URL of the OGX server, including /v1. Applies to all connect subcommands and "
+                "takes precedence over the per-agent --url / --host / --port flags."
+            ),
+        )
 
         subparsers = self.parser.add_subparsers(title="connect_subcommands")
 
