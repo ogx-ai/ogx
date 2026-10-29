@@ -493,14 +493,14 @@ jobs:
 
       - name: Upload artifacts (local)
         if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Packages-${{ matrix.package }}
           path: ${{ matrix.path }}/dist/*
 
       - name: Upload artifacts (external)
         if: steps.should-build.outputs.skip != 'true' && matrix.type == 'external'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Packages-${{ matrix.package }}
           path: external-repo/dist/*
