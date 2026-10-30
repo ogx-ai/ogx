@@ -208,7 +208,7 @@ class AuthenticationMiddleware:
                 "headers": [[b"content-type", b"application/json"]],
             }
         )
-        error_msg = OpenAIErrorResponse.from_message(message).to_bytes()
+        error_msg = OpenAIErrorResponse.for_status(status, message).to_bytes()
         await send({"type": "http.response.body", "body": error_msg})
 
 
@@ -270,7 +270,7 @@ class RouteAuthorizationMiddleware:
                 "headers": [[b"content-type", b"application/json"]],
             }
         )
-        error_msg = OpenAIErrorResponse.from_message(message).to_bytes()
+        error_msg = OpenAIErrorResponse.for_status(status, message).to_bytes()
         await send({"type": "http.response.body", "body": error_msg})
 
 
@@ -337,5 +337,5 @@ class TenancyMiddleware:
                 "headers": [[b"content-type", b"application/json"]],
             }
         )
-        error_msg = OpenAIErrorResponse.from_message(message).to_bytes()
+        error_msg = OpenAIErrorResponse.for_status(401, message).to_bytes()
         await send({"type": "http.response.body", "body": error_msg})
