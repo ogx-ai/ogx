@@ -143,6 +143,7 @@ def get_provider_data():
     keymap = {
         "TAVILY_SEARCH_API_KEY": "tavily_search_api_key",
         "EXA_API_KEY": "exa_search_api_key",
+        "SEARCHAPI_API_KEY": "searchapi_search_api_key",
         "BRAVE_SEARCH_API_KEY": "brave_search_api_key",
         "FIREWORKS_API_KEY": "fireworks_api_key",
         "GEMINI_API_KEY": "gemini_api_key",

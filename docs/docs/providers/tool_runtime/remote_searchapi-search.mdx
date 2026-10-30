@@ -1,0 +1,27 @@
+---
+description: "SearchApi Search tool for web search via SearchApi's Google Search API."
+sidebar_label: Remote - Searchapi-Search
+title: remote::searchapi-search
+---
+
+# remote::searchapi-search
+
+## Description
+
+SearchApi Search tool for web search via SearchApi's Google Search API.
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `timeout` | `float` | No | 30.0 | Overall HTTP timeout in seconds for requests to external services. |
+| `connect_timeout` | `float` | No | 10.0 | TCP connect timeout in seconds. Shorter than the overall timeout to fail fast on unreachable hosts. |
+| `api_key` | `SecretStr \| None` | No |  | The SearchApi API key, sent as a Bearer token in the Authorization header. Can be overridden per-request via the X-OGX-Provider-Data header. |
+| `max_results` | `int` | No | 3 | The maximum number of results to return (at most 10, one Google results page) |
+
+## Sample Configuration
+
+```yaml
+api_key: ${env.SEARCHAPI_API_KEY:=}
+max_results: 3
+```

@@ -106,6 +106,17 @@ def available_providers() -> list[ProviderSpec]:
         ),
         RemoteProviderSpec(
             api=Api.tool_runtime,
+            adapter_type="searchapi-search",
+            provider_type="remote::searchapi-search",
+            module="ogx.providers.remote.tool_runtime.searchapi_search",
+            config_class="ogx.providers.remote.tool_runtime.searchapi_search.config.SearchApiSearchToolConfig",
+            pip_packages=[],
+            provider_data_validator="ogx.providers.remote.tool_runtime.searchapi_search.SearchApiSearchToolProviderDataValidator",
+            toolgroup_id="builtin::websearch",
+            description="SearchApi Search tool for web search via SearchApi's Google Search API.",
+        ),
+        RemoteProviderSpec(
+            api=Api.tool_runtime,
             adapter_type="model-context-protocol",
             provider_type="remote::model-context-protocol",
             module="ogx.providers.remote.tool_runtime.model_context_protocol",
