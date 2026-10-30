@@ -39,7 +39,7 @@ def available_providers() -> list[ProviderSpec]:
             # CrossEncoder depends on torchao.quantization
             pip_packages=[
                 "torch torchvision torchao>=0.12.0 --extra-index-url https://download.pytorch.org/whl/cpu",
-                "sentence-transformers",  # we installed cpu versions of pytorch so sentence-transformers doesn't pull in cuda deps
+                "sentence-transformers>=5.6.0",  # we installed cpu versions of pytorch so sentence-transformers doesn't pull in cuda deps
                 # required by some SentenceTransformers architectures for tensor rearrange/merge ops
                 "einops",
                 # fast HF tokenization backend used by SentenceTransformers models
