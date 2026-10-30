@@ -15,7 +15,7 @@ from openai import APIConnectionError, APIStatusError
 
 from ogx.cli.connect.claude import ConnectClaude, _detect_tier_models, _strip_leading_separator
 
-from .connect_helpers import parse_group_args
+from .connect_helpers import make_untrusted_certificate_error, parse_group_args
 
 
 @pytest.fixture
@@ -123,7 +123,7 @@ class TestServerProbe:
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
-                connect_claude._fetch_models("http://localhost:8321/v1")
+                connect_claude._fetch_models("http://localhost:8321/v1", False)
 
     def test_exits_on_server_error(self, connect_claude: ConnectClaude) -> None:
         mock_client = MagicMock()
@@ -132,13 +132,13 @@ class TestServerProbe:
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
-                connect_claude._fetch_models("http://localhost:8321/v1")
+                connect_claude._fetch_models("http://localhost:8321/v1", False)
 
     def test_returns_models_on_success(self, connect_claude: ConnectClaude) -> None:
         mock_client = _make_mock_client([_make_model("gpt-4o"), _make_model("llama-3.1-8b")])
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
-            models = connect_claude._fetch_models("http://localhost:8321/v1")
+            models, _ = connect_claude._fetch_models("http://localhost:8321/v1", False)
         assert models == ["gpt-4o", "llama-3.1-8b"]
 
     def test_filters_out_embedding_models(self, connect_claude: ConnectClaude) -> None:
@@ -150,9 +150,64 @@ class TestServerProbe:
         )
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
-            models = connect_claude._fetch_models("http://localhost:8321/v1")
+            models, _ = connect_claude._fetch_models("http://localhost:8321/v1", False)
         assert "text-embedding-3-small" not in models
         assert "gpt-4o" in models
+
+
+class TestSelfSignedTLS:
+    def test_untrusted_cert_without_insecure_exits_with_hint(
+        self, connect_claude: ConnectClaude, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        mock_client = MagicMock()
+        mock_client.models.list.side_effect = make_untrusted_certificate_error()
+
+        with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
+            with pytest.raises(SystemExit):
+                connect_claude._fetch_models("https://ogx.example.com/v1", False)
+        output = capsys.readouterr().err
+        assert "TLS certificate is not trusted" in output
+        assert "--insecure" in output
+
+    def test_insecure_retries_without_verification(self, connect_claude: ConnectClaude) -> None:
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+        mock_client.models.list.side_effect = [make_untrusted_certificate_error(), mock_client.models.list.return_value]
+
+        with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
+            models, self_signed = connect_claude._fetch_models("https://ogx.example.com/v1", True)
+        assert models == ["gpt-4o"]
+        assert self_signed is True
+
+    def test_insecure_still_exits_when_server_down(self, connect_claude: ConnectClaude) -> None:
+        mock_client = MagicMock()
+        mock_client.models.list.side_effect = APIConnectionError(
+            request=httpx2.Request("GET", "https://ogx.example.com")
+        )
+
+        with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
+            with pytest.raises(SystemExit):
+                connect_claude._fetch_models("https://ogx.example.com/v1", True)
+
+    def test_self_signed_exports_tls_env_for_launched_process(
+        self, connect_claude: ConnectClaude, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+        mock_client.models.list.side_effect = [make_untrusted_certificate_error(), mock_client.models.list.return_value]
+        args = parse_group_args(["-k", "claude", "--print-env", "--model", "gpt-4o"])
+
+        with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
+            connect_claude._run_connect_claude_cmd(args)
+        assert "export NODE_TLS_REJECT_UNAUTHORIZED=0" in capsys.readouterr().out
+
+    def test_trusted_server_does_not_export_tls_env(
+        self, connect_claude: ConnectClaude, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+        args = parse_group_args(["claude", "--print-env", "--model", "gpt-4o"])
+
+        with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
+            connect_claude._run_connect_claude_cmd(args)
+        assert "NODE_TLS_REJECT_UNAUTHORIZED" not in capsys.readouterr().out
 
 
 class TestModelMapping:

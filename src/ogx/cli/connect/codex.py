@@ -18,6 +18,7 @@ from typing import Any, NoReturn
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 from termcolor import cprint
 
+from ogx.cli.connect.tls import is_untrusted_certificate_error, untrusted_certificate_client
 from ogx.cli.subcommand import Subcommand
 from ogx.log import get_logger
 
@@ -43,14 +44,38 @@ class CodexServerDiscovery:
     def __init__(self, *, timeout_seconds: float) -> None:
         self.timeout_seconds = timeout_seconds
 
-    def fetch_models(self, base_url: str) -> list[DiscoveredCodexModel]:
+    def fetch_models(self, base_url: str, insecure: bool) -> tuple[list[DiscoveredCodexModel], bool]:
+        """Fetch discovered models. Returns (models, self_signed_certificate)."""
         default_headers = self.build_request_headers()
-        client = OpenAI(
-            base_url=base_url,
-            api_key=os.getenv("OGX_API_KEY", "unused"),
-            timeout=self.timeout_seconds,
-            default_headers=default_headers or None,
-        )
+        try:
+            return self._list_models(base_url, default_headers, verify=True), False
+        except APIConnectionError as e:
+            if insecure and is_untrusted_certificate_error(e):
+                # The user approved skipping verification with --insecure.
+                try:
+                    return self._list_models(base_url, default_headers, verify=False), True
+                except APIConnectionError:
+                    pass
+            if is_untrusted_certificate_error(e):
+                _exit_with_error(
+                    f"Failed to connect to OGX server at {base_url}: its TLS certificate is not trusted.\n"
+                    "Add the certificate to your system trust store, or re-run with 'ogx connect --insecure' "
+                    "to skip certificate verification for this invocation."
+                )
+            _exit_with_error(f"Failed to connect to OGX server at {base_url}\nStart the server first with: ogx go")
+
+    def _list_models(
+        self, base_url: str, default_headers: dict[str, str], *, verify: bool
+    ) -> list[DiscoveredCodexModel]:
+        client_kwargs: dict[str, Any] = {
+            "base_url": base_url,
+            "api_key": os.getenv("OGX_API_KEY", "unused"),
+            "timeout": self.timeout_seconds,
+            "default_headers": default_headers or None,
+        }
+        if not verify:
+            client_kwargs["http_client"] = untrusted_certificate_client()
+        client = OpenAI(**client_kwargs)
         try:
             response = client.models.list()
         except APITimeoutError:
@@ -59,9 +84,7 @@ class CodexServerDiscovery:
                 f"Timed out while querying available models after {self.timeout_seconds} seconds."
             )
         except APIConnectionError:
-            _exit_with_error(
-                f"Failed to connect to OGX server at {base_url}\nStart the server first with: ogx run <config>"
-            )
+            raise
         except APIStatusError as e:
             _exit_with_error(f"Failed to query models from OGX server at {base_url} (HTTP {e.status_code})")
 
@@ -335,7 +358,12 @@ class ConnectCodex(Subcommand):
         # The connect group resolves and validates the server URL into args.connect_url.
         base_url = args.connect_url
 
-        models = self.discovery.fetch_models(base_url)
+        models, self_signed = self.discovery.fetch_models(base_url, args.insecure)
+        if self_signed:
+            _exit_with_error(
+                "Codex cannot connect to a server with a self-signed certificate. Add the certificate to your "
+                "system trust store, or restart the server with: ogx go --insecure --no-auth"
+            )
         if not models:
             _exit_with_error("Failed to find any LLM models on the OGX server.")
 

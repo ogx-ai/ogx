@@ -90,6 +90,19 @@ class ConnectParser(Subcommand):
             ),
         )
 
+        self.parser.add_argument(
+            "--insecure",
+            "--no-check-certificate",
+            "-k",
+            action="store_true",
+            default=False,
+            help=(
+                "Allow HTTPS connections to servers with untrusted (for example, self-signed) "
+                "certificates, like curl -k or wget --no-check-certificate. Only affects this "
+                "connect invocation."
+            ),
+        )
+
         subparsers = self.parser.add_subparsers(title="connect_subcommands")
 
         ConnectClaude.create(subparsers)

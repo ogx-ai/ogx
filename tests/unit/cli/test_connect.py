@@ -36,6 +36,24 @@ class TestGroupUrl:
             connect_group.parse_args(["connect", "claude", "--url", "http://agent.example.com/v1"])
 
 
+class TestInsecureFlag:
+    def test_defaults_to_false(self, connect_group: argparse.ArgumentParser) -> None:
+        args = connect_group.parse_args(["connect", "claude"])
+        assert args.insecure is False
+
+    def test_dash_k(self, connect_group: argparse.ArgumentParser) -> None:
+        args = connect_group.parse_args(["connect", "-k", "claude"])
+        assert args.insecure is True
+
+    def test_long_form(self, connect_group: argparse.ArgumentParser) -> None:
+        args = connect_group.parse_args(["connect", "--insecure", "claude"])
+        assert args.insecure is True
+
+    def test_wget_style_long_form(self, connect_group: argparse.ArgumentParser) -> None:
+        args = connect_group.parse_args(["connect", "--no-check-certificate", "claude"])
+        assert args.insecure is True
+
+
 class TestUrlResolution:
     def _clean_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("OGX_BASE_URL", raising=False)
