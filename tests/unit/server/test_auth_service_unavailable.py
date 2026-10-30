@@ -5,9 +5,8 @@
 # the root directory of this source tree.
 
 import base64
-import json
 import logging  # allow-direct-logging
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -123,24 +122,21 @@ def oauth2_client():
 def test_jwks_connection_error_returns_503(oauth2_client, jwt_token_valid, suppress_auth_errors):
     from jwt.exceptions import PyJWKClientConnectionError
 
-    with patch("urllib.request.urlopen") as mock_urlopen:
-        mock_urlopen.side_effect = PyJWKClientConnectionError("Connection refused")
+    with patch("jwt.PyJWKClient.fetch_data", side_effect=PyJWKClientConnectionError("Connection refused")):
         response = oauth2_client.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
         assert response.status_code == 503
         assert "Authentication service unavailable" in response.json()["error"]["message"]
 
 
 def test_jwks_network_error_returns_503(oauth2_client, jwt_token_valid, suppress_auth_errors):
-    with patch("urllib.request.urlopen") as mock_urlopen:
-        mock_urlopen.side_effect = OSError("Network is unreachable")
+    with patch("jwt.PyJWKClient.fetch_data", side_effect=OSError("Network is unreachable")):
         response = oauth2_client.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
         assert response.status_code == 503
         assert "Authentication service unavailable" in response.json()["error"]["message"]
 
 
 def test_jwks_timeout_returns_503(oauth2_client, jwt_token_valid, suppress_auth_errors):
-    with patch("urllib.request.urlopen") as mock_urlopen:
-        mock_urlopen.side_effect = TimeoutError("Connection timed out")
+    with patch("jwt.PyJWKClient.fetch_data", side_effect=TimeoutError("Connection timed out")):
         response = oauth2_client.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
         assert response.status_code == 503
         assert "Authentication service unavailable" in response.json()["error"]["message"]
@@ -149,36 +145,36 @@ def test_jwks_timeout_returns_503(oauth2_client, jwt_token_valid, suppress_auth_
 def test_jwks_http_500_returns_503(oauth2_client, jwt_token_valid, suppress_auth_errors):
     import urllib.error
 
-    with patch("urllib.request.urlopen") as mock_urlopen:
-        mock_urlopen.side_effect = urllib.error.HTTPError(
+    with patch(
+        "jwt.PyJWKClient.fetch_data",
+        side_effect=urllib.error.HTTPError(
             url="http://mock-authz-service/.well-known/jwks.json",
             code=500,
             msg="Internal Server Error",
             hdrs={},
             fp=None,
-        )
+        ),
+    ):
         response = oauth2_client.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
         assert response.status_code == 503
         assert "Authentication service unavailable" in response.json()["error"]["message"]
 
 
 def test_bad_token_still_returns_401(oauth2_client, suppress_auth_errors):
-    with patch("urllib.request.urlopen") as mock_urlopen:
-        mock_response = Mock()
-        mock_response.read.return_value = json.dumps(
-            {
-                "keys": [
-                    {
-                        "kid": "1234567890",
-                        "kty": "oct",
-                        "alg": "HS256",
-                        "use": "sig",
-                        "k": base64.b64encode(b"foobarbaz").decode(),
-                    }
-                ]
-            }
-        ).encode()
-        mock_urlopen.return_value.__enter__.return_value = mock_response
+    with patch(
+        "jwt.PyJWKClient.fetch_data",
+        return_value={
+            "keys": [
+                {
+                    "kid": "1234567890",
+                    "kty": "oct",
+                    "alg": "HS256",
+                    "use": "sig",
+                    "k": base64.b64encode(b"foobarbaz").decode(),
+                }
+            ]
+        },
+    ):
         response = oauth2_client.get("/test", headers={"Authorization": "Bearer not.a.valid.jwt"})
         assert response.status_code == 401
         assert "Invalid JWT token" in response.json()["error"]["message"]
@@ -194,23 +190,20 @@ def test_jwks_missing_kid_still_returns_401(oauth2_client, suppress_auth_errors)
         headers={"kid": "unknown-kid"},
     )
 
-    with patch("urllib.request.urlopen") as mock_urlopen:
-        mock_response = Mock()
-        mock_response.read.return_value = json.dumps(
-            {
-                "keys": [
-                    {
-                        "kid": "1234567890",
-                        "kty": "oct",
-                        "alg": "HS256",
-                        "use": "sig",
-                        "k": base64.b64encode(b"foobarbaz").decode(),
-                    }
-                ]
-            }
-        ).encode()
-        mock_urlopen.return_value.__enter__.return_value = mock_response
-
+    with patch(
+        "jwt.PyJWKClient.fetch_data",
+        return_value={
+            "keys": [
+                {
+                    "kid": "1234567890",
+                    "kty": "oct",
+                    "alg": "HS256",
+                    "use": "sig",
+                    "k": base64.b64encode(b"foobarbaz").decode(),
+                }
+            ]
+        },
+    ):
         response = oauth2_client.get("/test", headers={"Authorization": f"Bearer {token_with_unknown_kid}"})
         assert response.status_code == 401
         assert "Invalid JWT token" in response.json()["error"]["message"]
