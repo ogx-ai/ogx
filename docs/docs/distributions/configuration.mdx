@@ -226,7 +226,7 @@ The environment variable substitution system is type-safe:
 
 - String values remain strings
 - Empty defaults (`${env.VAR:+}`) are converted to `None` for fields that accept `str | None`
-- Numeric defaults are properly typed (e.g., `${env.PORT:=8321}` becomes an integer)
+- Numeric values are passed as strings and converted by the field type (e.g., `${env.PORT:=8321}` becomes an integer for an `int` field, while a digits-only password stays a string)
 - Boolean defaults work correctly (e.g., `${env.DEBUG:=false}` becomes a boolean)
 
 ## Resources

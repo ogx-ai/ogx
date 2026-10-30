@@ -679,16 +679,9 @@ def _convert_string_to_proper_type(value: str) -> Any:
     elif lowered == "false":
         return False
 
-    try:
-        return int(value)
-    except ValueError:
-        pass
-
-    try:
-        return float(value)
-    except ValueError:
-        pass
-
+    # Numeric-looking values stay strings. Pydantic coerces them for int and float
+    # fields, while str fields (passwords, API keys, project numbers) keep the exact
+    # value, including leading zeros.
     return value
 
 
