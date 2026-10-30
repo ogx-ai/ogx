@@ -50,17 +50,17 @@ def test_claude_code_cli_smoke(messages_base_url, text_model_id, mock_sentinel, 
     """
     prompt = "What is the capital of France? Reply with only the city name and nothing else."
 
-    # `ogx connect claude` builds the ANTHROPIC_* environment from --url and
-    # --model and execs the CLI, passing through its exit code. The test
-    # passes no thinking configuration: the adapter is what makes this work
-    # for users, so the test exercises exactly the shipped path.
+    # `ogx connect claude` builds the ANTHROPIC_* environment from the group
+    # --url flag and --model and execs the CLI, passing through its exit code.
+    # The test passes no thinking configuration: the adapter is what makes this
+    # work for users, so the test exercises exactly the shipped path.
     result = subprocess.run(
         [
             OGX_CLI,
             "connect",
-            "claude",
             "--url",
             str(messages_base_url).rstrip("/") + "/v1",
+            "claude",
             "--model",
             text_model_id,
             "--",
