@@ -69,15 +69,24 @@ def get_provider_dependencies(
             if hasattr(provider_spec, "container_image") and provider_spec.container_image:
                 raise ValueError("A stack's dependencies cannot have a container image")
 
+    normal_deps, special_deps = split_pip_packages(deps)
+    return list(set(normal_deps)), list(set(special_deps)), list(set(external_provider_deps))
+
+
+def split_pip_packages(packages: list[str]) -> tuple[list[str], list[str]]:
+    """Split pip packages into normal requirements and special ones that carry pip flags.
+
+    Special entries (e.g. ``torch --index-url ...``) must each be installed with their own
+    pip invocation, so they cannot be batched with normal requirements.
+    """
     normal_deps = []
     special_deps = []
-    for package in deps:
-        if any(f in package for f in ["--no-deps", "--index-url", "--extra-index-url"]):
+    for package in packages:
+        if any(f in package for f in ["--no-deps", "--no-index", "--index-url", "--extra-index-url"]):
             special_deps.append(package)
         else:
             normal_deps.append(package)
-
-    return list(set(normal_deps)), list(set(special_deps)), list(set(external_provider_deps))
+    return normal_deps, special_deps
 
 
 def print_pip_install_help(config: StackConfig) -> None:
