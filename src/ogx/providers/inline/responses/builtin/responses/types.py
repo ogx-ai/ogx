@@ -23,6 +23,7 @@ from ogx_api import (
     OpenAIResponseInputToolFileSearch,
     OpenAIResponseInputToolFunction,
     OpenAIResponseInputToolMCP,
+    OpenAIResponseInputToolNamespace,
     OpenAIResponseInputToolWebSearch,
     OpenAIResponseMCPApprovalRequest,
     OpenAIResponseMCPApprovalResponse,
@@ -178,7 +179,17 @@ class ToolContext(BaseModel):
             # Exhaustive check - all tool types should be handled above
             raise AssertionError(f"Unexpected tool type: {type(tool)}")
 
-        return [convert_tool(tool) for tool in self.current_tools]
+        # Namespaced tools are accepted on the wire but flattened to their
+        # function tools here: the response tools echo only knows about
+        # function tools (the model itself sees them under qualified names).
+        flat_tools: list[OpenAIResponseInputTool] = []
+        for tool in self.current_tools:
+            if isinstance(tool, OpenAIResponseInputToolNamespace):
+                flat_tools.extend(tool.tools)
+            else:
+                flat_tools.append(tool)
+
+        return [convert_tool(tool) for tool in flat_tools]
 
 
 class ChatCompletionContext(BaseModel):

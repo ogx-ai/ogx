@@ -314,6 +314,8 @@ class OpenAIResponseOutputMessageFunctionToolCall(BaseModel):
     :param type: Tool call type identifier, always "function_call"
     :param id: (Optional) Additional identifier for the tool call
     :param status: (Optional) Current status of the function call execution
+    :param namespace: (Optional) Namespace of the function, when the tool was
+        declared inside a namespace; clients use it to route the call
     """
 
     call_id: str
@@ -322,6 +324,7 @@ class OpenAIResponseOutputMessageFunctionToolCall(BaseModel):
     type: Literal["function_call"] = "function_call"
     id: str | None = None
     status: str | None = None
+    namespace: str | None = None
 
 
 @json_schema_type
@@ -563,6 +566,22 @@ class OpenAIResponseInputToolFunction(BaseModel):
 
 
 @json_schema_type
+class OpenAIResponseInputToolNamespace(BaseModel):
+    """Namespace tool configuration grouping function tools under a shared name.
+
+    :param type: Tool type identifier, always "namespace"
+    :param name: Name of the namespace
+    :param description: Description of what the namespace groups
+    :param tools: The function tools grouped in this namespace
+    """
+
+    type: Literal["namespace"] = "namespace"
+    name: str = Field(min_length=1)
+    description: str
+    tools: list[OpenAIResponseInputToolFunction] = Field(min_length=1)
+
+
+@json_schema_type
 class OpenAIResponseInputToolFileSearch(BaseModel):
     """File search tool configuration for OpenAI response inputs.
 
@@ -635,7 +654,8 @@ OpenAIResponseInputTool = Annotated[
     OpenAIResponseInputToolWebSearch
     | OpenAIResponseInputToolFileSearch
     | OpenAIResponseInputToolFunction
-    | OpenAIResponseInputToolMCP,
+    | OpenAIResponseInputToolMCP
+    | OpenAIResponseInputToolNamespace,
     Field(discriminator="type"),
 ]
 register_schema(OpenAIResponseInputTool, name="OpenAIResponseInputTool")

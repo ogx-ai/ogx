@@ -24,6 +24,7 @@ from ogx_api import (
     OpenAIResponseInputToolFileSearch,
     OpenAIResponseInputToolFunction,
     OpenAIResponseInputToolMCP,
+    OpenAIResponseInputToolNamespace,
     OpenAIResponseInputToolWebSearch,
     OpenAIResponseObject,
     OpenAIResponseOutputMessageMCPListTools,
@@ -43,6 +44,24 @@ class TestToolContext:
         assert len(context.tools_to_process) == 0
         assert len(context.previous_tools) == 0
         assert len(context.previous_tool_listings) == 0
+
+    def test_available_tools_flattens_namespace_tools(self):
+        tools = [
+            OpenAIResponseInputToolNamespace(
+                name="codex_worktrees",
+                description="Worktree tools.",
+                tools=[
+                    OpenAIResponseInputToolFunction(name="create_worktree", parameters={"type": "object"}),
+                    OpenAIResponseInputToolFunction(name="list_worktrees", parameters={"type": "object"}),
+                ],
+            ),
+        ]
+        context = ToolContext(tools)
+        available = context.available_tools()
+
+        assert len(available) == 2
+        assert all(tool.type == "function" for tool in available)
+        assert [tool.name for tool in available] == ["create_worktree", "list_worktrees"]
 
     def test_no_previous_tools(self):
         tools = [

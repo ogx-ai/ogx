@@ -122,8 +122,11 @@ from .utils import (
     convert_mcp_tool_choice,
     extract_citations_from_text,
     is_function_tool_call,
+    merge_namespace_tool_description,
+    qualified_namespace_tool_name,
     run_guardrails,
     should_summarize_reasoning,
+    split_qualified_tool_name,
     summarize_reasoning,
 )
 
@@ -481,6 +484,7 @@ class StreamingResponseOrchestrator:
                 self.ctx.chat_tools,
                 self.ctx.tool_choice,
                 self.server_label_to_tools,
+                self.ctx.response_tools,
             )
             # chat_tool_choice can be str, dict-like object, or None
             if isinstance(processed_tool_choice, str | type(None)):
@@ -952,7 +956,9 @@ class StreamingResponseOrchestrator:
                         # The model hallucinated a tool name — it doesn't match
                         # any registered function tool, server-side built-in, or
                         # MCP tool.
-                        has_client_tools = any(t.type == "function" for t in self.ctx.response_tools)
+                        has_client_tools = any(
+                            t.type == "function" or (t.type == "namespace" and t.tools) for t in self.ctx.response_tools
+                        )
                         if has_client_tools:
                             # A client is expected to handle function calls, so
                             # surface the hallucinated name as a client-side
@@ -1378,12 +1384,14 @@ class StreamingResponseOrchestrator:
                             is_mcp_tool = tool_call.function.name and tool_call.function.name in self.mcp_tool_to_server
                             if not is_mcp_tool and tool_call.function.name not in _SERVER_SIDE_BUILTIN_TOOL_NAMES:
                                 # for MCP tools (and even other non-function tools) we emit an output message item later
+                                call_name, call_namespace = self._function_call_identity(tool_call.function.name)
                                 function_call_item = OpenAIResponseOutputMessageFunctionToolCall(
                                     arguments="",  # Will be filled incrementally via delta events
                                     call_id=tool_call.id or "",
-                                    name=tool_call.function.name if tool_call.function else "",
+                                    name=call_name,
                                     id=tool_call_item_id,
                                     status="in_progress",
+                                    namespace=call_namespace,
                                 )
                                 yield OpenAIResponseObjectStreamResponseOutputItemAdded(
                                     response_id=self.response_id,
@@ -1594,6 +1602,20 @@ class StreamingResponseOrchestrator:
             reasoning_content="".join(reasoning_text_accumulated) if reasoning_text_accumulated else None,
         )
 
+    def _function_call_identity(self, name: str | None) -> tuple[str, str | None]:
+        """Map a chat-layer tool name back to the (bare name, namespace) to emit.
+
+        Namespaced tools reach the chat backend under a qualified name
+        (namespace + delimiter + function name), so the call the model makes
+        identifies the exact tool it picked, even when the same bare name is
+        declared in several namespaces or also at the top level. Clients such
+        as codex read the namespace back off the function_call output to route
+        the call to the handler that owns the group.
+        """
+        if not name or not self.ctx.response_tools:
+            return (name or "", None)
+        return split_qualified_tool_name(name, self.ctx.response_tools)
+
     def _build_chat_completion(self, result: ChatCompletionResult) -> OpenAIChatCompletion:
         """Build OpenAIChatCompletion from ChatCompletionResult."""
         # Convert collected chunks to complete response
@@ -1741,12 +1763,14 @@ class StreamingResponseOrchestrator:
             # Use existing item_id or create new one if not found
             final_item_id = matching_item_id or f"fc_{uuid.uuid4()}"
 
+            call_name, call_namespace = self._function_call_identity(tool_call.function.name)
             function_call_item = OpenAIResponseOutputMessageFunctionToolCall(
                 arguments=tool_call.function.arguments or "",
                 call_id=tool_call.id,
-                name=tool_call.function.name or "",
+                name=call_name,
                 id=final_item_id,
                 status="completed",
+                namespace=call_namespace,
             )
             output_messages.append(function_call_item)
 
@@ -1780,6 +1804,22 @@ class StreamingResponseOrchestrator:
                 self.ctx.chat_tools.append(
                     ChatCompletionToolParam(type="function", function=input_tool.model_dump(exclude_none=True))  # type: ignore[typeddict-item,arg-type]  # Dict compatible with FunctionDefinition
                 )
+            elif input_tool.type == "namespace":
+                # Flatten the namespace's function tools under a qualified
+                # name so same-named tools from different namespaces stay
+                # distinguishable for the model and on the way back. The
+                # namespace's model-facing description is merged into each
+                # member's description.
+                for function_tool in input_tool.tools:
+                    qualified = qualified_namespace_tool_name(input_tool.name, function_tool.name)
+                    description = merge_namespace_tool_description(input_tool.description, function_tool.description)
+                    self.ctx.chat_tools.append(
+                        ChatCompletionToolParam(
+                            type="function",
+                            function=function_tool.model_dump(exclude_none=True)
+                            | {"name": qualified, "description": description},  # type: ignore[typeddict-item,arg-type]  # Dict compatible with FunctionDefinition
+                        )
+                    )
             elif input_tool.type in WebSearchToolTypes:
                 tool_name = "web_search"
                 # Need to access tool_groups_api from tool_executor
@@ -1911,12 +1951,52 @@ class StreamingResponseOrchestrator:
             logger.exception("Failed to list MCP tools", server_url=mcp_tool.server_url, error=str(e))
             raise
 
+    def _validate_qualified_tool_names(self) -> None:
+        """Reject tool declarations whose chat-layer names collide across tools.
+
+        Namespaced functions reach the chat layer under a qualified name
+        (namespace + delimiter + function name). A top-level function, or a
+        member of another namespace, whose name equals one of those makes the
+        chat-layer name map to two different tools, so calls cannot be routed
+        back unambiguously and the request is rejected. Duplicate member names
+        within a single namespace are allowed, matching the OpenAI API: the
+        qualified name still maps to exactly one (name, namespace) pair and
+        clients disambiguate overloads via the arguments.
+        """
+        top_level = {t.name for t in (self.ctx.response_tools or []) if t.type == "function"}
+        seen_qualified: dict[str, str] = {}
+        for t in self.ctx.response_tools or []:
+            if t.type != "namespace":
+                continue
+            for f in t.tools:
+                qualified = qualified_namespace_tool_name(t.name, f.name)
+                if qualified in top_level:
+                    raise InvalidParameterError(
+                        "tools",
+                        qualified,
+                        "conflicts with a top-level function tool of the same name; "
+                        "rename one so namespaced and top-level tools stay distinguishable",
+                    )
+                # A qualified name from another namespace always names a
+                # distinct tool, so it is ambiguous. Duplicate members of the
+                # same namespace share one (name, namespace) identity and are
+                # allowed (overloads, matching the OpenAI API).
+                other_ns = seen_qualified.get(qualified)
+                if other_ns is not None and other_ns != t.name:
+                    raise InvalidParameterError(
+                        "tools",
+                        qualified,
+                        f"conflicts with a function tool in namespace '{other_ns}'",
+                    )
+                seen_qualified[qualified] = t.name
+
     async def _process_tools(
         self, output_messages: list[OpenAIResponseOutput]
     ) -> AsyncIterator[OpenAIResponseObjectStream]:
         # Handle all mcp tool lists from previous response that are still valid:
         # tool_context can be None when no tools are provided in the response request
         if self.ctx.tool_context:
+            self._validate_qualified_tool_names()
             for tool in self.ctx.tool_context.previous_tool_listings:
                 async for evt in self._reuse_mcp_list_tools(tool, output_messages):
                     yield evt
@@ -2029,18 +2109,35 @@ async def _process_tool_choice(
     chat_tools: list[ChatCompletionToolParam],
     tool_choice: OpenAIResponseInputToolChoice,
     server_label_to_tools: dict[str, list[str]],
+    response_tools: list[OpenAIResponseInputTool] | None = None,
 ) -> str | OpenAIChatCompletionToolChoice | None:
     """Process and validate the OpenAI Responses tool choice and return the appropriate chat completion tool choice object.
 
     :param chat_tools: The list of chat tools to enforce tool choice against.
     :param tool_choice: The OpenAI Responses tool choice to process.
     :param server_label_to_tools: A dictionary mapping server labels to the list of tools available on that server.
+    :param response_tools: The original request tools, used to resolve bare
+        names of namespaced functions to their qualified chat-layer names.
     :return: The appropriate chat completion tool choice object.
     """
 
     # retrieve all function tool names from the chat tools
     # Note: chat_tools contains dicts, not objects
     chat_tool_names = [tool["function"]["name"] for tool in chat_tools if tool["type"] == "function"]
+
+    def to_chat_tool_name(name: str) -> str:
+        # Clients reference namespaced functions by bare name; the chat layer
+        # knows them by qualified name. A top-level function of the same bare
+        # name wins; a name shared by several namespaces cannot be resolved
+        # and is left bare (no enforcement rather than the wrong tool).
+        if not name:
+            return name
+        if any(t.type == "function" and t.name == name for t in response_tools or []):
+            return name
+        matches = [t for t in response_tools or [] if t.type == "namespace" and any(f.name == name for f in t.tools)]
+        if len(matches) == 1:
+            return qualified_namespace_tool_name(matches[0].name, name)
+        return name
 
     if isinstance(tool_choice, OpenAIResponseInputToolChoiceMode):
         if tool_choice.value == "required":
@@ -2061,7 +2158,9 @@ async def _process_tool_choice(
         for tool in tool_choice.tools:
             match tool.get("type"):
                 case "function":
-                    final_tools.append({"type": "function", "function": {"name": tool.get("name")}})
+                    final_tools.append(
+                        {"type": "function", "function": {"name": to_chat_tool_name(tool.get("name") or "")}}
+                    )
                 case "custom":
                     final_tools.append({"type": "custom", "custom": {"name": tool.get("name")}})
                 case "mcp":
@@ -2098,10 +2197,11 @@ async def _process_tool_choice(
                 return OpenAIChatCompletionToolChoiceCustomTool(name=tool_choice.name)
 
             case OpenAIResponseInputToolChoiceFunctionTool():
-                if tool_choice.name and tool_choice.name not in chat_tool_names:
+                resolved_name = to_chat_tool_name(tool_choice.name) if tool_choice.name else tool_choice.name
+                if resolved_name and resolved_name not in chat_tool_names:
                     logger.warning("Tool not found in chat tools", tool_name=tool_choice.name)
                     return None
-                return OpenAIChatCompletionToolChoiceFunctionTool(name=tool_choice.name)
+                return OpenAIChatCompletionToolChoiceFunctionTool(name=resolved_name)
 
             case OpenAIResponseInputToolChoiceFileSearch():
                 if "file_search" not in chat_tool_names:
