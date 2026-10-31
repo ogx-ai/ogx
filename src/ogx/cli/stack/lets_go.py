@@ -243,7 +243,7 @@ def _remove_api(run_config: StackConfig, api: str) -> None:
         run_config.apis = [a for a in run_config.apis if a != api]
 
 
-def _add_file_search_and_responses(run_config: StackConfig) -> None:
+async def _add_file_search_and_responses(run_config: StackConfig) -> None:
     """Add file-search and responses providers to the stack config.
 
     These are only added after confirming an embedding model is available.
@@ -338,7 +338,16 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
                 config=resolved_config,
             )
         )
-        cprint(f"  ✓ {provider_id} (web search)", color="green")
+        probe_ok, probe_detail = await _probe_web_search_provider(provider_type, resolved_config)
+        if probe_ok:
+            cprint(f"  ✓ {provider_id} (web search) — {probe_detail}", color="green")
+        else:
+            # Register anyway: the key was set on purpose, and the failure may be temporary
+            # (rate limit, or a local mock endpoint that is not up yet).
+            cprint(
+                f"  ⚠ {provider_id} (web search) — probe failed: {probe_detail}, registered anyway",
+                color="yellow",
+            )
         added = True
 
     if not added:
@@ -434,7 +443,7 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
             color="green",
         )
         # Add file-search and responses now that embedding model is confirmed
-        _add_file_search_and_responses(run_config)
+        await _add_file_search_and_responses(run_config)
     elif "vector_io" in run_config.providers:
         detected_result = (
             autodetect_embedding if autodetect_embedding is not None else await _detect_embedding_model(run_config)
@@ -472,7 +481,7 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
                     color="green",
                 )
                 # Add file-search and responses now that embedding model is confirmed
-                _add_file_search_and_responses(run_config)
+                await _add_file_search_and_responses(run_config)
         else:
             cprint(
                 "  ✗ No embedding model detected — vector stores, file-search, and responses disabled.",
@@ -812,6 +821,35 @@ def _is_auth_error(e: Exception) -> bool:
         or "forbidden" in error_str
         or "invalid_api_key" in error_str
     )
+
+
+async def _probe_web_search_provider(provider_type: str, config: dict[str, Any]) -> tuple[bool, str]:
+    """Send one minimal web_search query through a web search provider to check its key and endpoint.
+
+    Returns a tuple of (ok, detail), where detail is a short reason shown in the startup banner.
+    """
+    spec = get_provider_registry().get(Api.tool_runtime, {}).get(provider_type)
+    if spec is None or not spec.module:
+        return False, "provider not found in registry"
+
+    try:
+        module = importlib.import_module(spec.module)
+        factory_fn = _FactoryDispatcher.get_factory(spec, module)
+        if factory_fn is None:
+            return False, "provider has no factory function"
+        config_type = instantiate_class_type(spec.config_class)
+        impl: Any = await _instantiate_with_timeout(factory_fn, config_type(**config))
+        result = await asyncio.wait_for(impl.invoke_tool("web_search", {"query": "test"}), timeout=10.0)
+    except TimeoutError:
+        return False, "timed out"
+    except Exception as e:
+        status_code = getattr(getattr(e, "response", None), "status_code", None)
+        reason = "auth error" if _is_auth_error(e) else type(e).__name__
+        return False, f"{reason} ({status_code})" if status_code else reason
+
+    if result.error_message:
+        return False, result.error_message
+    return True, "probe query ok"
 
 
 @contextlib.contextmanager

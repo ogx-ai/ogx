@@ -10,6 +10,7 @@ import argparse
 import warnings
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx2
 import pytest
 
 from ogx.cli.letsgo import LetsGo, LetsGoDeprecated
@@ -20,6 +21,16 @@ from ogx.cli.stack.lets_go import (
     _autodetect_providers,
     _build_claude_code_aliases,
     _ProbeStatus,
+)
+from ogx_api import ToolInvocationResult
+
+_WEB_SEARCH_KEY_VARS = (
+    "BRAVE_SEARCH_API_KEY",
+    "TAVILY_SEARCH_API_KEY",
+    "BING_API_KEY",
+    "NIMBLE_API_KEY",
+    "SERPLY_API_KEY",
+    "EXA_API_KEY",
 )
 
 
@@ -466,7 +477,7 @@ class TestClaudeCodeAliases:
 
 
 class TestAddFileSearchAndResponses:
-    def test_uses_brave_when_brave_key_is_set(self, monkeypatch: pytest.MonkeyPatch):
+    async def test_uses_brave_when_brave_key_is_set(self, monkeypatch: pytest.MonkeyPatch):
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
         from ogx.core.datatypes import StackConfig
 
@@ -476,7 +487,7 @@ class TestAddFileSearchAndResponses:
         monkeypatch.delenv("NIMBLE_API_KEY", raising=False)
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(
+            await _add_file_search_and_responses(
                 StackConfig(
                     distro_name="test",
                     providers={
@@ -497,7 +508,7 @@ class TestAddFileSearchAndResponses:
         assert "bing-search" not in web_search_providers
         assert "nimble-search" not in web_search_providers
 
-    def test_falls_back_to_tavily_when_only_tavily_key_set(self, monkeypatch: pytest.MonkeyPatch):
+    async def test_falls_back_to_tavily_when_only_tavily_key_set(self, monkeypatch: pytest.MonkeyPatch):
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
         from ogx.core.datatypes import StackConfig
 
@@ -507,7 +518,7 @@ class TestAddFileSearchAndResponses:
         monkeypatch.delenv("NIMBLE_API_KEY", raising=False)
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(
+            await _add_file_search_and_responses(
                 StackConfig(
                     distro_name="test",
                     providers={
@@ -531,7 +542,16 @@ class TestAddFileSearchAndResponses:
         # Only tavily is added since only its env var is set
         assert provider_ids_in_calls == {"tavily-search"}
 
-    def test_selects_first_with_api_key(self, monkeypatch: pytest.MonkeyPatch):
+    @pytest.fixture(autouse=True)
+    def mock_probe(self):
+        with patch(
+            "ogx.cli.stack.lets_go._probe_web_search_provider",
+            new_callable=AsyncMock,
+            return_value=(True, "probe query ok"),
+        ) as mock:
+            yield mock
+
+    async def test_selects_first_with_api_key(self, monkeypatch: pytest.MonkeyPatch):
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
         from ogx.core.datatypes import StackConfig
 
@@ -541,7 +561,7 @@ class TestAddFileSearchAndResponses:
         monkeypatch.setenv("NIMBLE_API_KEY", "nimble-key")
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(
+            await _add_file_search_and_responses(
                 StackConfig(
                     distro_name="test",
                     providers={
@@ -565,7 +585,7 @@ class TestAddFileSearchAndResponses:
         # All four have keys, all four should be added
         assert provider_ids_in_calls == {"brave-search", "tavily-search", "bing-search", "nimble-search"}
 
-    def test_no_web_search_when_no_key_set(self, monkeypatch: pytest.MonkeyPatch):
+    async def test_no_web_search_when_no_key_set(self, monkeypatch: pytest.MonkeyPatch):
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
         from ogx.core.datatypes import StackConfig
 
@@ -574,7 +594,7 @@ class TestAddFileSearchAndResponses:
             monkeypatch.delenv(var, raising=False)
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(
+            await _add_file_search_and_responses(
                 StackConfig(
                     distro_name="test",
                     providers={
@@ -588,7 +608,7 @@ class TestAddFileSearchAndResponses:
         has_disabled = any("web search disabled" in str(call) for call in mock_cprint.call_args_list)
         assert has_disabled
 
-    def test_duplicate_providers_when_already_configured(self, monkeypatch: pytest.MonkeyPatch):
+    async def test_duplicate_providers_when_already_configured(self, monkeypatch: pytest.MonkeyPatch):
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
         from ogx.core.datatypes import Provider, StackConfig
 
@@ -608,7 +628,7 @@ class TestAddFileSearchAndResponses:
         )
 
         with patch("ogx.cli.stack.lets_go.cprint"):
-            _add_file_search_and_responses(config)
+            await _add_file_search_and_responses(config)
 
         web_search_types = {
             "remote::brave-search",
@@ -619,7 +639,7 @@ class TestAddFileSearchAndResponses:
         web_search_providers = [p for p in config.providers["tool_runtime"] if p.provider_type in web_search_types]
         assert len(web_search_providers) == 1
 
-    def test_existing_provider_keeps_no_api_key_config(self):
+    async def test_existing_provider_keeps_no_api_key_config(self):
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
         from ogx.core.datatypes import Provider, StackConfig
 
@@ -638,7 +658,7 @@ class TestAddFileSearchAndResponses:
         )
 
         with patch("ogx.cli.stack.lets_go.cprint"):
-            _add_file_search_and_responses(config)
+            await _add_file_search_and_responses(config)
 
         web_search_providers = [
             p for p in config.providers["tool_runtime"] if p.provider_type == "remote::brave-search"
@@ -647,3 +667,99 @@ class TestAddFileSearchAndResponses:
         assert web_search_providers[0].config["api_key"] == "existing-key"
         assert web_search_providers[0].config["max_results"] == 5
         assert _CLAUDE_CODE_PROVIDER_PRIORITY.index("anthropic") < _CLAUDE_CODE_PROVIDER_PRIORITY.index("ollama")
+
+    async def test_probe_ok_is_shown_in_banner(self, monkeypatch: pytest.MonkeyPatch, mock_probe: AsyncMock):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import StackConfig
+
+        for var in _WEB_SEARCH_KEY_VARS:
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "brave-key")
+
+        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
+            await _add_file_search_and_responses(
+                StackConfig(distro_name="test", providers={"tool_runtime": [], "responses": []})
+            )
+
+        mock_probe.assert_awaited_once()
+        assert mock_probe.await_args.args[0] == "remote::brave-search"
+        assert any("brave-search (web search) — probe query ok" in str(call) for call in mock_cprint.call_args_list)
+
+    async def test_probe_failure_still_registers_provider(self, monkeypatch: pytest.MonkeyPatch, mock_probe: AsyncMock):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import StackConfig
+
+        for var in _WEB_SEARCH_KEY_VARS:
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "wrong-key")
+        mock_probe.return_value = (False, "auth error (401)")
+        config = StackConfig(distro_name="test", providers={"tool_runtime": [], "responses": []})
+
+        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
+            await _add_file_search_and_responses(config)
+
+        assert any(p.provider_type == "remote::brave-search" for p in config.providers["tool_runtime"])
+        assert any(
+            "probe failed: auth error (401), registered anyway" in str(call) for call in mock_cprint.call_args_list
+        )
+
+    async def test_no_probe_when_no_key_set(self, monkeypatch: pytest.MonkeyPatch, mock_probe: AsyncMock):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import StackConfig
+
+        for var in _WEB_SEARCH_KEY_VARS:
+            monkeypatch.delenv(var, raising=False)
+
+        with patch("ogx.cli.stack.lets_go.cprint"):
+            await _add_file_search_and_responses(
+                StackConfig(distro_name="test", providers={"tool_runtime": [], "responses": []})
+            )
+
+        mock_probe.assert_not_awaited()
+
+
+class TestProbeWebSearchProvider:
+    async def test_reports_ok_when_search_succeeds(self):
+        from ogx.cli.stack.lets_go import _probe_web_search_provider
+
+        impl = MagicMock()
+        impl.invoke_tool = AsyncMock(return_value=ToolInvocationResult(content="results"))
+        with patch("ogx.cli.stack.lets_go._instantiate_with_timeout", new_callable=AsyncMock, return_value=impl):
+            ok, detail = await _probe_web_search_provider("remote::brave-search", {"api_key": "key"})
+
+        assert (ok, detail) == (True, "probe query ok")
+        impl.invoke_tool.assert_awaited_once_with("web_search", {"query": "test"})
+
+    async def test_reports_auth_error_with_status_code(self):
+        from ogx.cli.stack.lets_go import _probe_web_search_provider
+
+        request = httpx2.Request("GET", "https://search.example/search")
+        response = httpx2.Response(401, request=request)
+        impl = MagicMock()
+        impl.invoke_tool = AsyncMock(
+            side_effect=httpx2.HTTPStatusError("Client error '401 Unauthorized'", request=request, response=response)
+        )
+        with patch("ogx.cli.stack.lets_go._instantiate_with_timeout", new_callable=AsyncMock, return_value=impl):
+            ok, detail = await _probe_web_search_provider("remote::brave-search", {"api_key": "wrong-key"})
+
+        assert (ok, detail) == (False, "auth error (401)")
+
+    async def test_reports_error_message_returned_by_provider(self):
+        from ogx.cli.stack.lets_go import _probe_web_search_provider
+
+        impl = MagicMock()
+        impl.invoke_tool = AsyncMock(return_value=ToolInvocationResult(error_message="Serply API key is invalid"))
+        with patch("ogx.cli.stack.lets_go._instantiate_with_timeout", new_callable=AsyncMock, return_value=impl):
+            ok, detail = await _probe_web_search_provider("remote::serply-search", {"api_key": "wrong-key"})
+
+        assert (ok, detail) == (False, "Serply API key is invalid")
+
+    async def test_reports_timeout(self):
+        from ogx.cli.stack.lets_go import _probe_web_search_provider
+
+        impl = MagicMock()
+        impl.invoke_tool = AsyncMock(side_effect=TimeoutError())
+        with patch("ogx.cli.stack.lets_go._instantiate_with_timeout", new_callable=AsyncMock, return_value=impl):
+            ok, detail = await _probe_web_search_provider("remote::tavily-search", {"api_key": "key"})
+
+        assert (ok, detail) == (False, "timed out")
