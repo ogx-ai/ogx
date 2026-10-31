@@ -30,7 +30,7 @@ from ogx.core.task import (
     create_detached_background_task,
 )
 from ogx.log import get_logger
-from ogx.providers.inline.responses.builtin.config import CompactionConfig, MemoryConfig
+from ogx.providers.inline.responses.builtin.config import CitationsConfig, CompactionConfig, MemoryConfig
 from ogx.providers.inline.skills.builtin.manifest import parse_skill_manifest
 from ogx.providers.inline.skills.builtin.validation import _SKILL_MD
 from ogx.providers.utils.responses.responses_store import (
@@ -43,6 +43,7 @@ from ogx_api import (
     ConflictError,
     Connectors,
     ConversationItem,
+    ConversationItemList,
     CreateResponseRequest,
     Files,
     GetPromptRequest,
@@ -65,6 +66,8 @@ from ogx_api import (
     OpenAIResponseInputMessageContentText,
     OpenAIResponseInputTool,
     OpenAIResponseInputToolChoice,
+    OpenAIResponseInputToolFileSearch,
+    OpenAIResponseInputToolWebSearch,
     OpenAIResponseMessage,
     OpenAIResponseObject,
     OpenAIResponseObjectStream,
@@ -90,6 +93,7 @@ from ogx_api import (
 )
 from ogx_api.inference import OpenAIChatCompletionRequestWithExtraBody, ServiceTier
 
+from .citations import CitationRegistry
 from .memory import resolve_memory_context, resolve_memory_owner_id, write_conversation_memory
 from .streaming import StreamingResponseOrchestrator
 from .tool_executor import ToolExecutor
@@ -143,6 +147,7 @@ class OpenAIResponsesImpl:
         vector_stores_config: VectorStoresConfig | None = None,
         compaction_config=None,
         memory_config: MemoryConfig | None = None,
+        citations_config: CitationsConfig | None = None,
     ):
         self.inference_api = inference_api
         self.tool_groups_api = tool_groups_api
@@ -165,6 +170,7 @@ class OpenAIResponsesImpl:
 
         self.compaction_config = compaction_config or CompactionConfig()
         self.memory_config = memory_config or MemoryConfig()
+        self.citations_config = citations_config or CitationsConfig()
         self._background_queue: asyncio.Queue[_BackgroundWorkItem] = asyncio.Queue(maxsize=BACKGROUND_QUEUE_MAX_SIZE)
         self._background_worker_tasks: set[asyncio.Task] = set()
         self._background_response_tasks: dict[str, asyncio.Task] = {}
@@ -329,19 +335,23 @@ class OpenAIResponsesImpl:
         tools: list[OpenAIResponseInputTool] | None,
         previous_response_id: str | None,
         conversation: str | None,
+        number_sources: bool = False,
     ) -> tuple[
         str | list[OpenAIResponseInput],
         list[OpenAIMessageParam],
         ToolContext,
         OpenAIResponseUsage | None,
         list[str] | None,
+        CitationRegistry | None,
     ]:
         """Process input with optional previous response context.
 
         Returns:
-            tuple: (all_input, messages, tool context, previous usage, inherited skills)
+            tuple: (all_input, messages, tool context, previous usage, inherited skills, and, when number_sources,
+            the numbers the history showed)
         """
         tool_context = ToolContext(tools)
+        citations = CitationRegistry() if number_sources else None
         previous_usage: OpenAIResponseUsage | None = None
         inherited_skills: list[str] | None = None
         if previous_response_id:
@@ -370,10 +380,14 @@ class OpenAIResponsesImpl:
                 messages = await convert_response_input_to_chat_messages(all_input, files_api=self.files_api)
 
             tool_context.recover_tools_from_previous_response(previous_response)
+            if citations:
+                citations.replay([*previous_response.input, *previous_response.output], stored=True)
         elif conversation is not None:
             conversation_items = await self.conversations_api.list_items(
                 ListItemsRequest(conversation_id=conversation, order="asc")
             )
+            if citations:
+                citations.replay(await self._all_conversation_items(conversation, conversation_items), stored=True)
 
             # Use stored messages as source of truth (like previous_response.messages)
             stored_messages = await self.responses_store.get_conversation_messages(conversation)
@@ -405,8 +419,22 @@ class OpenAIResponsesImpl:
         else:
             all_input = input
             messages = await convert_response_input_to_chat_messages(all_input, files_api=self.files_api)
+        if citations and not isinstance(input, str):
+            citations.replay(input, stored=False)
 
-        return all_input, messages, tool_context, previous_usage, inherited_skills
+        return all_input, messages, tool_context, previous_usage, inherited_skills, citations
+
+    async def _all_conversation_items(
+        self, conversation_id: str, first_page: ConversationItemList
+    ) -> list[ConversationItem]:
+        """The items of first_page and of every page after it."""
+        items, page = list(first_page.data), first_page
+        while page.has_more and page.last_id:
+            page = await self.conversations_api.list_items(
+                ListItemsRequest(conversation_id=conversation_id, order="asc", after=page.last_id)
+            )
+            items.extend(page.data)
+        return items
 
     @staticmethod
     def _insert_memory_context(messages: list[OpenAIMessageParam], memory_context: str) -> None:
@@ -1304,8 +1332,18 @@ class OpenAIResponsesImpl:
             tool_context,
             previous_usage,
             inherited_skills,
+            citations,
         ) = await self._process_input_with_previous_response(
-            request.input, request.tools, request.previous_response_id, request.conversation
+            request.input,
+            request.tools,
+            request.previous_response_id,
+            request.conversation,
+            # Even a JSON turn keeps the numbers apart: file_search labels chunks there too.
+            number_sources=self.citations_config.web_search == "numbered"
+            and any(
+                isinstance(tool, OpenAIResponseInputToolWebSearch | OpenAIResponseInputToolFileSearch)
+                for tool in request.tools or []
+            ),
         )
 
         # Inherit skills from previous response if not explicitly provided
@@ -1364,6 +1402,7 @@ class OpenAIResponsesImpl:
             tool_context=tool_context,
             inputs=all_input,
             extra_body=extra_body,
+            citations=citations,
         )
 
         # Create orchestrator and delegate streaming logic

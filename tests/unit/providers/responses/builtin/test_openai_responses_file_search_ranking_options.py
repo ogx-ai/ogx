@@ -267,7 +267,7 @@ async def test_execute_tool_does_not_turn_unsupported_hybrid_search_into_a_tool_
     """
     mock_vector_io_api.openai_search_vector_store.side_effect = _unsupported_hybrid_search_error()
     tool_executor = _tool_executor(mock_vector_io_api)
-    ctx = SimpleNamespace(response_tools=[_hybrid_search_file_search_tool()])
+    ctx = SimpleNamespace(response_tools=[_hybrid_search_file_search_tool()], citations=None)
 
     with pytest.raises(InvalidParameterError):
         await tool_executor._execute_tool("file_search", {"query": "receipts"}, ctx)

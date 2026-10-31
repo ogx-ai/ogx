@@ -9,13 +9,12 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from ogx.providers.inline.responses.builtin.responses.citations import CitationRewriter
 from ogx.providers.inline.responses.builtin.responses.utils import (
-    _extract_citations_from_text,
     convert_chat_choice_to_response_message,
     convert_response_content_to_chat_content,
     convert_response_input_to_chat_messages,
     convert_response_text_to_chat_response_format,
-    extract_citations_from_text,
     get_message_type_by_role,
     is_function_tool_call,
 )
@@ -57,6 +56,13 @@ from ogx_api.openai_responses import (
 )
 
 
+def _rewrite(text: str, citation_files: dict[str, str]):
+    rewriter = CitationRewriter(citation_files)
+    rewriter.feed(text)
+    rewriter.finish()
+    return rewriter.annotations, rewriter.text
+
+
 @pytest.fixture
 def mock_files_api():
     """Mock files API for testing."""
@@ -71,7 +77,7 @@ class TestConvertChatChoiceToResponseMessage:
             index=0,
         )
 
-        result = await convert_chat_choice_to_response_message(choice)
+        result = await convert_chat_choice_to_response_message(choice, choice.message.content or "", [])
 
         assert result.role == "assistant"
         assert result.status == "completed"
@@ -88,7 +94,7 @@ class TestConvertChatChoiceToResponseMessage:
             index=0,
         )
 
-        result = await convert_chat_choice_to_response_message(choice)
+        result = await convert_chat_choice_to_response_message(choice, choice.message.content or "", [])
 
         assert result.role == "assistant"
         assert result.status == "completed"
@@ -109,7 +115,8 @@ class TestConvertChatChoiceToResponseMessage:
             index=0,
         )
 
-        result = await convert_chat_choice_to_response_message(choice, citation_files={"file-abc123": "climate.pdf"})
+        annotations, text = _rewrite(choice.message.content, {"file-abc123": "climate.pdf"})
+        result = await convert_chat_choice_to_response_message(choice, text, annotations)
 
         assert isinstance(result.content[0], OpenAIResponseOutputMessageContentOutputText)
         assert result.content[0].text == "Global warming is caused by greenhouse gases trapping heat."
@@ -843,7 +850,7 @@ class TestExtractCitationsFromText:
         text += "Other source <|file-def456|>? Repeat source <|file-abc123|>! No citation."
         file_mapping = {"file-abc123": "doc1.pdf", "file-def456": "doc2.txt"}
 
-        annotations, cleaned_text = _extract_citations_from_text(text, file_mapping)
+        annotations, cleaned_text = _rewrite(text, file_mapping)
 
         expected_annotations = [
             OpenAIResponseAnnotationFileCitation(file_id="file-abc123", filename="doc1.pdf", index=30),
@@ -864,7 +871,7 @@ class TestExtractCitationsFromText:
         text = "Fact one [file-abc123]. Fact two (file-def456)."
         file_mapping = {"file-abc123": "doc1.pdf", "file-def456": "doc2.txt"}
 
-        annotations, cleaned_text = _extract_citations_from_text(text, file_mapping)
+        annotations, cleaned_text = _rewrite(text, file_mapping)
 
         assert cleaned_text == "Fact one. Fact two."
         assert [a.file_id for a in annotations] == ["file-abc123", "file-def456"]
@@ -875,15 +882,16 @@ class TestExtractCitationsFromText:
         for recognized files are stripped out, since those become real annotations instead.
         """
         text = "Some fact <|file-unknown|>."
-        annotations, cleaned_text = _extract_citations_from_text(text, {"file-abc123": "doc1.pdf"})
+        annotations, cleaned_text = _rewrite(text, {"file-abc123": "doc1.pdf"})
 
-        assert annotations == []
+        # Only the fallback cites a file: the unknown marker names none.
+        assert [(a.file_id, a.index) for a in annotations] == [("file-abc123", len(text))]
         assert cleaned_text == "Some fact <|file-unknown|>."
 
     def test_extract_citations_preserves_unknown_marker_alongside_known_one(self):
         """A mix of a known and an unknown marker: only the known one is stripped/cited."""
         text = "Cited fact <|file-abc123|>. Uncited fact <|file-unknown|>."
-        annotations, cleaned_text = _extract_citations_from_text(text, {"file-abc123": "doc1.pdf"})
+        annotations, cleaned_text = _rewrite(text, {"file-abc123": "doc1.pdf"})
 
         assert [a.file_id for a in annotations] == ["file-abc123"]
         assert cleaned_text == "Cited fact. Uncited fact <|file-unknown|>."
@@ -899,7 +907,7 @@ class TestExtractCitationsFromTextWithFallback:
         text = "Global warming is caused by greenhouse gases."
         citation_files = {"file-abc123": "climate.pdf"}
 
-        annotations, cleaned_text = extract_citations_from_text(text, citation_files)
+        annotations, cleaned_text = _rewrite(text, citation_files)
 
         assert cleaned_text == text
         assert len(annotations) == 1
@@ -918,7 +926,7 @@ class TestExtractCitationsFromTextWithFallback:
         text = "Global warming is caused by greenhouse gases."
         citation_files = {"file-abc123": "climate.pdf", "file-def456": "unrelated.pdf"}
 
-        annotations, cleaned_text = extract_citations_from_text(text, citation_files)
+        annotations, cleaned_text = _rewrite(text, citation_files)
 
         assert len(annotations) == 1
         assert annotations[0].file_id == "file-abc123"
@@ -926,7 +934,7 @@ class TestExtractCitationsFromTextWithFallback:
         assert annotations[0].index == len(cleaned_text)
 
     def test_no_fallback_when_no_files_were_retrieved(self):
-        annotations, cleaned_text = extract_citations_from_text("No sources used here.", {})
+        annotations, cleaned_text = _rewrite("No sources used here.", {})
 
         assert annotations == []
         assert cleaned_text == "No sources used here."
@@ -935,7 +943,7 @@ class TestExtractCitationsFromTextWithFallback:
         text = "Cited fact <|file-abc123|>. Uncited fact."
         citation_files = {"file-abc123": "doc1.pdf", "file-def456": "doc2.txt"}
 
-        annotations, cleaned_text = extract_citations_from_text(text, citation_files)
+        annotations, cleaned_text = _rewrite(text, citation_files)
 
         assert [a.file_id for a in annotations] == ["file-abc123"]
         assert cleaned_text == "Cited fact. Uncited fact."

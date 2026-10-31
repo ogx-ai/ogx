@@ -136,6 +136,7 @@ async def test_invoke_returns_source_metadata(exa_search_client, mock_exa_respon
     assert "sources" in result.metadata
     assert len(result.metadata["sources"]) == 1
     assert result.metadata["sources"][0]["url"] == "https://example.com"
+    assert result.metadata["sources"][0]["title"] == "Test Result"
     assert result.metadata["query"] == "test query"
 
 

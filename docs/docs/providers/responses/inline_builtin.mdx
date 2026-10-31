@@ -116,6 +116,8 @@ Return Markdown only. | Prompt template used to generate long-term memory summar
 | `memory_config.summarization_model` | `str \| None` | No |  | Model to use for memory summaries. If not set, uses the response model. |
 | `memory_config.max_summary_messages` | `int` | No | 100 | Maximum number of recent conversation messages used when generating a memory summary. |
 | `memory_config.max_transcript_chars` | `int` | No | 20000 | Maximum number of characters stored in the searchable transcript section of a memory file. |
+| `citations_config` | `CitationsConfig` | No | web_search='numbered' | Citation behavior for web_search results. |
+| `citations_config.web_search` | `Literal[numbered, off]` | No | numbered | numbered: list each web_search result as [N] with its title and URL, ask the model to cite [N], and replace each cited number with a ([domain](url)) link carrying a url_citation. off: no web_search citations. Responses with a JSON text format get no web_search citations. |
 | `moderation_endpoint` | `str \| None` | No |  | URL of an OpenAI-compatible /v1/moderations endpoint for guardrails. The endpoint must accept POST &#123;"input": "text"&#125; and return &#123;"results": [&#123;"flagged": bool, "categories": &#123;...&#125;&#125;]&#125;. |
 | `moderation_headers` | `dict[str, str] \| None` | No |  | HTTP headers to send with moderation endpoint requests. Use this to provide authentication for hosted moderation services (e.g., &#123;'Authorization': 'Bearer sk-...'&#125;). These headers are server-side only and never exposed to clients. |
 

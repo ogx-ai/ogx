@@ -133,6 +133,7 @@ async def test_invoke_returns_source_metadata(tavily_search_client, mock_tavily_
     assert "sources" in result.metadata
     assert len(result.metadata["sources"]) == 1
     assert result.metadata["sources"][0]["url"] == "https://example.com"
+    assert result.metadata["sources"][0]["title"] == "Test Result"
     assert result.metadata["query"] == "test query"
 
 

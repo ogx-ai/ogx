@@ -10,10 +10,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from ogx.providers.inline.responses.builtin.responses.citations import CitationRegistry
 from ogx.providers.inline.responses.builtin.responses.streaming import (
     StreamingResponseOrchestrator,
 )
 from ogx.providers.inline.responses.builtin.responses.types import ChatCompletionContext
+from ogx_api.inference import OpenAIResponseFormatText
 from ogx_api.inference.models import (
     OpenAIChatCompletionChunk,
     OpenAIChatCompletionChunkWithReasoning,
@@ -37,6 +39,8 @@ def mock_context():
     context = AsyncMock(spec=ChatCompletionContext)
     context.tool_context = AsyncMock()
     context.tool_context.previous_tools = {}
+    context.citations = None
+    context.response_format = OpenAIResponseFormatText(type="text")
     context.messages = []
     context.tool_choice = None
     context.available_tools = MagicMock(return_value=[])
@@ -215,6 +219,59 @@ async def test_guardrailed_reasoning_blocked_on_violation(mock_inference_api, mo
         refusal_events = [e for e in events if hasattr(e, "type") and e.type == "response.completed"]
         assert len(refusal_events) == 1
         assert orchestrator.violation_detected is True
+
+
+@pytest.mark.parametrize("flagged", [False, True])
+async def test_guardrails_check_the_held_citation_tail(
+    mock_inference_api, mock_context, mock_moderation_endpoint, flagged
+):
+    """The whole answer is a tail the citation rewriter holds until the stream ends, so no delta is pending
+    when it is flushed. It still goes through the final moderation check."""
+    mock_context.model = "test-model"
+    mock_context.temperature = None
+    mock_context.top_p = None
+    mock_context.frequency_penalty = None
+    mock_context.citations = CitationRegistry()
+    mock_context.citations.add("https://example.com/a", "A")
+
+    orchestrator = StreamingResponseOrchestrator(
+        inference_api=mock_inference_api,
+        ctx=mock_context,
+        response_id="resp_held_tail",
+        created_at=0,
+        text=MagicMock(),
+        max_infer_iters=1,
+        tool_executor=MagicMock(),
+        instructions=None,
+        moderation_endpoint=mock_moderation_endpoint,
+        enable_guardrails=True,
+    )
+
+    async def completion_result() -> AsyncIterator[OpenAIChatCompletionChunk]:
+        yield OpenAIChatCompletionChunk(
+            id="chatcmpl_held_tail",
+            choices=[
+                OpenAIChunkChoice(
+                    index=0, delta=OpenAIChoiceDelta(content=" [1", role="assistant"), finish_reason="stop"
+                )
+            ],
+            created=1,
+            model="test-model",
+            object="chat.completion.chunk",
+        )
+
+    async def moderate(endpoint, text, headers=None):
+        return "Content blocked by safety guardrails" if flagged and "[1" in text else None
+
+    mock_guardrails = AsyncMock(side_effect=moderate)
+    with patch("ogx.providers.inline.responses.builtin.responses.streaming.run_guardrails", mock_guardrails):
+        events = [e async for e in orchestrator._process_streaming_chunks(completion_result(), output_messages=[])]
+
+    mock_guardrails.assert_awaited_once()
+    assert mock_guardrails.call_args[0][1] == " [1"
+    streamed = "".join(e.delta for e in events if getattr(e, "type", None) == "response.output_text.delta")
+    assert orchestrator.violation_detected is flagged
+    assert streamed == ("" if flagged else " [1")
 
 
 # ---------------------------------------------------------------------------
