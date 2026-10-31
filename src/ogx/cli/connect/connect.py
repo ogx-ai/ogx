@@ -89,6 +89,16 @@ class ConnectParser(Subcommand):
                 "http://localhost:OGX_PORT/v1."
             ),
         )
+        self.parser.add_argument(
+            "--api-key",
+            dest="connect_api_key",
+            type=str,
+            default=None,
+            help=(
+                "Bearer API key for the OGX server. Applies to all connect subcommands. "
+                "If omitted, falls back to the OGX_API_KEY env var."
+            ),
+        )
 
         self.parser.add_argument(
             "--insecure",
@@ -128,6 +138,8 @@ class ConnectParser(Subcommand):
                 if parsed.connect_url is None:
                     parsed.connect_url = default_base_url()
                 parsed.connect_url = validate_base_url(parsed.connect_url)
+                if parsed.connect_api_key is None:
+                    parsed.connect_api_key = os.getenv("OGX_API_KEY", "").strip()
             return parsed, extras
 
         parser.parse_known_args = parse_known_args  # type: ignore[method-assign]

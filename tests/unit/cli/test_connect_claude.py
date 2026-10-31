@@ -115,6 +115,22 @@ class TestClaudeDetection:
                 connect_claude._run_connect_claude_cmd(args)
             assert exc_info.value.code == 0
 
+    def test_print_env_exports_api_key(self, connect_claude: ConnectClaude, capsys: pytest.CaptureFixture[str]) -> None:
+        args = parse_group_args(["--api-key", "ogk_123", "claude", "--print-env", "--model", "gpt-4o"])
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+
+        with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
+            connect_claude._run_connect_claude_cmd(args)
+        assert "export ANTHROPIC_AUTH_TOKEN=ogk_123" in capsys.readouterr().out
+
+    def test_launch_env_uses_placeholder_without_api_key(self, connect_claude: ConnectClaude) -> None:
+        env = connect_claude._build_env("http://localhost:8321/v1", {})
+        assert env["ANTHROPIC_AUTH_TOKEN"] == "ogx"
+
+    def test_launch_env_uses_api_key_when_provided(self, connect_claude: ConnectClaude) -> None:
+        env = connect_claude._build_env("http://localhost:8321/v1", {}, api_key="ogk_123")
+        assert env["ANTHROPIC_AUTH_TOKEN"] == "ogk_123"
+
 
 class TestServerProbe:
     def test_exits_when_server_unreachable(self, connect_claude: ConnectClaude) -> None:
@@ -123,7 +139,7 @@ class TestServerProbe:
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
-                connect_claude._fetch_models("http://localhost:8321/v1", False)
+                connect_claude._fetch_models("http://localhost:8321/v1", "", False)
 
     def test_exits_on_server_error(self, connect_claude: ConnectClaude) -> None:
         mock_client = MagicMock()
@@ -132,13 +148,42 @@ class TestServerProbe:
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
-                connect_claude._fetch_models("http://localhost:8321/v1", False)
+                connect_claude._fetch_models("http://localhost:8321/v1", "", False)
+
+    def test_exits_with_auth_message_on_401(
+        self, connect_claude: ConnectClaude, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        mock_client = MagicMock()
+        mock_response = httpx2.Response(401, request=httpx2.Request("GET", "http://localhost"))
+        mock_client.models.list.side_effect = APIStatusError("unauthorized", response=mock_response, body=None)
+
+        with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
+            with pytest.raises(SystemExit):
+                connect_claude._fetch_models("http://localhost:8321/v1", "secret-token", False)
+        output = capsys.readouterr().err
+        assert "Failed to authenticate" in output
+        assert "--api-key" in output
+        assert "secret-token" not in output
+
+    def test_probe_forwards_api_key(self, connect_claude: ConnectClaude) -> None:
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+
+        with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client) as mock_openai:
+            connect_claude._fetch_models("http://localhost:8321/v1", "ogk_123", False)
+        assert mock_openai.call_args.kwargs["api_key"] == "ogk_123"
+
+    def test_probe_uses_placeholder_without_api_key(self, connect_claude: ConnectClaude) -> None:
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+
+        with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client) as mock_openai:
+            connect_claude._fetch_models("http://localhost:8321/v1", "", False)
+        assert mock_openai.call_args.kwargs["api_key"] == "unused"
 
     def test_returns_models_on_success(self, connect_claude: ConnectClaude) -> None:
         mock_client = _make_mock_client([_make_model("gpt-4o"), _make_model("llama-3.1-8b")])
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
-            models, _ = connect_claude._fetch_models("http://localhost:8321/v1", False)
+            models, _ = connect_claude._fetch_models("http://localhost:8321/v1", "", False)
         assert models == ["gpt-4o", "llama-3.1-8b"]
 
     def test_filters_out_embedding_models(self, connect_claude: ConnectClaude) -> None:
@@ -150,7 +195,7 @@ class TestServerProbe:
         )
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
-            models, _ = connect_claude._fetch_models("http://localhost:8321/v1", False)
+            models, _ = connect_claude._fetch_models("http://localhost:8321/v1", "", False)
         assert "text-embedding-3-small" not in models
         assert "gpt-4o" in models
 
@@ -164,7 +209,7 @@ class TestSelfSignedTLS:
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
-                connect_claude._fetch_models("https://ogx.example.com/v1", False)
+                connect_claude._fetch_models("https://ogx.example.com/v1", "", False)
         output = capsys.readouterr().err
         assert "TLS certificate is not trusted" in output
         assert "--insecure" in output
@@ -174,7 +219,7 @@ class TestSelfSignedTLS:
         mock_client.models.list.side_effect = [make_untrusted_certificate_error(), mock_client.models.list.return_value]
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
-            models, self_signed = connect_claude._fetch_models("https://ogx.example.com/v1", True)
+            models, self_signed = connect_claude._fetch_models("https://ogx.example.com/v1", "", True)
         assert models == ["gpt-4o"]
         assert self_signed is True
 
@@ -186,7 +231,7 @@ class TestSelfSignedTLS:
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
-                connect_claude._fetch_models("https://ogx.example.com/v1", True)
+                connect_claude._fetch_models("https://ogx.example.com/v1", "", True)
 
     def test_self_signed_exports_tls_env_for_launched_process(
         self, connect_claude: ConnectClaude, capsys: pytest.CaptureFixture[str]

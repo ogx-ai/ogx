@@ -101,7 +101,7 @@ class TestServerProbe:
 
         with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
-                connect_opencode._fetch_models("http://localhost:8321/v1", False)
+                connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
 
     def test_exits_on_timeout(self, connect_opencode: ConnectOpenCode) -> None:
         mock_client = MagicMock()
@@ -109,7 +109,7 @@ class TestServerProbe:
 
         with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
-                connect_opencode._fetch_models("http://localhost:8321/v1", False)
+                connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
 
     def test_exits_on_server_error(self, connect_opencode: ConnectOpenCode) -> None:
         mock_client = MagicMock()
@@ -118,13 +118,34 @@ class TestServerProbe:
 
         with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
-                connect_opencode._fetch_models("http://localhost:8321/v1", False)
+                connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
+
+    def test_exits_with_auth_message_on_401(
+        self, connect_opencode: ConnectOpenCode, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        mock_client = MagicMock()
+        mock_response = httpx2.Response(401, request=httpx2.Request("GET", "http://localhost"))
+        mock_client.models.list.side_effect = APIStatusError("unauthorized", response=mock_response, body=None)
+
+        with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
+            with pytest.raises(SystemExit):
+                connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
+        output = capsys.readouterr().err
+        assert "Failed to authenticate" in output
+        assert "--api-key" in output
+
+    def test_probe_forwards_api_key(self, connect_opencode: ConnectOpenCode) -> None:
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+
+        with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client) as mock_openai:
+            connect_opencode._fetch_models("http://localhost:8321/v1", "ogk_123", False)
+        assert mock_openai.call_args.kwargs["api_key"] == "ogk_123"
 
     def test_returns_models_on_success(self, connect_opencode: ConnectOpenCode) -> None:
         mock_client = _make_mock_client([_make_model("gpt-4o"), _make_model("llama-3.1-8b")])
 
         with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
-            models, _ = connect_opencode._fetch_models("http://localhost:8321/v1", False)
+            models, _ = connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
         assert models == ["gpt-4o", "llama-3.1-8b"]
 
 
@@ -150,7 +171,7 @@ class TestModelSelection:
         )
 
         with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
-            models, _ = connect_opencode._fetch_models("http://localhost:8321/v1", False)
+            models, _ = connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
         assert "text-embedding-3-small" not in models
         assert "gpt-4o" in models
 
@@ -162,7 +183,7 @@ class TestModelSelection:
         )
 
         with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
-            models, _ = connect_opencode._fetch_models("http://localhost:8321/v1", False)
+            models, _ = connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
         assert models == []
 
 
@@ -196,6 +217,16 @@ class TestConfigGeneration:
         assert config["provider"]["ogx"]["options"]["baseURL"] == "http://myhost:9000/v1"
         assert "llama-3.1-8b" in config["provider"]["ogx"]["models"]
 
+    def test_config_includes_api_key_when_provided(self, connect_opencode: ConnectOpenCode) -> None:
+        config = connect_opencode._build_opencode_config(
+            "http://myhost:9000/v1", ["llama-3.1-8b"], "llama-3.1-8b", api_key="ogk_123"
+        )
+        assert config["provider"]["ogx"]["options"]["apiKey"] == "ogk_123"
+
+    def test_config_omits_api_key_when_not_provided(self, connect_opencode: ConnectOpenCode) -> None:
+        config = connect_opencode._build_opencode_config("http://myhost:9000/v1", ["gpt-4o"], "gpt-4o")
+        assert "apiKey" not in config["provider"]["ogx"]["options"]
+
     def test_config_is_valid_json(self, connect_opencode: ConnectOpenCode) -> None:
         config = connect_opencode._build_opencode_config("http://localhost:8321/v1", ["gpt-4o"], "gpt-4o")
         serialized = json.dumps(config)
@@ -212,7 +243,7 @@ class TestSelfSignedTLS:
 
         with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
-                connect_opencode._fetch_models("https://ogx.example.com/v1", False)
+                connect_opencode._fetch_models("https://ogx.example.com/v1", "", False)
         output = capsys.readouterr().err
         assert "TLS certificate is not trusted" in output
         assert "--insecure" in output
