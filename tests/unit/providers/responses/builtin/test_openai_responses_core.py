@@ -756,7 +756,10 @@ async def test_store_response_uses_incremental_input_with_previous_response(
 async def test_store_response_disables_incremental_input_when_auto_compaction_applies(
     openai_responses_impl, mock_responses_store, mock_inference_api
 ):
-    """When auto-compaction rewrites history, storage must persist the effective compacted input snapshot."""
+    """When auto-compaction rewrites history, storage must persist the effective compacted input
+    snapshot (including the compaction item itself), not just the new turn -- otherwise the next
+    previous_response_id turn's history (previous.input + previous.output) would never see that
+    the earlier turns were ever summarized."""
 
     previous_response = _OpenAIResponseObjectWithInputAndMessages(
         id="resp-previous-123",
@@ -789,15 +792,16 @@ async def test_store_response_disables_incremental_input_when_auto_compaction_ap
     mock_responses_store.get_response_object.return_value = previous_response
     mock_inference_api.openai_chat_completion.return_value = fake_stream()
 
+    compaction_item = OpenAIResponseCompaction(id="cmp_123", encrypted_content="Compacted context summary")
     compacted_input = [
+        compaction_item,
         OpenAIResponseMessage(
             id="msg-compacted-user",
             role="user",
             content=[OpenAIResponseInputMessageContentText(text="Now what is 3+3?")],
         ),
-        OpenAIResponseCompaction(id="cmp_123", encrypted_content="Compacted context summary"),
     ]
-    openai_responses_impl._maybe_auto_compact = AsyncMock(return_value=compacted_input)
+    openai_responses_impl._maybe_auto_compact = AsyncMock(return_value=(compacted_input, compaction_item, None))
 
     await openai_responses_impl.create_openai_response(
         CreateResponseRequest(
@@ -815,10 +819,9 @@ async def test_store_response_disables_incremental_input_when_auto_compaction_ap
 
     assert store_call_args.kwargs["incremental_input"] is False
     assert len(stored_input) == 2
-    assert isinstance(stored_input[0], OpenAIResponseMessage)
-    assert stored_input[0].content[0].text == "Now what is 3+3?"
-    assert isinstance(stored_input[1], OpenAIResponseCompaction)
-    assert stored_input[1].encrypted_content == "Compacted context summary"
+    assert isinstance(stored_input[0], OpenAIResponseCompaction)
+    assert isinstance(stored_input[1], OpenAIResponseMessage)
+    assert stored_input[1].content[0].text == "Now what is 3+3?"
 
 
 @pytest.mark.parametrize(

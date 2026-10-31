@@ -289,6 +289,7 @@ class StreamingResponseOrchestrator:
         presence_penalty: float | None = None,
         extra_body: dict | None = None,
         stream_options: ResponseStreamOptions | None = None,
+        initial_usage: OpenAIChatCompletionUsage | None = None,
     ):
         self.inference_api = inference_api
         self.ctx = ctx
@@ -350,6 +351,14 @@ class StreamingResponseOrchestrator:
         self.accumulated_builtin_tool_calls = 0
         # Track total output tokens generated across inference calls
         self.accumulated_builtin_output_tokens = 0
+        if initial_usage is not None:
+            # Seeds with the compaction/summarization call's own usage, so a client sees
+            # what that call cost instead of it silently not showing up anywhere. Must
+            # not count toward accumulated_builtin_output_tokens: that call already ran
+            # to completion before this turn's own inference loop starts, capped by its
+            # own independent budget (CompactionConfig.summary_max_output_tokens), and
+            # must not eat into max_output_tokens' budget for the actual answer.
+            self._accumulate_usage(initial_usage, count_toward_output_budget=False)
 
     async def _create_refusal_response(self, violation_message: str) -> OpenAIResponseObjectStream:
         """Create a refusal response to replace streaming content."""
@@ -378,6 +387,7 @@ class StreamingResponseOrchestrator:
             store=self.store,
             prompt_cache_key=self.prompt_cache_key,
             previous_response_id=self.previous_response_id,
+            usage=self.accumulated_usage,
         )
 
         self.sequence_number += 1
@@ -1022,9 +1032,19 @@ class StreamingResponseOrchestrator:
             return
         self._accumulate_usage(chunk.usage)
 
-    def _accumulate_usage(self, usage: OpenAIChatCompletionUsage) -> None:
-        """Accumulate chat completion usage into the response usage format."""
-        self.accumulated_builtin_output_tokens += usage.completion_tokens
+    def _accumulate_usage(self, usage: OpenAIChatCompletionUsage, count_toward_output_budget: bool = True) -> None:
+        """Accumulate chat completion usage into the response usage format.
+
+        count_toward_output_budget=False keeps usage out of
+        accumulated_builtin_output_tokens -- the counter that gates max_output_tokens
+        (see the while-loop's remaining_output_tokens calculation) -- while still
+        folding it into accumulated_usage so it's reported to the caller. Used for the
+        auto-compaction summary call's usage: that call is internal housekeeping done
+        before the main loop even starts, not part of the answer the caller asked
+        max_output_tokens tokens of, so it must not eat into that budget.
+        """
+        if count_toward_output_budget:
+            self.accumulated_builtin_output_tokens += usage.completion_tokens
 
         if self.accumulated_usage is None:
             # Convert from chat completion format to response format

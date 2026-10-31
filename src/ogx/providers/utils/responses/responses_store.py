@@ -779,6 +779,18 @@ class ResponsesStore:
 
         logger.debug("Stored messages for conversation", messages_count=len(messages), conversation_id=conversation_id)
 
+    async def delete_conversation_messages(self, conversation_id: str) -> None:
+        """Delete the stored message cache for a conversation, if any.
+
+        Conversation deletion itself happens in the core Conversations provider, which
+        has no dependency on (and must not gain one on) this Responses-specific cache
+        table. Callers here clean it up opportunistically instead, e.g. once a
+        conversation turn discovers its conversation no longer exists.
+
+        :param conversation_id: The conversation identifier.
+        """
+        await self.sql_store.delete("conversation_messages", where={"conversation_id": conversation_id})
+
     async def get_conversation_messages(self, conversation_id: str) -> list[OpenAIMessageParam] | None:
         """Get stored messages for a conversation.
 
