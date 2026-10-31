@@ -782,12 +782,14 @@ def convert_gemini_stream_chunk_to_openai(
             )
         )
 
+    # Gemini repeats usage_metadata on every streamed chunk. Usage is reported once,
+    # on the trailing usage-only chunk the adapter emits for stream_options.include_usage,
+    # so consumers that sum chunk usage do not count it twice.
     return OpenAIChatCompletionChunk(
         id=completion_id,
         choices=choices,
         created=created,
         model=model,
-        usage=extract_usage(chunk),
     )
 
 
