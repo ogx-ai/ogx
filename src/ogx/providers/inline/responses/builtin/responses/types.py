@@ -23,6 +23,7 @@ from ogx_api import (
     OpenAIResponseInputToolFileSearch,
     OpenAIResponseInputToolFunction,
     OpenAIResponseInputToolMCP,
+    OpenAIResponseInputToolNamespace,
     OpenAIResponseInputToolWebSearch,
     OpenAIResponseMCPApprovalRequest,
     OpenAIResponseMCPApprovalResponse,
@@ -169,6 +170,8 @@ class ToolContext(BaseModel):
             if isinstance(tool, OpenAIResponseInputToolFileSearch):
                 return tool
             if isinstance(tool, OpenAIResponseInputToolFunction):
+                return tool
+            if isinstance(tool, OpenAIResponseInputToolNamespace):
                 return tool
             if isinstance(tool, OpenAIResponseInputToolMCP):
                 return OpenAIResponseToolMCP(

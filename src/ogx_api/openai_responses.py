@@ -314,6 +314,8 @@ class OpenAIResponseOutputMessageFunctionToolCall(BaseModel):
     :param type: Tool call type identifier, always "function_call"
     :param id: (Optional) Additional identifier for the tool call
     :param status: (Optional) Current status of the function call execution
+    :param namespace: (Optional) Namespace this function belongs to, if it was
+        registered under a namespace tool
     """
 
     call_id: str
@@ -322,6 +324,7 @@ class OpenAIResponseOutputMessageFunctionToolCall(BaseModel):
     type: Literal["function_call"] = "function_call"
     id: str | None = None
     status: str | None = None
+    namespace: str | None = None
 
 
 @json_schema_type
@@ -631,11 +634,33 @@ class OpenAIResponseInputToolMCP(BaseModel):
         return self
 
 
+@json_schema_type
+class OpenAIResponseInputToolNamespace(BaseModel):
+    """Namespace tool configuration that groups function tools under a shared name.
+
+    The model calls namespaced functions by their bare name; the namespace is
+    carried back on the resulting function_call output item instead (see
+    OpenAIResponseOutputMessageFunctionToolCall.namespace) so the caller can route
+    the call to the handler that owns the group.
+
+    :param type: Tool type identifier, always "namespace"
+    :param name: Namespace name used to route calls back to the owning handler
+    :param description: Description of the namespace shown to the model
+    :param tools: Function tools available inside this namespace
+    """
+
+    type: Literal["namespace"] = "namespace"
+    name: str
+    description: str
+    tools: list[OpenAIResponseInputToolFunction]
+
+
 OpenAIResponseInputTool = Annotated[
     OpenAIResponseInputToolWebSearch
     | OpenAIResponseInputToolFileSearch
     | OpenAIResponseInputToolFunction
-    | OpenAIResponseInputToolMCP,
+    | OpenAIResponseInputToolMCP
+    | OpenAIResponseInputToolNamespace,
     Field(discriminator="type"),
 ]
 register_schema(OpenAIResponseInputTool, name="OpenAIResponseInputTool")
@@ -659,7 +684,8 @@ OpenAIResponseTool = Annotated[
     OpenAIResponseInputToolWebSearch
     | OpenAIResponseInputToolFileSearch
     | OpenAIResponseInputToolFunction
-    | OpenAIResponseToolMCP,  # The only type that differes from that in the inputs is the MCP tool
+    | OpenAIResponseToolMCP  # The only type that differes from that in the inputs is the MCP tool
+    | OpenAIResponseInputToolNamespace,
     Field(discriminator="type"),
 ]
 register_schema(OpenAIResponseTool, name="OpenAIResponseTool")

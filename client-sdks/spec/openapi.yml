@@ -6672,6 +6672,10 @@ components:
           anyOf:
           - type: string
           - type: 'null'
+        namespace:
+          anyOf:
+          - type: string
+          - type: 'null'
       type: object
       required:
       - call_id
@@ -7910,17 +7914,20 @@ components:
               title: OpenAIResponseInputToolFunction
             - $ref: '#/components/schemas/OpenAIResponseToolMCP'
               title: OpenAIResponseToolMCP
+            - $ref: '#/components/schemas/OpenAIResponseInputToolNamespace'
+              title: OpenAIResponseInputToolNamespace
             discriminator:
               propertyName: type
               mapping:
                 file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
                 function: '#/components/schemas/OpenAIResponseInputToolFunction'
                 mcp: '#/components/schemas/OpenAIResponseToolMCP'
+                namespace: '#/components/schemas/OpenAIResponseInputToolNamespace'
                 web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                 web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                 web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                 web_search_preview_2025_03_11: '#/components/schemas/OpenAIResponseInputToolWebSearch'
-            title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+            title: OpenAIResponseInputToolWebSearch | ... (5 variants)
           type: array
           title: Tools
         tool_choice:
@@ -8115,6 +8122,7 @@ components:
           file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
           function: '#/components/schemas/OpenAIResponseInputToolFunction'
           mcp: '#/components/schemas/OpenAIResponseToolMCP'
+          namespace: '#/components/schemas/OpenAIResponseInputToolNamespace'
           web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
           web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
           web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
@@ -8129,7 +8137,9 @@ components:
         title: OpenAIResponseInputToolFunction
       - $ref: '#/components/schemas/OpenAIResponseToolMCP'
         title: OpenAIResponseToolMCP
-      title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+      - $ref: '#/components/schemas/OpenAIResponseInputToolNamespace'
+        title: OpenAIResponseInputToolNamespace
+      title: OpenAIResponseInputToolWebSearch | ... (5 variants)
     OpenAIResponseToolMCP:
       properties:
         type:
@@ -8185,6 +8195,7 @@ components:
           file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
           function: '#/components/schemas/OpenAIResponseInputToolFunction'
           mcp: '#/components/schemas/OpenAIResponseInputToolMCP'
+          namespace: '#/components/schemas/OpenAIResponseInputToolNamespace'
           web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
           web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
           web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
@@ -8199,7 +8210,9 @@ components:
         title: OpenAIResponseInputToolFunction
       - $ref: '#/components/schemas/OpenAIResponseInputToolMCP'
         title: OpenAIResponseInputToolMCP
-      title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+      - $ref: '#/components/schemas/OpenAIResponseInputToolNamespace'
+        title: OpenAIResponseInputToolNamespace
+      title: OpenAIResponseInputToolWebSearch | ... (5 variants)
     OpenAIResponseInputToolMCP:
       properties:
         type:
@@ -8342,17 +8355,20 @@ components:
               title: OpenAIResponseInputToolFunction
             - $ref: '#/components/schemas/OpenAIResponseToolMCP'
               title: OpenAIResponseToolMCP
+            - $ref: '#/components/schemas/OpenAIResponseInputToolNamespace'
+              title: OpenAIResponseInputToolNamespace
             discriminator:
               propertyName: type
               mapping:
                 file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
                 function: '#/components/schemas/OpenAIResponseInputToolFunction'
                 mcp: '#/components/schemas/OpenAIResponseToolMCP'
+                namespace: '#/components/schemas/OpenAIResponseInputToolNamespace'
                 web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                 web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                 web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                 web_search_preview_2025_03_11: '#/components/schemas/OpenAIResponseInputToolWebSearch'
-            title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+            title: OpenAIResponseInputToolWebSearch | ... (5 variants)
           type: array
           title: Tools
         tool_choice:
@@ -12049,17 +12065,20 @@ components:
                 title: OpenAIResponseInputToolFunction
               - $ref: '#/components/schemas/OpenAIResponseInputToolMCP'
                 title: OpenAIResponseInputToolMCP
+              - $ref: '#/components/schemas/OpenAIResponseInputToolNamespace'
+                title: OpenAIResponseInputToolNamespace
               discriminator:
                 propertyName: type
                 mapping:
                   file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
                   function: '#/components/schemas/OpenAIResponseInputToolFunction'
                   mcp: '#/components/schemas/OpenAIResponseInputToolMCP'
+                  namespace: '#/components/schemas/OpenAIResponseInputToolNamespace'
                   web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_preview_2025_03_11: '#/components/schemas/OpenAIResponseInputToolWebSearch'
-              title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+              title: OpenAIResponseInputToolWebSearch | ... (5 variants)
             type: array
           - type: 'null'
           description: List of tools available to the model. Accepted for compatibility but not used during compaction.
@@ -12355,17 +12374,20 @@ components:
                 title: OpenAIResponseInputToolFunction
               - $ref: '#/components/schemas/OpenAIResponseInputToolMCP'
                 title: OpenAIResponseInputToolMCP
+              - $ref: '#/components/schemas/OpenAIResponseInputToolNamespace'
+                title: OpenAIResponseInputToolNamespace
               discriminator:
                 propertyName: type
                 mapping:
                   file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
                   function: '#/components/schemas/OpenAIResponseInputToolFunction'
                   mcp: '#/components/schemas/OpenAIResponseInputToolMCP'
+                  namespace: '#/components/schemas/OpenAIResponseInputToolNamespace'
                   web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_preview_2025_03_11: '#/components/schemas/OpenAIResponseInputToolWebSearch'
-              title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+              title: OpenAIResponseInputToolWebSearch | ... (5 variants)
             type: array
           - type: 'null'
           description: List of tools available to the model.
@@ -13622,6 +13644,37 @@ components:
       type: object
       title: OpenAIResponseInputToolChoiceWebSearch
       description: Indicates that the model should use web search to generate a response
+    OpenAIResponseInputToolNamespace:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - namespace
+        name:
+          type: string
+          title: Name
+        description:
+          type: string
+          title: Description
+        tools:
+          items:
+            $ref: '#/components/schemas/OpenAIResponseInputToolFunction'
+          type: array
+          title: Tools
+      type: object
+      required:
+      - name
+      - description
+      - tools
+      title: OpenAIResponseInputToolNamespace
+      description: |-
+        Namespace tool configuration that groups function tools under a shared name.
+
+        The model calls namespaced functions by their bare name; the namespace is
+        carried back on the resulting function_call output item instead (see
+        OpenAIResponseOutputMessageFunctionToolCall.namespace) so the caller can route
+        the call to the handler that owns the group.
     OpenAIResponseOutputMessageFileSearchToolCallResults:
       properties:
         attributes:

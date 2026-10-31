@@ -642,6 +642,9 @@ def is_function_tool_call(
 ) -> bool:
     """Check whether a tool call corresponds to a user-defined function tool.
 
+    Also matches a function tool nested inside a namespace tool, since the model
+    calls namespaced functions by their bare name (see OpenAIResponseInputToolNamespace).
+
     Args:
         tool_call: the tool call to check
         tools: list of available response input tools
@@ -653,6 +656,8 @@ def is_function_tool_call(
         return False
     for t in tools:
         if t.type == "function" and t.name == tool_call.function.name:
+            return True
+        if t.type == "namespace" and any(nested.name == tool_call.function.name for nested in t.tools):
             return True
     return False
 

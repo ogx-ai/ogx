@@ -342,6 +342,10 @@ class StreamingResponseOrchestrator:
         self.final_messages: list[OpenAIMessageParam] = []
         # mapping for annotations
         self.citation_files: dict[str, str] = {}
+        # Maps a namespaced function tool's bare name to its owning namespace, so the
+        # resulting function_call output item can carry that namespace back (see
+        # OpenAIResponseOutputMessageFunctionToolCall.namespace).
+        self.function_namespace: dict[str, str] = {}
         # Track accumulated usage across all inference calls
         self.accumulated_usage: OpenAIResponseUsage | None = None
         # Track if we've sent a refusal response
@@ -952,7 +956,9 @@ class StreamingResponseOrchestrator:
                         # The model hallucinated a tool name — it doesn't match
                         # any registered function tool, server-side built-in, or
                         # MCP tool.
-                        has_client_tools = any(t.type == "function" for t in self.ctx.response_tools)
+                        has_client_tools = any(
+                            t.type == "function" or t.type == "namespace" for t in self.ctx.response_tools
+                        )
                         if has_client_tools:
                             # A client is expected to handle function calls, so
                             # surface the hallucinated name as a client-side
@@ -1384,6 +1390,9 @@ class StreamingResponseOrchestrator:
                                     name=tool_call.function.name if tool_call.function else "",
                                     id=tool_call_item_id,
                                     status="in_progress",
+                                    namespace=self.function_namespace.get(tool_call.function.name)
+                                    if tool_call.function
+                                    else None,
                                 )
                                 yield OpenAIResponseObjectStreamResponseOutputItemAdded(
                                     response_id=self.response_id,
@@ -1747,6 +1756,7 @@ class StreamingResponseOrchestrator:
                 name=tool_call.function.name or "",
                 id=final_item_id,
                 status="completed",
+                namespace=self.function_namespace.get(tool_call.function.name) if tool_call.function.name else None,
             )
             output_messages.append(function_call_item)
 
@@ -1807,6 +1817,16 @@ class StreamingResponseOrchestrator:
             elif input_tool.type == "mcp":
                 async for stream_event in self._process_mcp_tool(input_tool, output_messages):
                     yield stream_event
+            elif input_tool.type == "namespace":
+                # The model calls namespaced functions by their bare name, so each
+                # nested function tool is flattened into chat_tools exactly like a
+                # top-level function tool. The namespace is recovered later from
+                # function_namespace when building the function_call output item.
+                for nested_tool in input_tool.tools:
+                    self.function_namespace[nested_tool.name] = input_tool.name
+                    self.ctx.chat_tools.append(
+                        ChatCompletionToolParam(type="function", function=nested_tool.model_dump(exclude_none=True))  # type: ignore[typeddict-item,arg-type]  # Dict compatible with FunctionDefinition
+                    )
             else:
                 raise ValueError(f"OGX OpenAI Responses does not yet support tool type: {input_tool.type}")
 
