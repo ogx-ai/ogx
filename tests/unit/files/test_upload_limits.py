@@ -12,6 +12,7 @@ from fastapi import UploadFile
 from ogx_api.common.errors import FileTooLargeError
 from ogx_api.common.upload_limits import (
     PreReadUploadFile,
+    enforce_upload_size_limit,
     read_upload_with_size_limit,
 )
 
@@ -23,46 +24,8 @@ def _make_upload_file(content: bytes, *, filename: str = "test.bin", size: int |
     return upload
 
 
-class _NoSizeUploadFile:
-    """File-like object without .size that supports chunked read(n).
-
-    Simulates a non-UploadFile object that supports the read(n) interface
-    but does not expose a .size attribute (e.g. a future library client variant).
-    """
-
-    def __init__(self, content: bytes):
-        self.filename = "test.bin"
-        self._buf = io.BytesIO(content)
-
-    async def read(self, n: int = -1) -> bytes:
-        return self._buf.read(n)
-
-
-class _UnchunkedUploadFile:
-    """File-like object whose read() takes no args, like LibraryClientUploadFile.
-
-    Backed by BytesIO so repeated calls hit EOF. Passing a size argument
-    raises TypeError, exercising the fallback path.
-    """
-
-    def __init__(self, content: bytes):
-        self.filename = "test.bin"
-        self._buf = io.BytesIO(content)
-
-    async def read(self) -> bytes:
-        return self._buf.read()
-
-
-def _make_no_size_upload(content: bytes) -> _NoSizeUploadFile:
-    return _NoSizeUploadFile(content)
-
-
-def _make_unchunked_upload(content: bytes) -> _UnchunkedUploadFile:
-    return _UnchunkedUploadFile(content)
-
-
 class TestReadUploadWithSizeLimit:
-    """Tests for the bounded-read helper."""
+    """Tests for the size-checked read helper."""
 
     async def test_file_under_limit_succeeds(self):
         content = b"hello world"
@@ -85,23 +48,13 @@ class TestReadUploadWithSizeLimit:
             await read_upload_with_size_limit(_make_upload_file(content), max_upload_bytes=100)
         assert exc_info.value.status_code == 413
 
-    async def test_precheck_rejects_when_size_known(self):
-        """When file.size is set, reject before reading any bytes."""
-        content = b"x" * 200
-        upload = _make_upload_file(content, size=200)
+    async def test_oversized_file_rejected_before_reading(self):
+        upload = _make_upload_file(b"x" * 200)
         with pytest.raises(FileTooLargeError, match="200 bytes"):
             await read_upload_with_size_limit(upload, max_upload_bytes=100)
+        assert upload.file.tell() == 0
 
-    async def test_precheck_not_triggered_when_size_none(self):
-        """When file.size is None, fall through to chunked read."""
-        content = b"x" * 200
-        upload = _make_upload_file(content, size=None)
-        with pytest.raises(FileTooLargeError):
-            await read_upload_with_size_limit(upload, max_upload_bytes=100)
-
-    async def test_large_file_chunked_read(self):
-        """Verify multi-chunk reads work correctly for files larger than one chunk."""
-        # 2.5 MB — will require multiple 1 MB chunk reads
+    async def test_large_file_read(self):
         content = b"A" * (2 * 1024 * 1024 + 512 * 1024)
         result = await read_upload_with_size_limit(_make_upload_file(content), max_upload_bytes=10 * 1024 * 1024)
         assert result == content
@@ -117,39 +70,6 @@ class TestReadUploadWithSizeLimit:
             await read_upload_with_size_limit(_make_upload_file(content), max_upload_bytes=1000)
         msg = str(exc_info.value)
         assert "2000" in msg or "exceeds" in msg
-
-    async def test_no_size_attr_under_limit(self):
-        """File-like objects without .size use chunked reading normally."""
-        upload = _make_no_size_upload(b"hello")
-        result = await read_upload_with_size_limit(upload, max_upload_bytes=1024)
-        assert result == b"hello"
-
-    async def test_no_size_attr_over_limit(self):
-        """File-like objects without .size are still rejected via chunked read."""
-        upload = _make_no_size_upload(b"x" * 200)
-        with pytest.raises(FileTooLargeError):
-            await read_upload_with_size_limit(upload, max_upload_bytes=100)
-
-    async def test_no_size_attr_large_file_chunked_read(self):
-        """Multi-chunk reads work for file-like objects without .size."""
-        # 2.5 MB — will require multiple 1 MB chunk reads
-        content = b"B" * (2 * 1024 * 1024 + 512 * 1024)
-        upload = _make_no_size_upload(content)
-        result = await read_upload_with_size_limit(upload, max_upload_bytes=10 * 1024 * 1024)
-        assert result == content
-        assert len(result) == len(content)
-
-    async def test_no_chunked_read_support_under_limit(self):
-        """Objects whose read() takes no args fall back to single read."""
-        upload = _make_unchunked_upload(b"hello")
-        result = await read_upload_with_size_limit(upload, max_upload_bytes=1024)
-        assert result == b"hello"
-
-    async def test_no_chunked_read_support_over_limit(self):
-        """Objects whose read() takes no args still get rejected with clear message."""
-        upload = _make_unchunked_upload(b"x" * 200)
-        with pytest.raises(FileTooLargeError, match=r"200 bytes.*exceeds.*100 bytes"):
-            await read_upload_with_size_limit(upload, max_upload_bytes=100)
 
 
 class TestPreReadUploadFile:
@@ -168,3 +88,33 @@ class TestPreReadUploadFile:
     async def test_is_upload_file_subclass(self):
         wrapper = PreReadUploadFile(b"content")
         assert isinstance(wrapper, UploadFile)
+
+
+class TestEnforceUploadSizeLimit:
+    """Tests for the size check that leaves the upload unread for streaming providers."""
+
+    def test_file_at_limit_is_left_unread(self):
+        upload = _make_upload_file(b"x" * 100)
+        enforce_upload_size_limit(upload, max_upload_bytes=100)
+        assert upload.file.tell() == 0
+
+    def test_file_over_limit_raises(self):
+        with pytest.raises(FileTooLargeError, match="File size 101 bytes"):
+            enforce_upload_size_limit(_make_upload_file(b"x" * 101), max_upload_bytes=100)
+
+    def test_understated_declared_size_is_ignored(self):
+        with pytest.raises(FileTooLargeError, match="File size 200 bytes"):
+            enforce_upload_size_limit(_make_upload_file(b"x" * 200, size=10), max_upload_bytes=100)
+
+    async def test_partially_read_file_is_measured_in_full(self):
+        """The provider streams from the start, so the whole file is what must fit the limit."""
+        upload = _make_upload_file(b"x" * 150)
+        await upload.read(100)
+        with pytest.raises(FileTooLargeError, match="File size 150 bytes"):
+            enforce_upload_size_limit(upload, max_upload_bytes=100)
+
+    async def test_file_is_rewound_for_the_provider(self):
+        upload = _make_upload_file(b"hello")
+        await upload.read()
+        enforce_upload_size_limit(upload, max_upload_bytes=100)
+        assert await upload.read() == b"hello"
