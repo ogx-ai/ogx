@@ -16,14 +16,20 @@ Specific Tests:
 - test_rerank_calls_provider_correctly: Validates the router calls provider.rerank() with correct RerankRequest
 """
 
+import asyncio
 from collections.abc import AsyncIterator
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from openai.types.chat import ChatCompletionChunk
 from pydantic import ValidationError
 
 from ogx.core.request_headers import PROVIDER_DATA_VAR
 from ogx.core.routers.inference import InferenceRouter, _normalize_provider_data_key
+from ogx.core.storage.datatypes import InferenceStoreReference, SqliteSqlStoreConfig
+from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
+from ogx.providers.utils.inference.inference_store import InferenceStore
 from ogx.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
 from ogx_api import (
     GetChatCompletionRequest,
@@ -521,6 +527,72 @@ async def test_openai_chat_completion_streaming_without_store(
         "test_provider/test-llm-model",
     ]
     assert ["".join(c.delta.content or "" for c in chunk.choices) for chunk in chunks] == ["Hello", " world"]
+
+
+_URL_CITATION = {
+    "type": "url_citation",
+    "url_citation": {"start_index": 0, "end_index": 5, "title": "Example", "url": "https://example.com"},
+}
+
+
+def test_chunk_delta_accepts_annotations() -> None:
+    """Search models stream url_citation annotations in the chunk delta."""
+    chunk = OpenAIChatCompletionChunk.model_validate(
+        {
+            "id": "chatcmpl-test",
+            "created": 0,
+            "model": "test-llm-model",
+            "choices": [{"index": 0, "delta": {"annotations": [_URL_CITATION]}}],
+        }
+    )
+
+    assert chunk.choices[0].delta.annotations == [_URL_CITATION]
+    assert chunk.model_dump()["choices"][0]["delta"]["annotations"] == [_URL_CITATION]
+
+
+async def test_streamed_chat_completion_is_stored_with_annotations(
+    mock_llm_routing_table: tuple[MagicMock, MagicMock], tmp_path: Path
+) -> None:
+    """The completion stored after a stream keeps the annotations streamed in the deltas."""
+    register_sqlstore_backends({"sql_default": SqliteSqlStoreConfig(db_path=str(tmp_path / "store.db"))})
+    store = InferenceStore(InferenceStoreReference(backend="sql_default", table_name="chat_completions"), policy=[])
+    await store.initialize()
+    routing_table, mock_provider = mock_llm_routing_table
+    router = InferenceRouter(routing_table=routing_table, store=store)
+
+    def sdk_chunk(delta: dict, finish_reason: str | None = None) -> ChatCompletionChunk:
+        # OpenAI-compatible providers yield the SDK's chunk type, not ours
+        return ChatCompletionChunk.model_validate(
+            {
+                "id": "chatcmpl-test",
+                "object": "chat.completion.chunk",
+                "created": 0,
+                "model": "test-llm-model",
+                "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+            }
+        )
+
+    async def provider_stream() -> AsyncIterator[ChatCompletionChunk]:
+        yield sdk_chunk({"role": "assistant", "content": "Hello"})
+        yield sdk_chunk({"annotations": [_URL_CITATION]})
+        yield sdk_chunk({}, "stop")
+
+    mock_provider.openai_chat_completion = AsyncMock(return_value=provider_stream())
+
+    params = OpenAIChatCompletionRequestWithExtraBody(
+        model="test_provider/test-llm-model",
+        messages=[{"role": "user", "content": "Say hello"}],
+        stream=True,
+    )
+
+    stream = await router.openai_chat_completion(params)
+    _ = [chunk async for chunk in stream]
+    # The router stores the completion in a background task
+    await asyncio.gather(*(asyncio.all_tasks() - {asyncio.current_task()}))
+
+    stored = await router.get_chat_completion(GetChatCompletionRequest(completion_id="chatcmpl-test"))
+    assert stored.choices[0].message.content == "Hello"
+    assert stored.choices[0].message.annotations == [_URL_CITATION]
 
 
 async def test_list_chat_completions_without_store_raises_not_implemented(
