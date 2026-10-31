@@ -57,7 +57,7 @@ OGX implements OpenAI, Anthropic, and Google APIs, with the Responses API for se
 
 AI application development today is tightly coupled to proprietary API providers. While inference-only workloads can increasingly be swapped across providers---vLLM [@kwon2023vllm], for example, supports the Responses API for basic inference---applications that rely on the full stack (retrieval, tool calling, conversation state, safety guardrails) remain difficult to migrate without rewriting significant application logic. This coupling limits reproducibility, makes comparisons across model providers difficult, and prevents teams from running AI workloads on controlled infrastructure---a requirement in regulated, privacy-sensitive, and air-gapped environments.
 
-OGX addresses this need through standard APIs and configurable infrastructure. Researchers can compare backends while keeping retrieval, tool authorization, and conversation handling in one server. This separates the choice of client SDK, model, and deployment environment, supporting reproducible configurations on controlled infrastructure.
+OGX addresses this need through standard APIs and configurable infrastructure. Researchers can compare backends while keeping retrieval, tool authorization, and conversation handling in one server. This separates the choice of client software development kit (SDK), model, and deployment environment, supporting reproducible configurations on controlled infrastructure.
 
 # State of the Field
 
@@ -65,7 +65,7 @@ OGX continues Llama Stack under a renamed, model-agnostic mission. Its server-si
 
 **Inference engines** (vLLM [@kwon2023vllm], SGLang [@sglang], Ollama [@ollama]) focus on model inference and serving. Some expose tool-calling APIs; applications using them directly still need to arrange retrieval, persistent conversation state, and tool execution for agentic workflows. OGX supplies these application services around interchangeable inference engines.
 
-**API gateways** (LiteLLM [@litellm], OpenRouter [@openrouter]) provide unified access and routing across inference providers. Their feature sets also include capabilities beyond request translation, such as LiteLLM's guardrails and MCP gateway. OGX combines provider routing with its own vector stores, persistent conversations, and server-side Responses orchestration in a self-hosted application server.
+**API gateways** (LiteLLM [@litellm], OpenRouter [@openrouter]) provide unified access and routing across inference providers. Their feature sets also include capabilities beyond request translation, such as LiteLLM's guardrails and Model Context Protocol (MCP) gateway. OGX combines provider routing with its own vector stores, persistent conversations, and server-side Responses orchestration in a self-hosted application server.
 
 **Client-side frameworks** (LangChain [@langchain], LangGraph [@langgraph], LlamaIndex [@llamaindex], CrewAI [@crewai], Haystack [@haystack]) provide rich developer abstractions for building agents and RAG pipelines. However, they execute orchestration client-side, distributing security-critical logic across application code. These frameworks are complementary to OGX: they compose agent logic while OGX provides the server-side execution target they call into.
 
@@ -93,7 +93,7 @@ OGX serves three client SDK protocols from a single server. The stable **OpenAI-
 
 ## Server-Side Agentic Orchestration
 
-The Responses API implements server-side agentic orchestration: the inference-tool-inference loop executes within the server process, not the client [@openaiResponsesAPI]. This centralizes security enforcement, tool authorization, and conversation state management, at the cost of moving some flexibility from application code into server configuration. Built-in tools include file search (RAG over vector stores), web search, code interpretation, and Model Context Protocol (MCP) [@mcp] integration for external tool servers.
+The Responses API implements server-side agentic orchestration: the inference-tool-inference loop executes within the server process, not the client [@openaiResponsesAPI]. This centralizes security enforcement, tool authorization, and conversation state management, at the cost of moving some flexibility from application code into server configuration. Built-in tools include file search (RAG over vector stores), web search, code interpretation, and MCP [@mcp] integration for external tool servers.
 
 Unlike inference engines and API gateways that treat requests as stateless, OGX manages state natively: the Conversations API persists multi-turn history with tenant-scoped isolation, the Prompts API provides versioned prompt templates, and a resource registry tracks models, vector stores, and files as first-class server objects. A Compaction API summarizes long histories to manage context window limits. Telemetry is built on OpenTelemetry (OTEL) with MLflow [@mlflow] tracing integration for logging spans, tool calls, and retrieval steps to existing ML experiment tracking infrastructure. This state and observability layer is what makes OGX a complete application server rather than a stateless proxy.
 
@@ -101,7 +101,7 @@ For multitenant deployments, OGX provides attribute-based access control (ABAC) 
 
 ## Kubernetes Operator
 
-The OGX Kubernetes Operator [@ogxk8soperator] provides declarative deployment through the `OGXServer` custom resource. A single CR specifies the distribution, replica count, storage, inference backend, and network policies. The operator manages full lifecycle reconciliation with support for both vanilla Kubernetes and OpenShift, ConfigMap-driven image overrides for fleet-wide updates, multi-architecture builds (amd64/arm64) with FIPS-compliant images, and shared instances with ABAC isolation, per-tenant namespace isolation, and hybrid topologies.
+The OGX Kubernetes Operator [@ogxk8soperator] provides declarative deployment through the `OGXServer` custom resource. A single custom resource specifies the distribution, replica count, storage, inference backend, and network policies. The operator manages full lifecycle reconciliation with support for both vanilla Kubernetes and OpenShift, ConfigMap-driven image overrides for fleet-wide updates, multi-architecture builds (amd64/arm64) with images compliant with Federal Information Processing Standards (FIPS), and shared instances with ABAC isolation, per-tenant namespace isolation, and hybrid topologies.
 
 # Example Usage
 
