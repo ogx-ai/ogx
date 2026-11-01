@@ -10,10 +10,13 @@ import os
 import shutil
 import subprocess
 import sys
+from typing import Any, NoReturn
 
 from openai import APIConnectionError, APIStatusError, OpenAI
 from termcolor import cprint
 
+from ogx.cli.connect.auth import auth_error_message
+from ogx.cli.connect.tls import is_untrusted_certificate_error, untrusted_certificate_client
 from ogx.cli.subcommand import Subcommand
 from ogx.log import get_logger
 
@@ -41,18 +44,6 @@ class ConnectOpenCode(Subcommand):
             default=None,
             help="Default model ID. If omitted, the first available model is used.",
         )
-        self.parser.add_argument(
-            "--port",
-            type=int,
-            help="OGX server port.",
-            default=int(os.getenv("OGX_PORT", 8321)),
-        )
-        self.parser.add_argument(
-            "--host",
-            type=str,
-            default="localhost",
-            help="OGX server host.",
-        )
 
     def _run_connect_opencode_cmd(self, args: argparse.Namespace) -> None:
         if not shutil.which("opencode"):
@@ -63,41 +54,72 @@ class ConnectOpenCode(Subcommand):
             )
             sys.exit(1)
 
-        base_url = f"http://{args.host}:{args.port}/v1"
+        # The connect group resolves and validates the server URL into args.connect_url.
+        base_url = args.connect_url
 
-        models = self._fetch_models(base_url)
+        models, self_signed = self._fetch_models(base_url, args.connect_api_key, args.insecure)
         if not models:
             cprint("Failed to find any LLM models on the OGX server.", color="red", file=sys.stderr)
             sys.exit(1)
 
         default_model = self._select_default_model(args.model, models)
 
-        config = self._build_opencode_config(base_url, models, default_model)
+        config = self._build_opencode_config(base_url, models, default_model, api_key=args.connect_api_key)
         config_json = json.dumps(config)
 
         logger.info("Connecting to OpenCode", default_model=default_model, models=len(models), base_url=base_url)
 
         env = {**os.environ, "OPENCODE_CONFIG_CONTENT": config_json}
+        if self_signed:
+            env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0"
         result = subprocess.run(["opencode"], env=env)
         sys.exit(result.returncode)
 
-    def _fetch_models(self, base_url: str) -> list[str]:
-        client = OpenAI(base_url=base_url, api_key="unused")
+    def _fetch_models(self, base_url: str, api_key: str, insecure: bool) -> tuple[list[str], bool]:
+        """Fetch LLM model IDs. Returns (models, self_signed_certificate)."""
+        try:
+            return self._list_models(base_url, api_key, verify=True), False
+        except APIConnectionError as e:
+            if insecure and is_untrusted_certificate_error(e):
+                # The user approved skipping verification with --insecure.
+                try:
+                    return self._list_models(base_url, api_key, verify=False), True
+                except APIConnectionError:
+                    pass
+            self._exit_on_connection_error(base_url, e)
+
+    @staticmethod
+    def _exit_on_connection_error(base_url: str, error: APIConnectionError) -> NoReturn:
+        if is_untrusted_certificate_error(error):
+            cprint(
+                f"Failed to connect to OGX server at {base_url}: its TLS certificate is not trusted.\n"
+                "Add the certificate to your system trust store, or re-run with 'ogx connect --insecure' "
+                "to skip certificate verification for this invocation.",
+                color="red",
+                file=sys.stderr,
+            )
+        else:
+            cprint(
+                f"Failed to connect to OGX server at {base_url}\nStart the server first with: ogx go",
+                color="red",
+                file=sys.stderr,
+            )
+        sys.exit(1)
+
+    def _list_models(self, base_url: str, api_key: str, *, verify: bool) -> list[str]:
+        client_kwargs: dict[str, Any] = {"base_url": base_url, "api_key": api_key or "unused"}
+        if not verify:
+            client_kwargs["http_client"] = untrusted_certificate_client()
+        client = OpenAI(**client_kwargs)
         try:
             response = client.models.list()
-        except APIConnectionError:
-            cprint(
-                f"Failed to connect to OGX server at {base_url}\nStart the server first with: ogx run <config>",
-                color="red",
-                file=sys.stderr,
-            )
-            sys.exit(1)
         except APIStatusError as e:
-            cprint(
-                f"Failed to query models from OGX server at {base_url} (HTTP {e.status_code})",
-                color="red",
-                file=sys.stderr,
+            message = (
+                auth_error_message(base_url, e.status_code)
+                if e.status_code in (401, 403)
+                else f"Failed to query models from OGX server at {base_url} (HTTP {e.status_code})"
             )
+            cprint(message, color="red", file=sys.stderr)
             sys.exit(1)
 
         models: list[str] = []
@@ -121,7 +143,12 @@ class ConnectOpenCode(Subcommand):
 
         return available_models[0]
 
-    def _build_opencode_config(self, base_url: str, all_models: list[str], default_model: str) -> dict:
+    def _build_opencode_config(
+        self, base_url: str, all_models: list[str], default_model: str, api_key: str = ""
+    ) -> dict:
+        options: dict[str, str] = {"baseURL": base_url}
+        if api_key:
+            options["apiKey"] = api_key
         models_config = {
             model_id: {
                 "name": model_id,
@@ -140,9 +167,7 @@ class ConnectOpenCode(Subcommand):
                 "ogx": {
                     "npm": "@ai-sdk/openai-compatible",
                     "name": "OGX",
-                    "options": {
-                        "baseURL": base_url,
-                    },
+                    "options": options,
                     "models": models_config,
                 }
             },
