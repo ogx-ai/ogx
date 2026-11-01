@@ -224,7 +224,12 @@ jobs:
     # A full gpt responses record runs live against api.openai.com with a
     # reasoning model (~5s per call, mostly reasoning tokens): the test
     # phase alone measured 22m47s, which left no headroom under 30 min.
-    timeout-minutes: 60
+    # The ollama base lane needs more: its thinking model takes minutes per
+    # legacy completion (see ogx_client_timeout/timeout_minutes on that entry).
+    timeout-minutes: ${{ matrix.provider.timeout_minutes || 60 }}
+    env:
+      # Per-lane client timeout override; empty keeps the script's 300s default.
+      OGX_CLIENT_TIMEOUT: ${{ matrix.provider.ogx_client_timeout }}
     strategy:
       fail-fast: false
       matrix:
@@ -232,6 +237,12 @@ jobs:
         provider:
           - setup: ollama
             suite: base
+            # qwen3.5:0.8b reasons before answering on /v1/completions, where
+            # there is no reasoning-effort control: the raised max_tokens in the
+            # test plus this client timeout leave the reasoning (and the answer
+            # after it) room to finish at ~12 tok/s on the CPU runner.
+            ogx_client_timeout: 900
+            timeout_minutes: 90
           - setup: ollama-vision
             suite: vision
           - setup: ollama-reasoning
