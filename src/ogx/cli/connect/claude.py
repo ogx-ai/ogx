@@ -14,6 +14,7 @@ from typing import Any, NoReturn
 from openai import APIConnectionError, APIStatusError, OpenAI
 from termcolor import cprint
 
+from ogx.cli.connect.auth import auth_error_message
 from ogx.cli.connect.tls import is_untrusted_certificate_error, untrusted_certificate_client
 from ogx.cli.subcommand import Subcommand
 from ogx.log import get_logger
@@ -91,7 +92,7 @@ class ConnectClaude(Subcommand):
         # The connect group resolves and validates the server URL into args.connect_url.
         base_url = args.connect_url
 
-        models, self_signed = self._fetch_models(base_url, args.insecure)
+        models, self_signed = self._fetch_models(base_url, args.connect_api_key, args.insecure)
         if not models:
             cprint("Failed to find any LLM models on the OGX server.", color="red", file=sys.stderr)
             sys.exit(1)
@@ -104,7 +105,7 @@ class ConnectClaude(Subcommand):
             available_models=models,
         )
 
-        env = self._build_env(base_url, model_mapping, self_signed=self_signed)
+        env = self._build_env(base_url, model_mapping, self_signed=self_signed, api_key=args.connect_api_key)
 
         if args.print_env:
             for key in ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"]:
@@ -136,15 +137,15 @@ class ConnectClaude(Subcommand):
         result = subprocess.run(["claude", *claude_args], env=env)
         sys.exit(result.returncode)
 
-    def _fetch_models(self, base_url: str, insecure: bool) -> tuple[list[str], bool]:
+    def _fetch_models(self, base_url: str, api_key: str, insecure: bool) -> tuple[list[str], bool]:
         """Fetch LLM model IDs. Returns (models, self_signed_certificate)."""
         try:
-            return self._list_models(base_url, verify=True), False
+            return self._list_models(base_url, api_key, verify=True), False
         except APIConnectionError as e:
             if insecure and is_untrusted_certificate_error(e):
                 # The user approved skipping verification with --insecure.
                 try:
-                    return self._list_models(base_url, verify=False), True
+                    return self._list_models(base_url, api_key, verify=False), True
                 except APIConnectionError:
                     pass
             self._exit_on_connection_error(base_url, e)
@@ -167,19 +168,20 @@ class ConnectClaude(Subcommand):
             )
         sys.exit(1)
 
-    def _list_models(self, base_url: str, *, verify: bool) -> list[str]:
-        client_kwargs: dict[str, Any] = {"base_url": base_url, "api_key": "unused"}
+    def _list_models(self, base_url: str, api_key: str, *, verify: bool) -> list[str]:
+        client_kwargs: dict[str, Any] = {"base_url": base_url, "api_key": api_key or "unused"}
         if not verify:
             client_kwargs["http_client"] = untrusted_certificate_client()
         client = OpenAI(**client_kwargs)
         try:
             response = client.models.list()
         except APIStatusError as e:
-            cprint(
-                f"Failed to query models from OGX server at {base_url} (HTTP {e.status_code})",
-                color="red",
-                file=sys.stderr,
+            message = (
+                auth_error_message(base_url, e.status_code)
+                if e.status_code in (401, 403)
+                else f"Failed to query models from OGX server at {base_url} (HTTP {e.status_code})"
             )
+            cprint(message, color="red", file=sys.stderr)
             sys.exit(1)
 
         models: list[str] = []
@@ -219,10 +221,20 @@ class ConnectClaude(Subcommand):
 
         return mapping
 
-    def _build_env(self, base_url: str, model_mapping: dict[str, str], *, self_signed: bool = False) -> dict[str, str]:
+    def _build_env(
+        self,
+        base_url: str,
+        model_mapping: dict[str, str],
+        *,
+        self_signed: bool = False,
+        api_key: str = "",
+    ) -> dict[str, str]:
         env = {**os.environ}
         env["ANTHROPIC_BASE_URL"] = base_url.removesuffix("/v1")
-        env["ANTHROPIC_AUTH_TOKEN"] = "ogx"  # noqa: S105 — placeholder, not a real secret
+        if api_key:
+            env["ANTHROPIC_AUTH_TOKEN"] = api_key  # noqa: S105
+        else:
+            env["ANTHROPIC_AUTH_TOKEN"] = "ogx"  # noqa: S105 — placeholder, not a real secret
         if self_signed:
             # The user approved the self-signed certificate with --insecure;
             # disable verification for the launched Claude Code process only.
