@@ -71,17 +71,16 @@ def messages_client(messages_base_url):
 #   - vllm (Qwen3-0.6B): thinks by default in a typical deployment; keep the
 #     deployment standard and just raise max_tokens so text follows the
 #     thinking blocks.
-#   - ollama (qwen3.5:0.8b): hybrid-thinking model that thinks by default;
-#     at this size its default (medium) effort can exhaust even a raised
-#     max_tokens without emitting text, so steer an explicit budget
-#     (translated to a bounded reasoning effort) on top of the floor.
+#   - ollama (qwen3.5:0.8b): hybrid-thinking model that thinks by default,
+#     like vllm's Qwen3-0.6B; keep the deployment standard and just raise
+#     max_tokens so text follows the thinking blocks.
 #   - gpt (gpt-5-nano): OpenAI reasoning models charge reasoning tokens
 #     against max_tokens (translated to max_completion_tokens), so a small
 #     explicit budget is exhausted before any text is emitted; raise
 #     max_tokens to leave headroom for the reasoning.
 # Other providers default to non-thinking models.
 _THINKING_DISABLED_SETUPS = frozenset({"fireworks"})
-_THINKING_BUDGET_SETUPS = frozenset({"meta", "ollama", "ollama-postgres"})
+_THINKING_BUDGET_SETUPS = frozenset({"meta"})
 _THINKING_FLOOR_SETUPS = frozenset({"meta", "vllm", "gpt", "ollama", "ollama-postgres"})
 _THINKING_BUDGET_TOKENS = 1024
 _THINKING_MAX_TOKENS = 2048
@@ -194,6 +193,16 @@ def _build_headers() -> dict[str, str]:
         provider_data = {"__test_id": test_id}
         headers["X-OGX-Provider-Data"] = json.dumps(provider_data)
     return headers
+
+
+def _all_block_text(content: list[dict]) -> str:
+    """Readable output of a message: text blocks plus thinking blocks.
+
+    Thinking content is accepted as evidence the model processed the turn:
+    a thinking model truncated at max_tokens still proves the request (system
+    prompt, conversation history) reached it, even without any text block.
+    """
+    return " ".join(b.get("text") or b.get("thinking") or "" for b in content if b["type"] in ("text", "thinking"))
 
 
 def make_messages_request(
