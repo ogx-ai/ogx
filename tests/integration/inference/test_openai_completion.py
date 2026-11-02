@@ -8,7 +8,6 @@
 import time
 
 import pytest
-from openai import OpenAI
 from pydantic import BaseModel
 
 from ogx.providers.utils.inference.models_dev_registry import supports_reasoning
@@ -374,8 +373,8 @@ def test_openai_chat_completion_non_streaming(compat_client, client_with_models,
     question = tc["question"]
     expected = tc["expected"]
 
-    # The generated OGX client's create() does not accept a timeout keyword.
-    request_options = {"timeout": 120} if isinstance(compat_client, OpenAI) else {}
+    # No per-request timeout: it would override the client-level timeout,
+    # which scripts/integration-tests.sh raises per lane via OGX_CLIENT_TIMEOUT.
     response = compat_client.chat.completions.create(
         model=text_model_id,
         messages=[
@@ -386,7 +385,6 @@ def test_openai_chat_completion_non_streaming(compat_client, client_with_models,
         ],
         stream=False,
         **reasoning_effort_steering(text_model_id),
-        **request_options,
     )
     message_content = response.choices[0].message.content
     assert len(message_content) > 0
@@ -406,14 +404,11 @@ def test_openai_chat_completion_streaming(compat_client, client_with_models, tex
     question = tc["question"]
     expected = tc["expected"]
 
-    # The generated OGX client's create() does not accept a timeout keyword.
-    request_options = {"timeout": 120} if isinstance(compat_client, OpenAI) else {}
     response = compat_client.chat.completions.create(
         model=text_model_id,
         messages=[{"role": "user", "content": question}],
         stream=True,
         **reasoning_effort_steering(text_model_id),
-        **request_options,
     )
     streamed_content = []
     for chunk in response:
@@ -439,15 +434,12 @@ def test_openai_chat_completion_streaming_with_n(compat_client, client_with_mode
     question = tc["question"]
     expected = tc["expected"]
 
-    # The generated OGX client's create() does not accept a timeout keyword.
-    request_options = {"timeout": 120} if isinstance(compat_client, OpenAI) else {}
     response = compat_client.chat.completions.create(
         model=text_model_id,
         messages=[{"role": "user", "content": question}],
         stream=True,
         n=2,
         **reasoning_effort_steering(text_model_id),
-        **request_options,
     )
     streamed_content = {}
     chunks_per_index = {}
