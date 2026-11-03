@@ -18,6 +18,7 @@ from typing import Any, NoReturn
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 from termcolor import cprint
 
+from ogx.cli.connect.auth import auth_error_message
 from ogx.cli.connect.tls import is_untrusted_certificate_error, untrusted_certificate_client
 from ogx.cli.subcommand import Subcommand
 from ogx.log import get_logger
@@ -44,16 +45,16 @@ class CodexServerDiscovery:
     def __init__(self, *, timeout_seconds: float) -> None:
         self.timeout_seconds = timeout_seconds
 
-    def fetch_models(self, base_url: str, insecure: bool) -> tuple[list[DiscoveredCodexModel], bool]:
+    def fetch_models(self, base_url: str, api_key: str, insecure: bool) -> tuple[list[DiscoveredCodexModel], bool]:
         """Fetch discovered models. Returns (models, self_signed_certificate)."""
         default_headers = self.build_request_headers()
         try:
-            return self._list_models(base_url, default_headers, verify=True), False
+            return self._list_models(base_url, api_key, default_headers, verify=True), False
         except APIConnectionError as e:
             if insecure and is_untrusted_certificate_error(e):
                 # The user approved skipping verification with --insecure.
                 try:
-                    return self._list_models(base_url, default_headers, verify=False), True
+                    return self._list_models(base_url, api_key, default_headers, verify=False), True
                 except APIConnectionError:
                     pass
             if is_untrusted_certificate_error(e):
@@ -65,11 +66,11 @@ class CodexServerDiscovery:
             _exit_with_error(f"Failed to connect to OGX server at {base_url}\nStart the server first with: ogx go")
 
     def _list_models(
-        self, base_url: str, default_headers: dict[str, str], *, verify: bool
+        self, base_url: str, api_key: str, default_headers: dict[str, str], *, verify: bool
     ) -> list[DiscoveredCodexModel]:
         client_kwargs: dict[str, Any] = {
             "base_url": base_url,
-            "api_key": os.getenv("OGX_API_KEY", "unused"),
+            "api_key": api_key or "unused",
             "timeout": self.timeout_seconds,
             "default_headers": default_headers or None,
         }
@@ -86,7 +87,12 @@ class CodexServerDiscovery:
         except APIConnectionError:
             raise
         except APIStatusError as e:
-            _exit_with_error(f"Failed to query models from OGX server at {base_url} (HTTP {e.status_code})")
+            message = (
+                auth_error_message(base_url, e.status_code)
+                if e.status_code in (401, 403)
+                else f"Failed to query models from OGX server at {base_url} (HTTP {e.status_code})"
+            )
+            _exit_with_error(message)
 
         models: list[DiscoveredCodexModel] = []
         for model in response.data:
@@ -277,16 +283,17 @@ class CodexSessionBuilder:
         base_url: str,
         available_models: list[DiscoveredCodexModel],
         default_model: str,
+        api_key: str = "",
     ) -> None:
         model_catalog_path = codex_home / "ogx-model-catalog.json"
         config_path = codex_home / "ogx.config.toml"
         model_catalog_path.write_text(
             json.dumps(self.catalog_builder.build_model_catalog(available_models, default_model), indent=2)
         )
-        config_path.write_text(self.build_codex_config(base_url, model_catalog_path, default_model))
+        config_path.write_text(self.build_codex_config(base_url, model_catalog_path, default_model, api_key))
 
     @staticmethod
-    def build_codex_config(base_url: str, model_catalog_path: Path, default_model: str) -> str:
+    def build_codex_config(base_url: str, model_catalog_path: Path, default_model: str, api_key: str = "") -> str:
         env_http_headers = '{ "X-OGX-Provider-Data" = "OGX_PROVIDER_DATA" }'
         config_lines = [
             f"model = {json.dumps(default_model)}",
@@ -302,11 +309,11 @@ class CodexSessionBuilder:
             'wire_api = "responses"',
             "supports_websockets = false",
         ]
-        if os.getenv("OGX_API_KEY", "").strip():
+        if api_key.strip():
             config_lines.extend(
                 [
-                    'env_key = "OGX_API_KEY"',
-                    'env_key_instructions = "Set OGX_API_KEY when your OGX deployment requires bearer authentication."',
+                    'env_key = "OPENAI_API_KEY"',
+                    'env_key_instructions = "Set OPENAI_API_KEY if your OGX deployment requires authentication."',
                 ]
             )
         config_lines.extend(
@@ -358,7 +365,7 @@ class ConnectCodex(Subcommand):
         # The connect group resolves and validates the server URL into args.connect_url.
         base_url = args.connect_url
 
-        models, self_signed = self.discovery.fetch_models(base_url, args.insecure)
+        models, self_signed = self.discovery.fetch_models(base_url, args.connect_api_key, args.insecure)
         if self_signed:
             _exit_with_error(
                 "Codex cannot connect to a server with a self-signed certificate. Add the certificate to your "
@@ -373,9 +380,13 @@ class ConnectCodex(Subcommand):
 
         with tempfile.TemporaryDirectory(prefix="ogx-codex-") as codex_home:
             codex_home_path = Path(codex_home)
-            self.session_builder.write_session_files(codex_home_path, base_url, models, default_model.model_id)
+            self.session_builder.write_session_files(
+                codex_home_path, base_url, models, default_model.model_id, api_key=args.connect_api_key
+            )
             command = self._build_codex_command(args.exec_prompt)
             env = {**os.environ, "CODEX_HOME": str(codex_home_path)}
+            if args.connect_api_key:
+                env["OPENAI_API_KEY"] = args.connect_api_key  # noqa: S105
             result = subprocess.run(command, env=env)
             sys.exit(result.returncode)
 

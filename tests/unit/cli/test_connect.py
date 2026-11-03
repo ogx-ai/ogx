@@ -54,6 +54,38 @@ class TestInsecureFlag:
         assert args.insecure is True
 
 
+class TestGroupApiKey:
+    def test_group_api_key_is_parsed(self, connect_group: argparse.ArgumentParser) -> None:
+        args = connect_group.parse_args(["connect", "--api-key", "ogk_123", "claude"])
+        assert args.connect_api_key == "ogk_123"
+
+    def test_group_api_key_beats_env(
+        self, connect_group: argparse.ArgumentParser, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("OGX_API_KEY", "env-key")
+        args = connect_group.parse_args(["connect", "--api-key", "flag-key", "claude"])
+        assert args.connect_api_key == "flag-key"
+
+    def test_api_key_from_env(self, connect_group: argparse.ArgumentParser, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OGX_API_KEY", "env-key")
+        args = connect_group.parse_args(["connect", "claude"])
+        assert args.connect_api_key == "env-key"
+
+    def test_api_key_defaults_to_empty(
+        self, connect_group: argparse.ArgumentParser, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("OGX_API_KEY", raising=False)
+        args = connect_group.parse_args(["connect", "claude"])
+        assert args.connect_api_key == ""
+
+    def test_api_key_not_resolved_without_subcommand(
+        self, connect_group: argparse.ArgumentParser, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("OGX_API_KEY", "env-key")
+        args = connect_group.parse_args(["connect"])
+        assert args.connect_api_key is None
+
+
 class TestUrlResolution:
     def _clean_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("OGX_BASE_URL", raising=False)
