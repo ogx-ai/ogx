@@ -22,7 +22,11 @@ runs:
         OLLAMA_VERSION: ${{ inputs.ollama-version }}
       run: |
         echo "Starting Ollama server $OLLAMA_VERSION..."
-        docker run -d --name ollama -p 11434:11434 "ollama/ollama:${OLLAMA_VERSION}"
+        # The CPU-runner default context (4k) is too small for thinking models:
+        # reasoning can run past the cap and /v1/completions returns an empty
+        # completion (finish=length). 16k adds headroom; the KV cost is
+        # negligible for the sub-2b models used here.
+        docker run -d --name ollama -p 11434:11434 -e OLLAMA_CONTEXT_LENGTH=16384 "ollama/ollama:${OLLAMA_VERSION}"
         echo "Verifying Ollama status..."
         timeout 30 bash -c 'while ! curl -s -L http://127.0.0.1:11434; do sleep 1 && echo "."; done'
         echo "Ollama is ready"

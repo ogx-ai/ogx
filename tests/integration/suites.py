@@ -41,6 +41,12 @@ class Setup(BaseModel):
     description: str
     defaults: dict[str, str | int] = Field(default_factory=dict)
     env: dict[str, str] = Field(default_factory=dict)
+    # Set for setups that only run under a dedicated workflow (e.g. the k8s auth
+    # lane) rather than the standard CI matrix. Such setups must not appear in
+    # ci_matrix.json (enforced by tests/unit/test_ci_matrix.py), but their
+    # recordings are still referenced: cleanup_recordings.py collects the suites
+    # that default to an excluded setup when computing orphans.
+    matrix_excluded: bool = False
 
 
 # Global setups - can be used with any suite "technically" but in reality, some setups might work
@@ -180,22 +186,28 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
     # by test_id. Setups without ST-rerank recordings (e.g. vllm) intentionally omit it.
     "gpt": Setup(
         name="gpt",
-        description="OpenAI GPT models for high-quality responses and tool calling",
+        description="OpenAI GPT models for high-quality responses, tool calling, and reasoning effort tests",
         defaults={
-            "text_model": "openai/gpt-4o",
-            "vision_model": "openai/gpt-4o",
-            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
+            "text_model": "openai/gpt-5-nano",
+            "vision_model": "openai/gpt-5-nano",
+            "embedding_model": "openai/text-embedding-3-small",
             "embedding_dimension": 1536,
             "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
-    "gpt-reasoning": Setup(
-        name="gpt-reasoning",
-        description="OpenAI reasoning models (o4-mini) for reasoning effort tests",
+    # Kubernetes-auth access-control lane. Run only by
+    # .github/workflows/integration-responses-conversations-auth-tests.yml, which
+    # stands up a k8s auth provider the standard runner cannot; matrix_excluded
+    # keeps it out of ci_matrix.json. Recording happens through the same workflow
+    # in record mode (see record-integration-tests.yml).
+    "auth": Setup(
+        name="gpt",
+        description="OpenAI text model for the kubernetes-auth access-control lane",
+        matrix_excluded=True,
         defaults={
-            "text_model": "openai/o4-mini",
-            "embedding_model": "openai/text-embedding-3-small",
-            "embedding_dimension": 1536,
+            "text_model": "openai/gpt-5-nano",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
+            "embedding_dimension": 768,
         },
     ),
     "azure": Setup(
@@ -463,7 +475,7 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
             "tests/integration/responses/test_openai_responses.py::test_openai_response_reasoning_effort_streaming",
             "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_reasoning_passthrough",
         ],
-        default_setup="gpt-reasoning",
+        default_setup="gpt",
     ),
     # The gpt setup exercises the Anthropic-to-OpenAI translation path, since
     # OpenAI has no native /v1/messages endpoint.
@@ -477,6 +489,20 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         roots=["tests/integration/interactions"],
         default_setup="gemini",
     ),
+    # Kubernetes-auth access-control tests. Consumed only by the dedicated auth
+    # workflow (scripts/integration-responses-conversations-auth-tests.sh); the
+    # auth setup is matrix_excluded so this suite never runs in the standard CI
+    # matrix against a non-auth server.
+    "auth": Suite(
+        name="auth",
+        roots=[
+            "tests/integration/conversations/test_openai_conversations.py::TestConversationAccessControl",
+            "tests/integration/responses/test_prompts_access_control.py::TestPromptsAccessControl",
+            "tests/integration/vector_io/test_vector_stores_access_control.py::TestVectorStoresAccessControl",
+            "tests/integration/responses/test_responses_access_control.py::TestResponsesAccessControl",
+        ],
+        default_setup="auth",
+    ),
     # Bedrock-specific tests with pre-recorded responses (no live API calls in CI)
     "bedrock": Suite(
         name="bedrock",
@@ -484,21 +510,6 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
             "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming",
             "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_streaming",
             "tests/integration/inference/test_openai_completion.py::test_inference_store",
-        ],
-        default_setup="bedrock",
-    ),
-    # Bedrock responses suite — subset of tests that reliably pass with GPT-OSS via
-    # the Mantle API. Structured output, parallel tool calls, and some multi-turn
-    # tool tests are excluded due to model capability gaps.
-    "bedrock-responses": Suite(
-        name="bedrock-responses",
-        roots=[
-            "tests/integration/responses/test_basic_responses.py",
-            "tests/integration/responses/test_conversation_responses.py",
-            "tests/integration/responses/test_mcp_authentication.py",
-            "tests/integration/responses/test_prompt_templates.py",
-            "tests/integration/responses/test_reasoning.py",
-            "tests/integration/responses/test_responses_errors.py",
         ],
         default_setup="bedrock",
     ),
