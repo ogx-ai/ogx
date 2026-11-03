@@ -61,6 +61,7 @@ if no model is specified.
   - `responses`: collects tests under `tests/integration/responses` (needs strong tool-calling models)
   - `vision`: collects only `tests/integration/inference/test_vision_inference.py`
   - `auth`: kubernetes-auth access-control tests. Its `auth` setup is `matrix_excluded`, so this suite only ever runs under the dedicated auth workflow (which stands up the k8s auth provider) and never in the standard CI matrix
+  - `connect-cli`: drives the real agent CLIs (Claude Code, Codex, OpenCode) through `ogx connect <agent>` against the mock setup. The tests self-skip unless the CLIs are installed, so they only actually run under the dedicated connect-cli workflow
 - `--setup`: global configuration that can be used with any suite. Setups prefill model/env defaults; explicit CLI flags always win.
   - Available setups:
     - `ollama`: Local Ollama provider with lightweight models (sets OLLAMA_URL, uses qwen3.5:0.8b)
