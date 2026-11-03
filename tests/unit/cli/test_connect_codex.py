@@ -72,7 +72,7 @@ class TestArguments:
         monkeypatch.delenv("OGX_BASE_URL", raising=False)
         args = parse_group_args(["codex"])
         assert args.model is None
-        assert args.connect_url == "http://localhost:8321/v1"
+        assert args.connect_url == "https://localhost:8321/v1"
 
     def test_group_url_is_used(self) -> None:
         args = parse_group_args(["--url", "https://group.example.com/v1", "codex"])
@@ -464,7 +464,7 @@ class TestConnect:
         catalog = json.loads((tmp_path / "ogx-model-catalog.json").read_text())
         assert config["model"] == "openai/gpt-4o"
         assert config["features"]["multi_agent"] is False
-        assert config["model_providers"]["ogx"]["base_url"] == "http://localhost:8321/v1"
+        assert config["model_providers"]["ogx"]["base_url"] == "https://localhost:8321/v1"
         assert catalog["models"][0]["context_window"] == 200000
 
     def test_launches_codex_exec_with_generated_session_home(self, connect_codex: ConnectCodex, tmp_path) -> None:

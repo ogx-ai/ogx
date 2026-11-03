@@ -45,7 +45,7 @@ class TestArguments:
         monkeypatch.delenv("OGX_BASE_URL", raising=False)
         args = parse_group_args(["opencode"])
         assert args.model is None
-        assert args.connect_url == "http://localhost:8321/v1"
+        assert args.connect_url == "https://localhost:8321/v1"
 
     def test_group_url_is_used(self) -> None:
         args = parse_group_args(["--url", "https://group.example.com/v1", "opencode"])
@@ -65,7 +65,7 @@ class TestArguments:
         monkeypatch.delenv("OGX_BASE_URL", raising=False)
         monkeypatch.setenv("OGX_PORT", "9999")
         args = parse_group_args(["opencode"])
-        assert args.connect_url == "http://localhost:9999/v1"
+        assert args.connect_url == "https://localhost:9999/v1"
 
 
 class TestOpenCodeDetection:
@@ -299,7 +299,7 @@ class TestConnect:
             call_env = mock_run.call_args.kwargs["env"]
             assert "OPENCODE_CONFIG_CONTENT" in call_env
             config = json.loads(call_env["OPENCODE_CONFIG_CONTENT"])
-            assert config["provider"]["ogx"]["options"]["baseURL"] == "http://localhost:8321/v1"
+            assert config["provider"]["ogx"]["options"]["baseURL"] == "https://localhost:8321/v1"
 
     def test_propagates_exit_code(self, connect_opencode: ConnectOpenCode) -> None:
         args = parse_group_args(["opencode", "--model", "gpt-4o"])
