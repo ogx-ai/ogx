@@ -108,12 +108,11 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           CHANGED=$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename')
-          # Pass as a single-line escaped string for the argument
-          {
-            echo "files<<EOF"
-            echo "$CHANGED"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          # Write to a file instead of passing as a command-line argument: large PRs
+          # (hundreds of recording files) exceed the kernel's 128 KiB per-argument limit.
+          # This step stays separate from matrix generation so that only it needs GH_TOKEN.
+          echo "$CHANGED" > "${RUNNER_TEMP}/changed-files.txt"
+          echo "file=${RUNNER_TEMP}/changed-files.txt" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -127,7 +126,7 @@ jobs:
             --schedule "${{ github.event.schedule }}" \
             --test-setup "${{ github.event.inputs.test-setup || '' }}" \
             --matrix-key "${{ inputs.matrix_key || 'default' }}" \
-            --changed-files "${{ steps.changed-files.outputs.files || '' }}")
+            --changed-files-file "${{ steps.changed-files.outputs.file }}")
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "Generated matrix: $MATRIX"
 

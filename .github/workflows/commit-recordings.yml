@@ -1,6 +1,7 @@
 # Commits recordings from recording workflows back to PRs.
 # This workflow runs with elevated permissions but only executes trusted code from the base repo.
-# Triggered via workflow_run after recording workflows complete successfully.
+# Triggered via workflow_run after recording workflows complete. A failed lane produces no
+# artifact of its own, so only recordings from successful lanes are committed.
 name: Commit Recordings
 
 on:
@@ -17,8 +18,11 @@ permissions:
 jobs:
   commit-recordings:
     runs-on: ubuntu-latest
-    # Only run if the recording workflow succeeded
-    if: github.event.workflow_run.conclusion == 'success'
+    # Run when the recording workflow succeeded or failed: a failed lane
+    # skips its own artifact upload, so only recordings from successful
+    # lanes are committed. Cancelled and timed-out runs are excluded so a
+    # cancel-in-progress never commits half-finished artifacts.
+    if: github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure'
     steps:
       - name: Download workflow artifacts
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

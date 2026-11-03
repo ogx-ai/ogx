@@ -198,7 +198,9 @@ echo "Checking ogx packages"
 uv pip list | grep ogx
 
 # Set environment variables
-export OGX_CLIENT_TIMEOUT=300
+# OGX_CLIENT_TIMEOUT is overridable per lane: the ollama base lane raises it in
+# the record workflow, since its thinking model takes minutes per completion.
+export OGX_CLIENT_TIMEOUT="${OGX_CLIENT_TIMEOUT:-300}"
 
 THIS_DIR=$(dirname "$0")
 

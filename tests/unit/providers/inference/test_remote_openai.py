@@ -10,6 +10,7 @@ import pytest
 
 from ogx.providers.remote.inference.openai.config import OpenAIConfig
 from ogx.providers.remote.inference.openai.openai import (
+    _COUNT_MAX_OUTPUT_TOKENS,
     _MODEL_MAX_OUTPUT_TOKENS,
     _WARNED_MODELS,
     OpenAIInferenceAdapter,
@@ -395,7 +396,7 @@ class TestCountTokensSuppressesToolCalls:
             result = await adapter.anthropic_count_tokens(request)
 
             call_kwargs = mock_client.chat.completions.create.call_args.kwargs
-            assert call_kwargs["max_completion_tokens"] == 1
+            assert call_kwargs["max_completion_tokens"] == _COUNT_MAX_OUTPUT_TOKENS
             assert call_kwargs["tool_choice"] == "none"
             assert call_kwargs["tools"]
             assert result.input_tokens == 42
@@ -415,7 +416,7 @@ class TestCountTokensSuppressesToolCalls:
             result = await adapter.anthropic_count_tokens(request)
 
             call_kwargs = mock_client.chat.completions.create.call_args.kwargs
-            assert call_kwargs["max_completion_tokens"] == 1
+            assert call_kwargs["max_completion_tokens"] == _COUNT_MAX_OUTPUT_TOKENS
             assert call_kwargs.get("tool_choice") is None
             assert "tools" not in call_kwargs
             assert result.input_tokens == 42

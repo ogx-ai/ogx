@@ -12,7 +12,9 @@ including translation between Anthropic and OpenAI formats.
 
 import os
 
-from .conftest import make_messages_request, make_streaming_messages_request
+import pytest
+
+from .conftest import _is_limited_sampling_model, make_messages_request, make_streaming_messages_request
 
 
 def _get_text_blocks(content: list[dict]) -> list[dict]:
@@ -174,6 +176,8 @@ def test_messages_non_streaming_with_temperature(messages_client, text_model_id)
 
 def test_messages_non_streaming_with_stop_sequences(messages_client, text_model_id):
     """Non-streaming with stop_sequences parameter."""
+    if _is_limited_sampling_model(text_model_id):
+        pytest.skip("This model does not support stop sequences.")
     response = make_messages_request(
         messages_client,
         model=text_model_id,
