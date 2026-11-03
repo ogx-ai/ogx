@@ -18,7 +18,7 @@ from .config import TheGridImplConfig
 
 
 class TheGridInferenceAdapter(OpenAIMixin):
-    """Inference adapter for The Grid.
+    """Inference adapter for The Grid AI.
 
     The Grid AI is a spot market for inference: model ids are market instruments
     such as `text-standard`, `code-prime` or `agent-max` rather than fixed
