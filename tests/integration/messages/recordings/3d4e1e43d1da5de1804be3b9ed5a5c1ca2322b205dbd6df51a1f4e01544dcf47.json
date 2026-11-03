@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_create_and_retrieve[txt=ollama/qwen3.5:0.8b]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_create_and_retrieve[txt=ollama/qwen3.5:0.8b]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "qwen3.5:0.8b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is 3+3? Reply with just the number."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_157afd7e7254a186429b20c8",
+      "type": "message",
+      "role": "assistant",
+      "model": "qwen3.5:0.8b",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Thinking Process:\n\n1.  **Analyze the Request:** The user is asking \"What is 3+3?\" and explicitly requests the answer \"Reply with just the number.\"\n\n2.  **Determine the Mathematical Result:** 3 + 3 = 6.\n\n3.  **Check Constraints:** The user said \"Reply with just the number.\" This means no explanatory text, only the result.\n\n4.  **Formulate Output:** The output should be just \"6\".\n\n5.  **Final Review:** Does it meet all criteria? Yes. No extra words. Just the number.\n\n6.  **Construct Final Response:** 6"
+        },
+        {
+          "type": "text",
+          "text": "6"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 23,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 142
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

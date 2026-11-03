@@ -1,0 +1,69 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_with_tool_definitions[txt=ollama/qwen3.5:0.8b]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_with_tool_definitions[txt=ollama/qwen3.5:0.8b]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "qwen3.5:0.8b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What's the weather in San Francisco?"
+        }
+      ],
+      "max_tokens": 2048,
+      "tools": [
+        {
+          "type": "custom",
+          "name": "get_weather",
+          "description": "Get the current weather in a given location",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string",
+                "description": "The city and state, e.g. San Francisco, CA"
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
+        }
+      ],
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_23b435b1bb31103a63796910",
+      "type": "message",
+      "role": "assistant",
+      "model": "qwen3.5:0.8b",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "The user is asking for the current weather in San Francisco. I can see that there's a get_weather tool available, which requires a location parameter (city and state).\n\nBased on the user's request, I need to use this tool with:\n- location: \"San Francisco\" and I should include the state abbreviation \"CA\" if it's known"
+        },
+        {
+          "type": "tool_use",
+          "id": "call_fr7ffngg",
+          "name": "get_weather",
+          "input": {
+            "location": "San Francisco, CA"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 4,
+        "cache_read_input_tokens": 290,
+        "output_tokens": 104
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}
