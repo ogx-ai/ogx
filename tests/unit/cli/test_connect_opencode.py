@@ -92,6 +92,21 @@ class TestOpenCodeDetection:
             with pytest.raises(SystemExit) as exc_info:
                 connect_opencode._run_connect_opencode_cmd(args)
             assert exc_info.value.code == 0
+            assert mock_run.call_args.args[0] == ["opencode"]
+
+    def test_forwards_opencode_args(self, connect_opencode: ConnectOpenCode) -> None:
+        args = parse_group_args(["opencode", "--model", "gpt-4o", "--", "run", "What is 2+2?"])
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+
+        with (
+            patch("ogx.cli.connect.opencode.shutil.which", return_value="/usr/bin/opencode"),
+            patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client),
+            patch("ogx.cli.connect.opencode.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0)
+            with pytest.raises(SystemExit):
+                connect_opencode._run_connect_opencode_cmd(args)
+            assert mock_run.call_args.args[0] == ["opencode", "run", "What is 2+2?"]
 
 
 class TestServerProbe:
