@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
@@ -19,6 +20,7 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 from termcolor import cprint
 
 from ogx.cli.connect.auth import auth_error_message
+from ogx.cli.connect.claude import _strip_leading_separator
 from ogx.cli.connect.tls import is_untrusted_certificate_error, untrusted_certificate_client
 from ogx.cli.subcommand import Subcommand
 from ogx.log import get_logger
@@ -355,7 +357,12 @@ class ConnectCodex(Subcommand):
             dest="exec_prompt",
             type=str,
             default=None,
-            help="Run Codex non-interactively with the provided prompt.",
+            help=argparse.SUPPRESS,
+        )
+        self.parser.add_argument(
+            "codex_args",
+            nargs=argparse.REMAINDER,
+            help="Additional arguments forwarded to the codex command (place after --).",
         )
 
     def _run_connect_codex_cmd(self, args: argparse.Namespace) -> None:
@@ -383,14 +390,23 @@ class ConnectCodex(Subcommand):
             self.session_builder.write_session_files(
                 codex_home_path, base_url, models, default_model.model_id, api_key=args.connect_api_key
             )
-            command = self._build_codex_command(args.exec_prompt)
+            codex_args = _strip_leading_separator(list(args.codex_args))
+            if args.exec_prompt is not None:
+                # Deprecated: kept for compatibility with the pre-forwarding form.
+                warnings.warn(
+                    "'--exec' is deprecated and will be removed in a future release. "
+                    "Forward the prompt after -- instead: ogx connect codex -- exec <prompt>.",
+                    FutureWarning,
+                    stacklevel=1,
+                )
+                codex_args = ["exec", *codex_args, args.exec_prompt]
+            command = self._build_codex_command(codex_args)
             env = {**os.environ, "CODEX_HOME": str(codex_home_path)}
             if args.connect_api_key:
                 env["OPENAI_API_KEY"] = args.connect_api_key  # noqa: S105
             result = subprocess.run(command, env=env)
             sys.exit(result.returncode)
 
-    def _build_codex_command(self, exec_prompt: str | None = None) -> list[str]:
-        if exec_prompt:
-            return ["codex", "exec", "-p", "ogx", exec_prompt]
-        return ["codex", "-p", "ogx"]
+    def _build_codex_command(self, codex_args: list[str] | None = None) -> list[str]:
+        # -p selects the generated OGX profile; everything after -- is the user's codex command.
+        return ["codex", "-p", "ogx", *(codex_args or [])]
