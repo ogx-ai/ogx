@@ -41,6 +41,12 @@ class Setup(BaseModel):
     description: str
     defaults: dict[str, str | int] = Field(default_factory=dict)
     env: dict[str, str] = Field(default_factory=dict)
+    # Set for setups that only run under a dedicated workflow (e.g. the k8s auth
+    # lane) rather than the standard CI matrix. Such setups must not appear in
+    # ci_matrix.json (enforced by tests/unit/test_ci_matrix.py), but their
+    # recordings are still referenced: cleanup_recordings.py collects the suites
+    # that default to an excluded setup when computing orphans.
+    matrix_excluded: bool = False
 
 
 # Global setups - can be used with any suite "technically" but in reality, some setups might work
@@ -53,7 +59,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "OLLAMA_URL": "http://0.0.0.0:11434/v1",
         },
         defaults={
-            "text_model": "ollama/llama3.2:3b-instruct-fp16",
+            "text_model": "ollama/qwen3.5:0.8b",
             "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
@@ -81,7 +87,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "OGX_LOGGING": "openai_responses=info",
         },
         defaults={
-            "text_model": "ollama/llama3.2:3b-instruct-fp16",
+            "text_model": "ollama/qwen3.5:0.8b",
             "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
@@ -94,6 +100,20 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         defaults={
             "text_model": "vllm/Qwen/Qwen3-0.6B",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
+        },
+    ),
+    "vllm-systemone": Setup(
+        name="vllm",
+        description=(
+            "vLLM server serving the Tev1-0.8B-experimental decision model on its structured "
+            "decisions API (/v1/systemone), via vLLM's CPU next-token read strategy. Small "
+            "enough for the CI-pinned CPU wheel, unlike SGLang's 9B clef-flash."
+        ),
+        env={
+            "VLLM_URL": "http://localhost:8000/v1",
+        },
+        defaults={
+            "judge_model": "vllm/togethercomputer/Tev1-0.8B-experimental",
         },
     ),
     "sglang": Setup(
@@ -166,11 +186,11 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
     # by test_id. Setups without ST-rerank recordings (e.g. vllm) intentionally omit it.
     "gpt": Setup(
         name="gpt",
-        description="OpenAI GPT models for high-quality responses and tool calling",
+        description="OpenAI GPT models for high-quality responses, tool calling, and reasoning effort tests",
         defaults={
-            "text_model": "openai/gpt-4o",
-            "vision_model": "openai/gpt-4o",
-            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
+            "text_model": "openai/gpt-5-nano",
+            "vision_model": "openai/gpt-5-nano",
+            "embedding_model": "openai/text-embedding-3-small",
             "embedding_dimension": 1536,
             "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
@@ -182,13 +202,19 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "text_model": "thegrid/text-standard",
         },
     ),
-    "gpt-reasoning": Setup(
-        name="gpt-reasoning",
-        description="OpenAI reasoning models (o4-mini) for reasoning effort tests",
+    # Kubernetes-auth access-control lane. Run only by
+    # .github/workflows/integration-responses-conversations-auth-tests.yml, which
+    # stands up a k8s auth provider the standard runner cannot; matrix_excluded
+    # keeps it out of ci_matrix.json. Recording happens through the same workflow
+    # in record mode (see record-integration-tests.yml).
+    "auth": Setup(
+        name="gpt",
+        description="OpenAI text model for the kubernetes-auth access-control lane",
+        matrix_excluded=True,
         defaults={
-            "text_model": "openai/o4-mini",
-            "embedding_model": "openai/text-embedding-3-small",
-            "embedding_dimension": 1536,
+            "text_model": "openai/gpt-5-nano",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
+            "embedding_dimension": 768,
         },
     ),
     "azure": Setup(
@@ -314,6 +340,26 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "text_model": "groq/llama-3.3-70b-versatile",
         },
     ),
+    "mock": Setup(
+        name="mock",
+        description=(
+            "Deterministic in-repo mock model backend (scripts/mock_backend.py) standing in "
+            "for a text model and an embedding model behind the llama-cpp-server provider. "
+            "scripts/integration-tests.sh starts the backend on the setup's port when this "
+            "setup is selected. Every chat completion replies with the fixed 'sentinel' "
+            "default, which tests assert on to prove a round-trip; keep it in sync with "
+            "scripts/mock_backend.py."
+        ),
+        env={
+            "LLAMA_CPP_SERVER_URL": "http://127.0.0.1:8090/v1",
+        },
+        defaults={
+            "text_model": "llama-cpp-server/Llama-3.1-8B-Instruct",
+            "embedding_model": "llama-cpp-server/text-embedding-3-small",
+            "embedding_dimension": 1536,
+            "sentinel": "OGX-E2E-SENTINEL-42",
+        },
+    ),
     "llama-cpp-server": Setup(
         name="llama-cpp-server",
         description=(
@@ -391,25 +437,14 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         roots=base_roots,
         default_setup="ollama",
     ),
-    "base-vllm-subset": Suite(
-        name="base-vllm-subset",
+    # Full inference directory against a single self-hosted text backend (vllm, sglang,
+    # llama-cpp-server, or ollama via default_setup). These CI servers serve a text,
+    # embedding, and (for llama-cpp-server) rerank model, but no vision model, so
+    # vision tests skip.
+    "inference": Suite(
+        name="inference",
         roots=["tests/integration/inference"],
-        default_setup="vllm",
-    ),
-    # SGLang backend, scoped like base-vllm-subset (the full inference directory): the
-    # CI server serves one text model, so vision tests skip.
-    "sglang": Suite(
-        name="sglang",
-        roots=["tests/integration/inference"],
-        default_setup="sglang",
-    ),
-    # llama.cpp multi-model router backend (llama-server --models-preset), scoped like
-    # base-vllm-subset (the full inference directory). The router serves a text, an
-    # embedding, and a rerank model, but no vision model, so vision tests skip.
-    "llama-cpp-server": Suite(
-        name="llama-cpp-server",
-        roots=["tests/integration/inference"],
-        default_setup="llama-cpp-server",
+        default_setup="ollama",
     ),
     # Text-Embeddings-Inference backend. TEI only serves embeddings (no chat or
     # completion endpoint), so this suite is scoped to the embeddings tests only.
@@ -436,49 +471,44 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         roots=["tests/integration/inference/test_vision_inference.py"],
         default_setup="ollama-vision",
     ),
-    "vllm-reasoning": Suite(
-        name="vllm-reasoning",
-        roots=["tests/integration/responses/test_reasoning.py"],
-        default_setup="vllm",
-    ),
-    "gpt-reasoning": Suite(
-        name="gpt-reasoning",
+    # Reasoning tests self-skip when the model or provider lacks the relevant
+    # capability (reasoning content, reasoning_effort, reasoning summaries), so
+    # a single suite can be run against any reasoning-capable setup.
+    "reasoning": Suite(
+        name="reasoning",
         roots=[
+            "tests/integration/responses/test_reasoning.py",
             "tests/integration/responses/test_openai_responses.py::test_openai_response_reasoning_effort",
             "tests/integration/responses/test_openai_responses.py::test_openai_response_reasoning_effort_streaming",
-        ],
-        default_setup="gpt-reasoning",
-    ),
-    "ollama-reasoning": Suite(
-        name="ollama-reasoning",
-        roots=[
             "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_reasoning_passthrough",
-            "tests/integration/responses/test_reasoning.py::test_reasoning_basic_streaming",
-            "tests/integration/responses/test_reasoning.py::test_reasoning_non_streaming",
-            "tests/integration/responses/test_reasoning.py::test_reasoning_multi_turn_with_tool_call",
-            "tests/integration/responses/test_reasoning.py::test_reasoning_multi_turn_passthrough",
         ],
-        default_setup="ollama-reasoning",
+        default_setup="gpt",
     ),
+    # The gpt setup exercises the Anthropic-to-OpenAI translation path, since
+    # OpenAI has no native /v1/messages endpoint.
     "messages": Suite(
         name="messages",
         roots=["tests/integration/messages"],
         default_setup="ollama",
     ),
-    # Exercises the /v1/messages translation path: Anthropic request format is
-    # translated to OpenAI Chat Completions, dispatched to OpenAI, and the response
-    # is translated back to Anthropic format. OpenAI is not in _NATIVE_MESSAGES_MODULES,
-    # so this setup guarantees the translation codepath in providers/inline/messages/impl.py
-    # is covered end-to-end (rather than the native passthrough used by the ollama suite).
-    "messages-openai": Suite(
-        name="messages-openai",
-        roots=["tests/integration/messages"],
-        default_setup="gpt",
-    ),
     "interactions": Suite(
         name="interactions",
         roots=["tests/integration/interactions"],
         default_setup="gemini",
+    ),
+    # Kubernetes-auth access-control tests. Consumed only by the dedicated auth
+    # workflow (scripts/integration-responses-conversations-auth-tests.sh); the
+    # auth setup is matrix_excluded so this suite never runs in the standard CI
+    # matrix against a non-auth server.
+    "auth": Suite(
+        name="auth",
+        roots=[
+            "tests/integration/conversations/test_openai_conversations.py::TestConversationAccessControl",
+            "tests/integration/responses/test_prompts_access_control.py::TestPromptsAccessControl",
+            "tests/integration/vector_io/test_vector_stores_access_control.py::TestVectorStoresAccessControl",
+            "tests/integration/responses/test_responses_access_control.py::TestResponsesAccessControl",
+        ],
+        default_setup="auth",
     ),
     # Bedrock-specific tests with pre-recorded responses (no live API calls in CI)
     # The Grid AI serves chat completions only: /v1/completions and /v1/embeddings
@@ -495,21 +525,6 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
             "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming",
             "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_streaming",
             "tests/integration/inference/test_openai_completion.py::test_inference_store",
-        ],
-        default_setup="bedrock",
-    ),
-    # Bedrock responses suite — subset of tests that reliably pass with GPT-OSS via
-    # the Mantle API. Structured output, parallel tool calls, and some multi-turn
-    # tool tests are excluded due to model capability gaps.
-    "bedrock-responses": Suite(
-        name="bedrock-responses",
-        roots=[
-            "tests/integration/responses/test_basic_responses.py",
-            "tests/integration/responses/test_conversation_responses.py",
-            "tests/integration/responses/test_mcp_authentication.py",
-            "tests/integration/responses/test_prompt_templates.py",
-            "tests/integration/responses/test_reasoning.py",
-            "tests/integration/responses/test_responses_errors.py",
         ],
         default_setup="bedrock",
     ),

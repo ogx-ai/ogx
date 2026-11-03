@@ -380,8 +380,13 @@ class VectorStoreWithIndex:
                     dimensions=params.get("embedding_dimensions"),
                 )
             else:
+                # The query must be embedded at the store's dimension, otherwise
+                # search fails (e.g. a 1536-dim default query against a 768-dim
+                # FAISS index).
                 embeddings_request = OpenAIEmbeddingsRequestWithExtraBody(
-                    model=self.vector_store.embedding_model, input=[query_string]
+                    model=self.vector_store.embedding_model,
+                    input=[query_string],
+                    dimensions=self.vector_store.embedding_dimension,
                 )
             embeddings_response = await self.inference_api.openai_embeddings(embeddings_request)
             np = _get_numpy()

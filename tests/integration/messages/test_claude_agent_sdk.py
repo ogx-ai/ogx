@@ -61,6 +61,14 @@ def _run_query(prompt: str, base_url: str, model: str, cwd: str) -> list:
             "ANTHROPIC_API_KEY": "dummy",
             "ANTHROPIC_MODEL": model,
         },
+        # WARNING: the Agent SDK has no equivalent of the `ogx connect claude`
+        # adapter, which defaults extended thinking off for the CLI. The CLI
+        # enables thinking by default and non-Claude backends reject thinking
+        # requests with a 400, so SDK users pointing at OGX with a non-Claude
+        # model MUST pass thinking={"type": "disabled"} themselves -- there is
+        # no default we can ship on their behalf. If this param is ever
+        # removed, non-Claude smoke runs will start failing with a 400.
+        thinking={"type": "disabled"},
         # The prompt is pure Q&A and triggers no tools, but bypass permissions
         # so the non-interactive session can never stall on a permission prompt.
         permission_mode="bypassPermissions",
@@ -80,18 +88,19 @@ def _run_query(prompt: str, base_url: str, model: str, cwd: str) -> list:
     return messages
 
 
-def test_claude_agent_sdk_smoke(messages_base_url, text_model_id, tmp_path):
+def test_claude_agent_sdk_smoke(messages_base_url, text_model_id, mock_sentinel, tmp_path):
     """Claude Agent SDK completes a session against /v1/messages without error.
 
     The smoke signal is integration health, not answer quality: the SDK drives a
     full agentic session (system prompt, tools, inline system message) against
     OGX, OGX routes it to the backing model, and the session terminates with a
-    successful ResultMessage. We deliberately do not assert on the model's text
-    output -- a small local model driving the Claude Code harness cannot be
-    relied on to produce a specific answer, but a regression like a rejected
-    system-role message (which would surface as a session error) is caught here.
+    successful ResultMessage. Against the mock setup the fixed sentinel in the
+    assistant text proves the request round-tripped mock -> OGX -> client;
+    against real models we cannot assert on output, so we confirm the model was
+    used instead. A regression like a rejected system-role message (which would
+    surface as a session error) is caught either way.
     """
-    from claude_agent_sdk import ResultMessage
+    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
     prompt = "What is the capital of France? Reply with only the city name and nothing else."
     base_url = str(messages_base_url).rstrip("/")
@@ -107,7 +116,21 @@ def test_claude_agent_sdk_smoke(messages_base_url, text_model_id, tmp_path):
         f"subtype={result.subtype} is_error={result.is_error} errors={result.errors}"
     )
     # Confirm the request actually reached the backing model through /v1/messages.
-    model_usage = result.model_usage or {}
-    assert text_model_id in model_usage, (
-        f"Expected model {text_model_id} in ResultMessage.model_usage; got: {list(model_usage)}"
-    )
+    if mock_sentinel:
+        assistant_text = "".join(
+            block.text
+            for message in messages
+            if isinstance(message, AssistantMessage)
+            for block in message.content
+            if isinstance(block, TextBlock)
+        )
+        assert mock_sentinel in assistant_text, (
+            f"Mock sentinel {mock_sentinel!r} not in the assistant text; the request did not "
+            f"round-trip through the backing model. Messages: "
+            f"{[type(m).__name__ for m in messages]} text={assistant_text!r}"
+        )
+    else:
+        model_usage = result.model_usage or {}
+        assert text_model_id in model_usage, (
+            f"Expected model {text_model_id} in ResultMessage.model_usage; got: {list(model_usage)}"
+        )

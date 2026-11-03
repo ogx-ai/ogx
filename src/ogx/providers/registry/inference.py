@@ -92,7 +92,7 @@ def available_providers() -> list[ProviderSpec]:
             api=Api.inference,
             adapter_type="vllm",
             provider_type="remote::vllm",
-            pip_packages=[],
+            pip_packages=["typesafe-sdk>=0.7.2"],
             module="ogx.providers.remote.inference.vllm",
             config_class="ogx.providers.remote.inference.vllm.VLLMInferenceAdapterConfig",
             provider_data_validator="ogx.providers.remote.inference.vllm.VLLMProviderDataValidator",

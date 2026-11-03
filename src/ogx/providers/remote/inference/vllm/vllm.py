@@ -19,10 +19,12 @@ from ogx.providers.utils.inference.anthropic_mixin import AnthropicMixin
 from ogx.providers.utils.inference.models_dev_registry import classify_model
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx.providers.utils.inference.stream_utils import wrap_reasoning_chunks
+from ogx.providers.utils.inference.systemone import LOCAL_ENGINE_API_KEY, systemone_judge
 from ogx_api import (
     HealthResponse,
     HealthStatus,
     Model,
+    ModelType,
     OpenAIChatCompletion,
     OpenAIChatCompletionChunk,
     OpenAIChatCompletionChunkWithReasoning,
@@ -34,12 +36,30 @@ from ogx_api import (
     OpenAISystemMessageParam,
     RerankData,
     RerankResponse,
+    SystemOneRequest,
+    SystemOneResponse,
 )
 from ogx_api.inference import RerankRequest
 
 from .config import VLLMInferenceAdapterConfig
 
 log = get_logger(name=__name__, category="inference::vllm")
+
+# Clef-omni and Tev1 use vLLM's structured-decisions API (NextTokenStrategy /
+# JointSchemaStrategy, keyed by model architecture); plain Clef/Clef-flash and
+# PPLX-Decider are included for parity with the other local engines even though
+# vLLM's current read strategies don't cover every one of them -- unsupported
+# checkpoints fail at call time (NotImplementedError from /v1/systemone), not at
+# classification time. vLLM's /v1/models response exposes no capabilities and the
+# served id is normally the HuggingFace path, so the last path segment is matched
+# by name, same as sglang.py.
+_SYSTEMONE_MODEL_NAMES = frozenset({"clef", "clef-flash", "clef-omni", "tev1"})
+_SYSTEMONE_MODEL_PREFIXES = ("pplx-decider", "tev1-")
+
+
+def _is_systemone_model(identifier: str) -> bool:
+    name = identifier.rsplit("/", 1)[-1].casefold()
+    return name in _SYSTEMONE_MODEL_NAMES or name.startswith(_SYSTEMONE_MODEL_PREFIXES)
 
 
 def _convert_developer_messages(messages: list[Any]) -> list[Any]:
@@ -198,9 +218,43 @@ class VLLMInferenceAdapter(AnthropicMixin, OpenAIMixin):
         # vLLM's /v1/models response does not expose a model task/type field,
         # so we classify with models.dev with a name fallback.
         model = classify_model(identifier, self.__provider_id__)
-        if model is not None:
-            return model
-        return super().construct_model_from_identifier(identifier)
+        if model is None:
+            model = super().construct_model_from_identifier(identifier)
+        if _is_systemone_model(identifier):
+            # Decision models answer SystemOne judgments, not chat completions; register them
+            # under ModelType.systemone so the /v1/systemone router finds them.
+            model.model_type = ModelType.systemone
+        return model
+
+    async def judge(self, request: SystemOneRequest) -> SystemOneResponse:
+        """Answer a SystemOne judgment request by forwarding it to vLLM's /v1/systemone.
+
+        vLLM serves the structured decisions API natively for decision checkpoints whose
+        architecture it recognizes (e.g. Qwen3_5ForConditionalGeneration for Tev1,
+        ClefOmniForJointSchema for Clef-omni), so no translation of the request is needed.
+        The response needs light massaging first, though: vLLM reports its own per-call
+        id/object/created and per-question diagnostics (label_mass, argmax_is_label)
+        alongside `answers`, and its `noul` answers carry `probabilities`/`confidence`
+        fields that the SystemOne schema's choice/score answers also carry -- but as
+        required fields, not an extension, so they can only be stripped conditionally on
+        answer type, not unconditionally like SGLang's `x_label_mass`.
+        """
+        # get_api_key() returns a display placeholder ("NO KEY REQUIRED") when no
+        # credential is configured, which the typesafe SDK rejects; pass the
+        # configured credential or the fixed local placeholder instead.
+        api_key = (
+            self.config.auth_credential.get_secret_value()
+            if self.config.auth_credential is not None
+            else LOCAL_ENGINE_API_KEY
+        )
+        return await systemone_judge(
+            self._get_base_url_without_version(),
+            api_key,
+            request,
+            network=self.config.network,
+            top_level_extension_fields=frozenset({"id", "object", "created", "diagnostics"}),
+            extension_fields_by_type={"noul": frozenset({"probabilities", "confidence"})},
+        )
 
     async def rerank(
         self,

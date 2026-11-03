@@ -86,5 +86,8 @@ class VLLMInferenceAdapterConfig(RemoteInferenceProviderConfig):
                 "tls": {
                     "verify": "${env.VLLM_TLS_VERIFY:=true}",
                 },
+                # Local vLLM engines (e.g. CPU inference in CI) can take well over
+                # the TypeSafe SDK's 5s default to answer; allow a generous timeout.
+                "timeout": "${env.VLLM_TIMEOUT:=300}",
             },
         }

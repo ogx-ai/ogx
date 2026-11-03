@@ -37,7 +37,7 @@ Options:
     --stack-config STRING    Stack configuration to use (required)
     --suite STRING           Test suite to run (default: 'base')
     --setup STRING           Test setup (models, env) to use (e.g., 'ollama', 'ollama-vision', 'gpt', 'vllm')
-    --text-model STRING      Override text model (e.g. 'ollama/llama3.2:3b', 'openai/gpt-4o')
+    --text-model STRING      Override text model (e.g. 'ollama/qwen3.5:0.8b', 'openai/gpt-4o')
     --vision-model STRING    Override vision model (e.g. 'ollama/qwen3-vl:2b')
     --rerank-model STRING    Override rerank model (e.g. 'vllm/Qwen/Qwen3-Reranker-0.6B')
     --inference-mode STRING  Inference mode: replay, record-if-missing or record (default: replay)
@@ -79,7 +79,7 @@ Examples:
     $0 --stack-config server:ci-tests --file tests/integration/responses/test_responses_access_control.py --setup gpt
 
     # Override model (setup still provides env, e.g. OLLAMA_URL)
-    $0 --stack-config server:ci-tests --suite base --setup ollama --text-model ollama/llama3.2:1b
+    $0 --stack-config server:ci-tests --suite base --setup ollama --text-model ollama/qwen3.5:0.8b
 
     # Test against the in-repo generated ogx-client (CI client-version=latest equivalent)
     $0 --stack-config server:ci-tests --suite base --setup gpt --client-version latest
@@ -198,7 +198,9 @@ echo "Checking ogx packages"
 uv pip list | grep ogx
 
 # Set environment variables
-export OGX_CLIENT_TIMEOUT=300
+# OGX_CLIENT_TIMEOUT is overridable per lane: the ollama base lane raises it in
+# the record workflow, since its thinking model takes minutes per completion.
+export OGX_CLIENT_TIMEOUT="${OGX_CLIENT_TIMEOUT:-300}"
 
 THIS_DIR=$(dirname "$0")
 
@@ -254,6 +256,42 @@ echo "$SETUP_ENV"
 eval "$SETUP_ENV"
 echo ""
 
+# The mock setup's models are served by the in-repo stub backend, and the
+# OGX server in front of it is a plain default `ogx go`. Start the backend
+# detached (skipped when one is already listening); ogx go starts later,
+# once ogx is known to be on PATH. Both are stopped on exit.
+MOCK_BACKEND_PID=""
+OGX_GO_PID=""
+cleanup_mock() {
+    if [[ -n "${MOCK_BACKEND_PID:-}" ]]; then
+        kill "$MOCK_BACKEND_PID" 2>/dev/null
+    elif [[ -n "${MOCK_MODEL_PORT:-}" ]]; then
+        # We reused a pre-existing listener, so we do not own its PID; free the
+        # port by address instead of leaking the process.
+        pids=$(lsof -ti :"$MOCK_MODEL_PORT" 2>/dev/null || true)
+        [[ -n "$pids" ]] && kill $pids 2>/dev/null
+    fi
+    [[ -n "${OGX_GO_PID:-}" ]] && kill "$OGX_GO_PID" 2>/dev/null
+}
+if [[ "$TEST_SETUP" == mock* && "$COLLECT_ONLY" == false ]]; then
+    MOCK_MODEL_PORT="${MOCK_MODEL_PORT:-8090}"
+    if ! curl -sf --max-time 2 "http://127.0.0.1:${MOCK_MODEL_PORT}/v1/models" >/dev/null 2>&1; then
+        nohup python3 "$THIS_DIR/mock_backend.py" --port "$MOCK_MODEL_PORT" >"mock-model-backend.log" 2>&1 &
+        MOCK_BACKEND_PID=$!
+    fi
+    for i in $(seq 1 30); do
+        if curl -sf --max-time 2 "http://127.0.0.1:${MOCK_MODEL_PORT}/v1/models" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+    done
+    if ! curl -sf --max-time 2 "http://127.0.0.1:${MOCK_MODEL_PORT}/v1/models" >/dev/null 2>&1; then
+        echo "Failed to start the mock model backend on port ${MOCK_MODEL_PORT}"
+        exit 1
+    fi
+    trap cleanup_mock EXIT
+fi
+
 # Export suite and setup names for TypeScript tests
 export OGX_TEST_SUITE="$TEST_SUITE"
 export OGX_TEST_SETUP="$TEST_SETUP"
@@ -272,6 +310,35 @@ fi
 if ! command -v pytest &>/dev/null; then
     echo "pytest could not be found, ensure pytest is installed"
     exit 1
+fi
+
+# For the mock setup, the OGX server is a plain default `ogx go`: the setup's
+# LLAMA_CPP_SERVER_URL environment (exported above) points its
+# remote::llama-cpp-server probe at the mock backend, whose model ids let it
+# auto-detect the embedding model. Tests then connect via an http:// stack
+# config, so this script owns the server's lifetime.
+if [[ "$TEST_SETUP" == mock* && "$COLLECT_ONLY" == false ]]; then
+    OGX_GO_PORT="${OGX_GO_PORT:-8321}"
+    # --insecure --no-auth: plain http without auth, so the test clients need
+    # no certificate or key handling (the secure-by-default modes are covered
+    # elsewhere).
+    nohup ogx go --port "$OGX_GO_PORT" --host 127.0.0.1 --insecure --no-auth --skip-install-deps >"ogx-go.log" 2>&1 &
+    OGX_GO_PID=$!
+    for i in $(seq 1 60); do
+        if curl -sf --max-time 2 "http://localhost:${OGX_GO_PORT}/v1/models" >/dev/null 2>&1; then
+            break
+        fi
+        if ! kill -0 "$OGX_GO_PID" 2>/dev/null; then
+            break
+        fi
+        sleep 2
+    done
+    if ! curl -sf --max-time 2 "http://localhost:${OGX_GO_PORT}/v1/models" >/dev/null 2>&1; then
+        echo "Failed to start ogx go on port ${OGX_GO_PORT}"
+        cat ogx-go.log
+        exit 1
+    fi
+    echo "ogx go is ready on port ${OGX_GO_PORT}"
 fi
 
 # Manage the ogx-client package to mirror CI's client-version input

@@ -1,6 +1,6 @@
 name: Messages API - Claude Code Client Smoke Tests
 
-run-name: Drive the latest Claude Code CLI and Agent SDK against /v1/messages (live, Ollama)
+run-name: Drive the latest Claude Code CLI and Agent SDK against /v1/messages (mock provider backend)
 
 # Deliberately not a required status check, and should stay out of branch protection: it tracks
 # upstream client releases we don't control, not our own code, so it must never gate a merge. See
@@ -21,6 +21,8 @@ on:
       - '.github/actions/setup-test-environment/action.yml'
       - '.github/actions/run-and-record-tests/action.yml'
       - 'scripts/integration-tests.sh'
+      - 'scripts/mock_backend.py'
+      - 'tests/integration/suites.py'
   merge_group:
     branches:
       - main
@@ -45,27 +47,31 @@ permissions:
 
 jobs:
   claude-code-client-smoke:
-    name: Claude Code CLI + Agent SDK smoke (ollama, live)
+    name: Claude Code CLI + Agent SDK smoke (mock provider backend)
     runs-on: ubuntu-latest
-    # CPU-only runners generate slowly; the live sessions can take several
-    # minutes against the Ollama model. Keep ample headroom over the tests' own
-    # 600s timeouts plus environment setup.
-    timeout-minutes: 30
+    # The mock backend answers instantly; the time is dominated by environment
+    # setup and the client sessions' own timeouts.
+    timeout-minutes: 5
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Live mode (not replay) so the Ollama backend is provisioned and the real
-      # client traffic reaches a real model.
+      # Live mode (not replay) so the real client traffic reaches a server. The
+      # mock setup stands up scripts/mock_backend.py (a deterministic in-repo
+      # mock provider backend) behind a plain default `ogx go` instead of
+      # downloading and generating with a real Ollama model; the tests assert
+      # its sentinel in the reply. No HuggingFace assets are needed because
+      # the mock serves the embedding model.
       - name: Setup test environment
         uses: ./.github/actions/setup-test-environment
         with:
           python-version: '3.12'
           client-version: 'latest'
-          setup: 'ollama'
+          setup: 'mock'
           suite: 'messages'
           inference-mode: 'live'
+          enable-hf-cache: 'false'
 
       # Both clients need the Claude Code CLI at runtime: the CLI test invokes it directly, and the SDK
       # test points the SDK at it (the SDK would otherwise prefer the CLI bundled in its own package).
@@ -119,8 +125,10 @@ jobs:
       - name: Run Claude Code client smoke tests
         uses: ./.github/actions/run-and-record-tests
         with:
-          stack-config: 'server:ci-tests'
-          setup: 'ollama'
+          # The script starts a default `ogx go` on 8321 for the mock setup;
+          # the http:// config makes the test client connect to it.
+          stack-config: 'http://localhost:8321'
+          setup: 'mock'
           suite: 'messages'
           inference-mode: 'live'
           # Selects both test_claude_code_cli_smoke and test_claude_agent_sdk_smoke.
