@@ -8,8 +8,23 @@ import time
 
 import pytest
 
-from .helpers import skip_if_provider_is_vertexai
+from .helpers import (
+    is_gpt_5_nano,
+    skip_if_gpt_nano_limited_params,
+    skip_if_provider_is_vertexai,
+    skip_if_text_model_prefix,
+)
 from .streaming_assertions import StreamingValidator
+
+
+@pytest.fixture(autouse=True)
+def _skip_responses_tests_for_bedrock(request):
+    """Skip these tests for Bedrock — parallel tool calls and multi-turn tool execution are unreliable."""
+    skip_if_text_model_prefix(
+        request,
+        "bedrock/",
+        "Bedrock GPT-OSS does not reliably support parallel tool calls and multi-turn tool execution",
+    )
 
 
 @pytest.mark.integration
@@ -55,8 +70,18 @@ class TestOpenAIResponses:
         )
 
         assert response.id.startswith("resp_")
-        assert len(response.output_text.strip()) > 0
         assert response.max_output_tokens == 100
+        # The budget must never be exceeded (with tolerance for provider
+        # differences). Whether the answer is truncated depends on the model:
+        # some complete within the budget, others (including reasoning models
+        # that spend it on reasoning tokens) do not.
+        assert response.usage is not None
+        assert response.usage.output_tokens <= 105
+        if response.status == "completed":
+            assert len(response.output_text.strip()) > 0
+        elif response.status == "incomplete":
+            assert response.incomplete_details is not None
+            assert response.incomplete_details.reason == "length"
 
     def test_openai_response_with_small_max_output_tokens(self, openai_client, client_with_models, text_model_id):
         """Test response with very small max_output_tokens to trigger potential truncation."""
@@ -78,15 +103,21 @@ class TestOpenAIResponses:
 
         assert response.id.startswith("resp_")
         assert response.max_output_tokens == 20
-        assert len(response.output_text.strip()) > 0
-
-        # With such a small token limit, the response might be incomplete
-        # Note: The status might be 'incomplete' depending on provider implementation
-        if response.usage is not None and response.usage.output_tokens > 0:
-            # Allow some tolerance for provider differences
-            assert response.usage.output_tokens <= 25, (
-                f"Output tokens ({response.usage.output_tokens}) should respect max_output_tokens (20) "
-            )
+        # No model completes this essay within 20 tokens, so the budget is the
+        # binding constraint for every model: the response is truncated for
+        # length and the budget is consumed. Visible text may be empty for
+        # reasoning models that spend the budget on reasoning tokens.
+        assert response.status == "incomplete"
+        assert response.incomplete_details is not None
+        assert response.incomplete_details.reason == "length"
+        assert response.usage is not None
+        # Allow some tolerance for provider differences
+        assert response.usage.output_tokens <= 25, (
+            f"Output tokens ({response.usage.output_tokens}) should respect max_output_tokens (20) "
+        )
+        assert response.usage.output_tokens >= 20, (
+            f"Output tokens ({response.usage.output_tokens}) should consume max_output_tokens (20) "
+        )
 
     def test_openai_response_max_output_tokens_below_minimum(self, openai_client, text_model_id):
         """Test that max_output_tokens below minimum (< 16) is rejected."""
@@ -314,6 +345,7 @@ class TestOpenAIResponses:
 
     def test_openai_response_with_top_p(self, openai_client, text_model_id):
         """Test OpenAI response with top_p parameter."""
+        skip_if_gpt_nano_limited_params(text_model_id, "top_p")
         response = openai_client.responses.create(
             model=text_model_id,
             input=[{"role": "user", "content": "What is the largest ocean on Earth?"}],
@@ -326,6 +358,7 @@ class TestOpenAIResponses:
 
     def test_openai_response_with_top_p_streaming(self, openai_client, text_model_id):
         """Test OpenAI response with top_p in streaming mode."""
+        skip_if_gpt_nano_limited_params(text_model_id, "top_p")
         stream = openai_client.responses.create(
             model=text_model_id,
             input=[{"role": "user", "content": "What is the smallest continent?"}],
@@ -350,6 +383,7 @@ class TestOpenAIResponses:
 
     def test_openai_response_with_top_p_and_previous_response(self, openai_client, text_model_id):
         """Test that top_p works correctly with previous_response_id."""
+        skip_if_gpt_nano_limited_params(text_model_id, "top_p")
         # Create first response
         response1 = openai_client.responses.create(
             model=text_model_id,
@@ -375,6 +409,7 @@ class TestOpenAIResponses:
     def test_openai_response_with_top_logprobs(self, openai_client, client_with_models, text_model_id):
         """Test OpenAI response with top_logprobs parameter."""
         skip_if_provider_is_vertexai(client_with_models, text_model_id, "does not support logprobs")
+        skip_if_gpt_nano_limited_params(text_model_id, "top_logprobs")
         response = openai_client.responses.create(
             model=text_model_id,
             input=[{"role": "user", "content": "What is the largest ocean on Earth?"}],
@@ -388,6 +423,7 @@ class TestOpenAIResponses:
     def test_openai_response_with_top_logprobs_streaming(self, openai_client, client_with_models, text_model_id):
         """Test OpenAI response with top_logprobs in streaming mode."""
         skip_if_provider_is_vertexai(client_with_models, text_model_id, "does not support logprobs")
+        skip_if_gpt_nano_limited_params(text_model_id, "top_logprobs")
         stream = openai_client.responses.create(
             model=text_model_id,
             input=[{"role": "user", "content": "What is the smallest continent?"}],
@@ -415,6 +451,7 @@ class TestOpenAIResponses:
     ):
         """Test that top_logprobs works correctly with previous_response_id."""
         skip_if_provider_is_vertexai(client_with_models, text_model_id, "does not support logprobs")
+        skip_if_gpt_nano_limited_params(text_model_id, "top_logprobs")
         # Create first response
         response1 = openai_client.responses.create(
             model=text_model_id,
@@ -812,6 +849,8 @@ class TestOpenAIResponses:
     def test_openai_response_with_service_tier(self, openai_client, client_with_models, text_model_id, service_tier):
         """Test OpenAI response with explicit service_tier values that should be preserved."""
         self._skip_service_tier_for_unsupported(client_with_models, text_model_id)
+        if service_tier == "priority" and is_gpt_5_nano(text_model_id):
+            pytest.skip("gpt-5-nano does not support the priority service tier (OpenAI downgrades it to default).")
 
         response = openai_client.responses.create(
             model=text_model_id,
@@ -876,6 +915,8 @@ class TestOpenAIResponses:
     ):
         """Test OpenAI response with explicit service_tier values in streaming mode."""
         self._skip_service_tier_for_unsupported(client_with_models, text_model_id)
+        if service_tier == "priority" and is_gpt_5_nano(text_model_id):
+            pytest.skip("gpt-5-nano does not support the priority service tier (OpenAI downgrades it to default).")
 
         stream = openai_client.responses.create(
             model=text_model_id,
@@ -959,6 +1000,8 @@ class TestOpenAIResponses:
     ):
         """Test that explicit service_tier values are preserved with previous_response_id."""
         self._skip_service_tier_for_unsupported(client_with_models, text_model_id)
+        if service_tier == "priority" and is_gpt_5_nano(text_model_id):
+            pytest.skip("gpt-5-nano does not support the priority service tier (OpenAI downgrades it to default).")
 
         response1 = openai_client.responses.create(
             model=text_model_id,
@@ -1191,8 +1234,8 @@ class TestOpenAIResponses:
         """Check if the model supports reasoning_effort based on model name patterns."""
         # Strip provider prefix (e.g., "openai/", "azure/") to get base model name
         base_model = model_id.split("/")[-1] if "/" in model_id else model_id
-        # OpenAI reasoning models: o1, o3, o4, etc.
-        reasoning_prefixes = ("o1", "o3", "o4")
+        # OpenAI reasoning models: the o-series and GPT-5+ generations
+        reasoning_prefixes = ("o1", "o3", "o4", "gpt-5", "gpt-6")
         return base_model.startswith(reasoning_prefixes)
 
     def _skip_reasoning_effort_for_unsupported(self, text_model_id):

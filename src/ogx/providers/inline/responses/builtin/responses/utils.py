@@ -317,11 +317,18 @@ async def convert_response_input_to_chat_messages(
                 # skip — reasoning items are consumed by the next assistant message via look-back
                 pass
             elif isinstance(input_item, OpenAIResponseOutputMessageFunctionToolCall):
+                # Namespaced calls were emitted by bare name; re-qualify them so
+                # the chat history matches the qualified tool names.
+                history_name = (
+                    qualified_namespace_tool_name(input_item.namespace, input_item.name)
+                    if input_item.namespace
+                    else input_item.name
+                )
                 tool_call = OpenAIChatCompletionToolCall(
                     index=0,
                     id=input_item.call_id,
                     function=OpenAIChatCompletionToolCallFunction(
-                        name=input_item.name,
+                        name=history_name,
                         arguments=input_item.arguments,
                     ),
                 )
@@ -636,6 +643,66 @@ class StreamingCitationCleaner:
         return cleaned
 
 
+NAMESPACE_TOOL_NAME_DELIMITER = "__"
+
+
+def qualified_namespace_tool_name(namespace: str, function_name: str) -> str:
+    """Chat-layer name for a namespaced function.
+
+    Namespaced tools are flattened for the chat-completion backend, and the
+    namespace is embedded in the function name so that identically-named
+    functions from different namespaces stay distinguishable end to end.
+    """
+    return f"{namespace}{NAMESPACE_TOOL_NAME_DELIMITER}{function_name}"
+
+
+def merge_namespace_tool_description(
+    namespace_description: str,
+    member_description: str | None,
+) -> str:
+    """Combine a namespace's description with a member tool's description.
+
+    The chat protocol has no group construct, so the namespace's
+    model-facing context is merged into each member's description (namespace
+    context first, matching how clients such as codex present grouped tools).
+    Chat function descriptions carry no length limit, so neither does this.
+    """
+    member = (member_description or "").strip()
+    ns = (namespace_description or "").strip()
+    if not member:
+        return ns
+    if not ns:
+        return member
+    return f"{ns} {member}"
+
+
+def split_qualified_tool_name(
+    name: str,
+    tools: list[OpenAIResponseInputTool],
+) -> tuple[str, str | None]:
+    """Map a chat-layer tool name back to (bare function name, namespace).
+
+    Chat-layer names are bare for top-level functions and qualified
+    (namespace + delimiter + name) for namespaced ones. A qualified match
+    wins and yields the exact member; otherwise, if the name matches a
+    namespaced function by bare name, the namespace is labeled only when
+    unambiguous (declared in exactly one namespace and not also declared as
+    a top-level function). Names that do not match a declared tool are
+    returned unchanged with no namespace.
+    """
+    for t in tools:
+        if t.type == "namespace":
+            for f in t.tools:
+                if qualified_namespace_tool_name(t.name, f.name) == name:
+                    return f.name, t.name
+    namespaces = [t.name for t in tools if t.type == "namespace" and any(f.name == name for f in t.tools)]
+    if any(t.type == "function" and t.name == name for t in tools):
+        return name, None
+    if len(namespaces) == 1:
+        return name, namespaces[0]
+    return name, None
+
+
 def is_function_tool_call(
     tool_call: OpenAIChatCompletionToolCall,
     tools: list[OpenAIResponseInputTool],
@@ -654,6 +721,15 @@ def is_function_tool_call(
     for t in tools:
         if t.type == "function" and t.name == tool_call.function.name:
             return True
+        if t.type == "namespace":
+            # Namespaced tools are flattened for the backend under a
+            # qualified name; also accept the bare name defensively.
+            if any(
+                f.name == tool_call.function.name
+                or qualified_namespace_tool_name(t.name, f.name) == tool_call.function.name
+                for f in t.tools
+            ):
+                return True
     return False
 
 

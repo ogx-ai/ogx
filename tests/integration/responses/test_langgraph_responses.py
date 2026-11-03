@@ -8,10 +8,17 @@
 from operator import add
 from typing import Annotated, TypedDict
 
+import pytest
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
-from .helpers import extract_text_content
+from .helpers import extract_text_content, skip_if_text_model_prefix
+
+
+@pytest.fixture(autouse=True)
+def _skip_langgraph_for_bedrock(request):
+    """Skip langgraph tests for Bedrock — no recordings available yet."""
+    skip_if_text_model_prefix(request, "bedrock/", "Bedrock GPT-OSS langgraph test recordings not available yet")
 
 
 def test_langgraph_basic(responses_client, langchain_chat):

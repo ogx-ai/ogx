@@ -39,8 +39,9 @@ def _client_timeout() -> float:
     # scripts/integration-tests.sh exports OGX_CLIENT_TIMEOUT=300 for CI; the
     # 120s default covers direct pytest runs, where CPU inference (e.g. vLLM)
     # can go idle for well over 30s while the server buffers a
-    # constrained-decoding response.
-    return float(os.environ.get("OGX_CLIENT_TIMEOUT", "120"))
+    # constrained-decoding response. "or" (not just a .get default) keeps an
+    # exported-but-empty value from crashing float().
+    return float(os.environ.get("OGX_CLIENT_TIMEOUT") or "120")
 
 
 def is_port_available(port: int, host: str = "localhost") -> bool:
