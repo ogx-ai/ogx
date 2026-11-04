@@ -59,7 +59,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "OLLAMA_URL": "http://0.0.0.0:11434/v1",
         },
         defaults={
-            "text_model": "ollama/llama3.2:3b-instruct-fp16",
+            "text_model": "ollama/qwen3.5:0.8b",
             "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
@@ -87,7 +87,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "OGX_LOGGING": "openai_responses=info",
         },
         defaults={
-            "text_model": "ollama/llama3.2:3b-instruct-fp16",
+            "text_model": "ollama/qwen3.5:0.8b",
             "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),

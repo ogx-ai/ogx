@@ -63,7 +63,7 @@ if no model is specified.
   - `auth`: kubernetes-auth access-control tests. Its `auth` setup is `matrix_excluded`, so this suite only ever runs under the dedicated auth workflow (which stands up the k8s auth provider) and never in the standard CI matrix
 - `--setup`: global configuration that can be used with any suite. Setups prefill model/env defaults; explicit CLI flags always win.
   - Available setups:
-    - `ollama`: Local Ollama provider with lightweight models (sets OLLAMA_URL, uses llama3.2:3b-instruct-fp16)
+    - `ollama`: Local Ollama provider with lightweight models (sets OLLAMA_URL, uses qwen3.5:0.8b)
     - `vllm`: vLLM provider running natively on the host (sets VLLM_URL, uses Qwen/Qwen3-0.6B)
     - `gpt`: OpenAI GPT models for high-quality responses (uses gpt-4o)
     - `claude`: Anthropic Claude models for high-quality responses (uses claude-3-5-sonnet)
@@ -98,7 +98,7 @@ Run all inference tests by auto-starting a server with the `starter` config:
 OLLAMA_URL=http://localhost:11434 \
   pytest -s -v tests/integration/inference \
    --stack-config=server:starter \
-   --text-model=ollama/llama3.2:3b-instruct-fp16 \
+   --text-model=ollama/qwen3.5:0.8b \
    --embedding-model=nomic-embed-text-v1.5
 ```
 
@@ -108,7 +108,7 @@ Run tests with auto-server startup on a custom port:
 OLLAMA_URL=http://localhost:11434 \
   pytest -s -v tests/integration/inference/ \
    --stack-config=server:starter:8322 \
-   --text-model=ollama/llama3.2:3b-instruct-fp16 \
+   --text-model=ollama/qwen3.5:0.8b \
    --embedding-model=nomic-embed-text-v1.5
 ```
 

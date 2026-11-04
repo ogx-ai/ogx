@@ -16,6 +16,7 @@ from openai import APIConnectionError, APIStatusError, OpenAI
 from termcolor import cprint
 
 from ogx.cli.connect.auth import auth_error_message
+from ogx.cli.connect.claude import _strip_leading_separator
 from ogx.cli.connect.tls import is_untrusted_certificate_error, untrusted_certificate_client
 from ogx.cli.subcommand import Subcommand
 from ogx.log import get_logger
@@ -43,6 +44,11 @@ class ConnectOpenCode(Subcommand):
             type=str,
             default=None,
             help="Default model ID. If omitted, the first available model is used.",
+        )
+        self.parser.add_argument(
+            "opencode_args",
+            nargs=argparse.REMAINDER,
+            help="Additional arguments forwarded to the opencode command (place after --).",
         )
 
     def _run_connect_opencode_cmd(self, args: argparse.Namespace) -> None:
@@ -72,7 +78,8 @@ class ConnectOpenCode(Subcommand):
         env = {**os.environ, "OPENCODE_CONFIG_CONTENT": config_json}
         if self_signed:
             env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0"
-        result = subprocess.run(["opencode"], env=env)
+        opencode_args = _strip_leading_separator(list(args.opencode_args))
+        result = subprocess.run(["opencode", *opencode_args], env=env)
         sys.exit(result.returncode)
 
     def _fetch_models(self, base_url: str, api_key: str, insecure: bool) -> tuple[list[str], bool]:

@@ -237,11 +237,10 @@ jobs:
         provider:
           - setup: ollama
             suite: base
-            # The base setup may serve a thinking model; on /v1/completions
-            # there is no reasoning-effort control, so a single legacy
-            # completion can take minutes at ~12 tok/s on the CPU runner.
-            # The raised test-side max_tokens plus this client timeout leave
-            # the reasoning (and the answer after it) room to finish.
+            # qwen3.5:0.8b reasons before answering on /v1/completions, where
+            # there is no reasoning-effort control: the raised max_tokens in the
+            # test plus this client timeout leave the reasoning (and the answer
+            # after it) room to finish at ~12 tok/s on the CPU runner.
             ogx_client_timeout: 900
             timeout_minutes: 90
           - setup: ollama-vision
