@@ -1,0 +1,43 @@
+{
+  "test_id": "tests/integration/messages/test_count_tokens.py::test_count_tokens_with_system[txt=ollama/qwen3.5:0.8b]",
+  "request": {
+    "test_id": "tests/integration/messages/test_count_tokens.py::test_count_tokens_with_system[txt=ollama/qwen3.5:0.8b]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "qwen3.5:0.8b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello."
+        }
+      ],
+      "max_tokens": 1,
+      "system": "You are a concise assistant. Always answer in one short sentence.",
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_3ca2d514c805ba84b1783655",
+      "type": "message",
+      "role": "assistant",
+      "model": "qwen3.5:0.8b",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Thinking"
+        }
+      ],
+      "stop_reason": "max_tokens",
+      "usage": {
+        "input_tokens": 30,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 1
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}
