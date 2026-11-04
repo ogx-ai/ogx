@@ -39,6 +39,13 @@ if "weaviate" not in sys.modules:
     sys.modules["weaviate.classes"] = weaviate.classes
     sys.modules["weaviate.classes.init"] = weaviate.classes.init
     sys.modules["weaviate.classes.query"] = weaviate.classes.query
+    # Pre-create the attributes that tests monkeypatch, so they live in the mock's
+    # instance __dict__ (auto-created children live in _mock_children instead).
+    # pytest >= 9.2 reads the original value from __dict__ (pytest-dev/pytest#10644)
+    # and its undo() delattrs whatever it cannot find there; the delattr marks the
+    # auto-created slot as deleted, so later getattr raises AttributeError.
+    weaviate.classes.data.DataObject = MagicMock(name="DataObject")
+    weaviate.classes.config.Property = MagicMock(name="Property")
 
 from ogx.providers.inline.vector_io.milvus import MilvusVectorIOConfig as InlineMilvusVectorIOConfig
 from ogx.providers.remote.vector_io.chroma import chroma as chroma_module
