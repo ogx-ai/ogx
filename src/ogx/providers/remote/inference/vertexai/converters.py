@@ -713,7 +713,10 @@ def extract_usage(
         return None
 
     prompt_tokens = getattr(usage_meta, "prompt_token_count", 0) or 0
-    completion_tokens = getattr(usage_meta, "candidates_token_count", 0) or 0
+    reasoning_tokens = getattr(usage_meta, "thoughts_token_count", None)
+    # Gemini reports thinking tokens separately from candidates_token_count, but
+    # OpenAI's completion_tokens includes reasoning tokens.
+    completion_tokens = (getattr(usage_meta, "candidates_token_count", 0) or 0) + (reasoning_tokens or 0)
     total_tokens = getattr(usage_meta, "total_token_count", 0) or 0
 
     cached_tokens = getattr(usage_meta, "cached_content_token_count", None)
@@ -721,7 +724,6 @@ def extract_usage(
     if cached_tokens:
         prompt_details = OpenAIChatCompletionUsagePromptTokensDetails(cached_tokens=cached_tokens)
 
-    reasoning_tokens = getattr(usage_meta, "thoughts_token_count", None)
     completion_details = None
     if reasoning_tokens:
         completion_details = OpenAIChatCompletionUsageCompletionTokensDetails(reasoning_tokens=reasoning_tokens)

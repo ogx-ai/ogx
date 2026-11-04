@@ -231,6 +231,23 @@ class TestConvertGeminiResponseToOpenAI:
         assert result.usage.completion_tokens == 5
         assert result.usage.total_tokens == 20
 
+    def test_usage_metadata_includes_thoughts_in_completion_tokens(self):
+        """completion_tokens must include thinking tokens, like OpenAI's reasoning tokens."""
+        response = _make_response(
+            candidates=[_make_candidate(parts=[_make_text_part("hi")])],
+            prompt_token_count=15,
+            candidates_token_count=5,
+            total_token_count=50,
+        )
+        response.usage_metadata.thoughts_token_count = 30
+        usage = vertexai_converters.extract_usage(response)
+        assert usage is not None
+        assert usage.completion_tokens == 35
+        assert usage.total_tokens == 50
+        assert usage.prompt_tokens + usage.completion_tokens == usage.total_tokens
+        assert usage.completion_tokens_details is not None
+        assert usage.completion_tokens_details.reasoning_tokens == 30
+
     def test_no_usage_metadata(self):
         """Test that no usage metadata."""
         response: Any = SimpleNamespace(
