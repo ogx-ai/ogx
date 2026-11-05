@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from openai.types.chat.chat_completion_chunk import (
@@ -825,7 +825,7 @@ async def test_reuse_mcp_tool_list(
             store=True,
             tools=[
                 OpenAIResponseInputToolFunction(name="fake", parameters=None),
-                OpenAIResponseInputToolMCP(server_label="alabel", server_url="aurl"),
+                OpenAIResponseInputToolMCP(server_label="alabel", server_url="http://8.8.8.8/mcp"),
             ],
         )
     )
@@ -843,7 +843,7 @@ async def test_reuse_mcp_tool_list(
             model="meta-llama/Llama-3.1-8B-Instruct",
             store=True,
             tools=[
-                OpenAIResponseInputToolMCP(server_label="alabel", server_url="aurl"),
+                OpenAIResponseInputToolMCP(server_label="alabel", server_url="http://8.8.8.8/mcp"),
             ],
         )
     )
@@ -896,13 +896,21 @@ async def test_mcp_tool_connector_id_resolved_to_server_url(
         )
     )
 
-    # Verify the connector_id was resolved via the connectors API
-    mock_connectors_api.get_connector.assert_called_once_with(GetConnectorRequest(connector_id="my-mcp-connector"))
+    # Verify the connector_id was resolved via the connectors API. The tool's
+    # authorization (None here) must be forwarded: get_connector pings the MCP
+    # server to read its name/version, so authenticated connectors 401 otherwise.
+    mock_connectors_api.get_connector.assert_called_once_with(
+        GetConnectorRequest(connector_id="my-mcp-connector"),
+        authorization=None,
+    )
 
     # Verify list_mcp_tools was called with the resolved URL
     mock_list_mcp_tools.assert_called_once()
     call_kwargs = mock_list_mcp_tools.call_args.kwargs
     assert call_kwargs["endpoint"] == "http://resolved-mcp-server:8080/mcp"
+
+    # Connector-resolved endpoints are admin-configured: no SSRF validation, no pinning
+    assert call_kwargs["endpoint_pins"] is None
 
     # Verify the response contains the resolved tools
     listings = [obj for obj in result.output if obj.type == "mcp_list_tools"]
@@ -910,6 +918,206 @@ async def test_mcp_tool_connector_id_resolved_to_server_url(
     assert listings[0].server_label == "my-label"
     assert len(listings[0].tools) == 1
     assert listings[0].tools[0].name == "resolved_tool"
+
+
+async def test_resolve_mcp_connector_id_forwards_tool_authorization():
+    from ogx.providers.inline.responses.builtin.responses.streaming import resolve_mcp_connector_id
+    from ogx_api import Connector, ConnectorType
+
+    connectors_api = AsyncMock()
+    connectors_api.get_connector.return_value = Connector(
+        connector_id="admin-connector",
+        connector_type=ConnectorType.MCP,
+        url="http://10.0.0.5:8080/mcp",
+        server_label="Admin MCP Server",
+    )
+    tool = OpenAIResponseInputToolMCP(server_label="mcp", connector_id="admin-connector", authorization="secret")
+    resolved = await resolve_mcp_connector_id(tool, connectors_api)
+
+    connectors_api.get_connector.assert_awaited_once_with(
+        GetConnectorRequest(connector_id="admin-connector"),
+        authorization="secret",
+    )
+    assert resolved.server_url == "http://10.0.0.5:8080/mcp"
+    assert resolved.authorization == "secret"
+
+    # A tool that already has a server_url (and no connector_id) is untouched
+    plain = OpenAIResponseInputToolMCP(server_label="mcp", server_url="http://mcp.example.com/sse")
+    assert await resolve_mcp_connector_id(plain, connectors_api) is plain
+    assert connectors_api.get_connector.await_count == 1
+
+
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
+async def test_mcp_tool_caller_supplied_private_url_rejected_before_connection(
+    mock_list_mcp_tools, openai_responses_impl, mock_responses_store, mock_inference_api
+):
+    """SSRF guard: a caller-supplied server_url that resolves to a private address is
+    rejected (ValueError -> 400) before any connection is opened to the MCP server,
+    and before the model is called."""
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    with pytest.raises(ValueError, match="private IP addresses are not allowed"):
+        await openai_responses_impl.create_openai_response(
+            CreateResponseRequest(
+                input="What is the boiling point of myawesomeliquid in Celsius?",
+                model="meta-llama/Llama-3.1-8B-Instruct",
+                store=False,
+                tools=[
+                    OpenAIResponseInputToolMCP(server_label="internal", server_url="http://127.0.0.1:5199/sse"),
+                ],
+            )
+        )
+
+    mock_list_mcp_tools.assert_not_called()
+    mock_inference_api.openai_chat_completion.assert_not_called()
+
+
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.validate_mcp_endpoint")
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
+async def test_mcp_tool_public_url_is_pinned_before_list(
+    mock_list_mcp_tools, mock_validate, openai_responses_impl, mock_responses_store, mock_inference_api
+):
+    """Caller-supplied public endpoints are re-resolved right before connecting and the
+    connection is pinned to the validated IP (narrows the DNS-rebinding TOCTOU window)."""
+    mock_validate.return_value = {"mcp.example.com": "93.184.216.34"}
+    mock_list_mcp_tools.return_value = ListToolDefsResponse(
+        data=[ToolDef(name="test_tool", description="a test tool", input_schema={}, output_schema={})]
+    )
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is 2+2?",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            store=False,
+            tools=[
+                OpenAIResponseInputToolMCP(server_label="mcp", server_url="http://mcp.example.com/sse"),
+            ],
+        )
+    )
+
+    mock_validate.assert_called_once_with("http://mcp.example.com/sse")
+    list_kwargs = mock_list_mcp_tools.call_args.kwargs
+    assert list_kwargs["endpoint"] == "http://mcp.example.com/sse"
+    assert list_kwargs["endpoint_pins"] == {"mcp.example.com": "93.184.216.34"}
+    assert any(obj.type == "mcp_list_tools" for obj in result.output)
+
+
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.validate_mcp_endpoint")
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
+async def test_mcp_tool_connector_resolved_private_url_is_trusted(
+    mock_list_mcp_tools,
+    mock_validate,
+    openai_responses_impl,
+    mock_responses_store,
+    mock_inference_api,
+    mock_connectors_api,
+):
+    """Admin-configured connectors may point at private endpoints: they bypass SSRF
+    validation and IP pinning entirely (the supported way to reach internal MCP servers)."""
+    from ogx_api import Connector, ConnectorType
+
+    mock_connector = Connector(
+        connector_id="admin-connector",
+        connector_type=ConnectorType.MCP,
+        url="http://127.0.0.1:5199/sse",
+        server_label="Admin MCP Server",
+    )
+    mock_connectors_api.get_connector.return_value = mock_connector
+    mock_list_mcp_tools.return_value = ListToolDefsResponse(
+        data=[ToolDef(name="test_tool", description="a test tool", input_schema={}, output_schema={})]
+    )
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is 2+2?",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            store=False,
+            tools=[
+                OpenAIResponseInputToolMCP(server_label="mcp", connector_id="admin-connector"),
+            ],
+        )
+    )
+
+    mock_validate.assert_not_called()
+    list_kwargs = mock_list_mcp_tools.call_args.kwargs
+    assert list_kwargs["endpoint"] == "http://127.0.0.1:5199/sse"
+    assert list_kwargs["endpoint_pins"] is None
+    assert any(obj.type == "mcp_list_tools" for obj in result.output)
+
+
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.validate_mcp_endpoint")
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
+async def test_mcp_tool_with_connector_id_and_caller_url_treats_url_as_untrusted(
+    mock_list_mcp_tools,
+    mock_validate,
+    openai_responses_impl,
+    mock_responses_store,
+    mock_inference_api,
+    mock_connectors_api,
+):
+    """A tool carrying both a connector_id and a caller-supplied server_url is
+    treated as caller-supplied: the connector is never consulted and the URL is
+    validated (and pinned), so a connector_id cannot smuggle trust for a
+    caller-chosen endpoint."""
+    mock_validate.return_value = {"mcp.example.com": "93.184.216.34"}
+    mock_list_mcp_tools.return_value = ListToolDefsResponse(
+        data=[ToolDef(name="test_tool", description="a test tool", input_schema={}, output_schema={})]
+    )
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is 2+2?",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            store=False,
+            tools=[
+                OpenAIResponseInputToolMCP(
+                    server_label="mcp",
+                    connector_id="admin-connector",
+                    server_url="http://mcp.example.com/sse",
+                ),
+            ],
+        )
+    )
+
+    mock_connectors_api.get_connector.assert_not_awaited()
+    mock_validate.assert_called_once_with("http://mcp.example.com/sse")
+    list_kwargs = mock_list_mcp_tools.call_args.kwargs
+    assert list_kwargs["endpoint"] == "http://mcp.example.com/sse"
+    assert list_kwargs["endpoint_pins"] == {"mcp.example.com": "93.184.216.34"}
+    assert any(obj.type == "mcp_list_tools" for obj in result.output)
+
+
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
+async def test_mcp_tool_with_connector_id_and_private_caller_url_is_rejected(
+    mock_list_mcp_tools, openai_responses_impl, mock_responses_store, mock_inference_api, mock_connectors_api
+):
+    """The private-URL variant of the same case: if the connector_id were
+    (incorrectly) trusted, this would connect to the private address instead of
+    raising."""
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    with pytest.raises(ValueError, match="private IP addresses are not allowed"):
+        await openai_responses_impl.create_openai_response(
+            CreateResponseRequest(
+                input="What is 2+2?",
+                model="meta-llama/Llama-3.1-8B-Instruct",
+                store=False,
+                tools=[
+                    OpenAIResponseInputToolMCP(
+                        server_label="mcp",
+                        connector_id="admin-connector",
+                        server_url="http://127.0.0.1:5199/sse",
+                    ),
+                ],
+            )
+        )
+
+    mock_connectors_api.get_connector.assert_not_awaited()
+    mock_list_mcp_tools.assert_not_called()
+    mock_inference_api.openai_chat_completion.assert_not_called()
 
 
 async def test_file_search_uses_default_search_mode_from_config(mock_vector_io_api):
