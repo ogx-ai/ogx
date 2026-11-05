@@ -1,9 +1,9 @@
 export interface Prompt {
   prompt_id: string;
-  prompt: string | null;
+  prompt?: string | null;
   version: number;
-  variables: string[];
-  is_default: boolean;
+  variables?: string[];
+  is_default?: boolean;
 }
 
 export interface PromptFormData {

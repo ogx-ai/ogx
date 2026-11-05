@@ -1,0 +1,81 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=llama-cpp-server/qwen3-0.6b-inference:chat_completion:non_streaming_02]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet has rings around it with a name starting with letter S?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.17.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-d2e72ebc6ac0",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "The planet with rings around it and a name starting with the letter **S** is **Saturn**.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, so the user is asking which planet has rings around it and the name starts with the letter S. Let me think. I know that there are many planets in our solar system, right? The ones we know are Mercury, Venus, Earth, Mars, Jupiter, Saturn, etc. \n\nNow, the question specifically mentions rings. I remember that Saturn is the planet known for its rings. But wait, is there another planet with rings? Let me check. Oh, right! The asteroid belt is around Saturn. But the asteroid belt is between Mars and Jupiter, not a planet. So the answer is definitely Saturn. \n\nWait, but I should make sure there isn't another planet with rings. Let me think again. Mercury has no rings, Venus has no rings, Earth has no rings, Mars has no rings, Jupiter has a ring system, Saturn has rings. Yep, Saturn is the one with rings that start with S. So the answer should be Saturn.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11147-fee39dd92",
+        "usage": {
+          "completion_tokens": 224,
+          "prompt_tokens": 22,
+          "total_tokens": 246,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 22,
+          "prompt_ms": 163.234,
+          "prompt_per_token_ms": 7.419727272727273,
+          "prompt_per_second": 134.7758432679466,
+          "predicted_n": 224,
+          "predicted_ms": 5770.129,
+          "predicted_per_token_ms": 25.87501793721973,
+          "predicted_per_second": 38.64731620384917
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

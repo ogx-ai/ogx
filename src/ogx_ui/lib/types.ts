@@ -137,12 +137,7 @@ export interface FileResource {
   expires_at: number;
   filename: string;
   purpose:
-    | "fine-tune"
-    | "assistants"
-    | "user_data"
-    | "batch"
-    | "vision"
-    | "evals";
+    "fine-tune" | "assistants" | "user_data" | "batch" | "vision" | "evals";
   object?: "file";
 }
 
@@ -163,12 +158,7 @@ export interface DeleteFileResponse {
 export interface FileCreateParams {
   file: File; // Browser File object
   purpose:
-    | "fine-tune"
-    | "assistants"
-    | "user_data"
-    | "batch"
-    | "vision"
-    | "evals";
+    "fine-tune" | "assistants" | "user_data" | "batch" | "vision" | "evals";
   expires_after?: {
     anchor: "created_at";
     seconds: number;
@@ -177,12 +167,7 @@ export interface FileCreateParams {
 
 export interface FileUploadFormData {
   purpose:
-    | "fine-tune"
-    | "assistants"
-    | "user_data"
-    | "batch"
-    | "vision"
-    | "evals";
+    "fine-tune" | "assistants" | "user_data" | "batch" | "vision" | "evals";
   expiresAfter?: number; // seconds
   fileName?: string;
 }

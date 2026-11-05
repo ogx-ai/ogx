@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 from enum import Enum
 from typing import Any, Union, get_args, get_origin
 
-import httpx
+import httpx2
 from pydantic import BaseModel, parse_obj_as
 from termcolor import cprint
 
@@ -86,7 +86,7 @@ def create_api_client_class(protocol: type[Any]) -> type[Any]:
                 return_type = extract_non_async_iterator_type(sig.return_annotation)
                 assert return_type, f"Could not extract return type for {sig.return_annotation}"
 
-            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+            async with httpx2.AsyncClient(timeout=httpx2.Timeout(30.0, connect=10.0)) as client:
                 params = self.httpx_request_params(method_name, *args, **kwargs)
                 response = await client.request(**params)
                 response.raise_for_status()
@@ -103,7 +103,7 @@ def create_api_client_class(protocol: type[Any]) -> type[Any]:
             return_type = extract_async_iterator_type(sig.return_annotation)
             assert return_type, f"Could not extract return type for {sig.return_annotation}"
 
-            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+            async with httpx2.AsyncClient(timeout=httpx2.Timeout(30.0, connect=10.0)) as client:
                 params = self.httpx_request_params(method_name, *args, **kwargs)
                 async with client.stream(**params) as response:
                     response.raise_for_status()

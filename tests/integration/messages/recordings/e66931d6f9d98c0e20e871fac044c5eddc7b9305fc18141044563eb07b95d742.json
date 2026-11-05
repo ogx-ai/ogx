@@ -1,0 +1,51 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_content_block_array[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_content_block_array[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "What is 1+1? Reply with just the number."
+            }
+          ]
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-a5b1632f1092a4ee",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay, the user is asking what 1 plus 1 is and wants just the number. Let me think. The question is straightforward. Adding 1 and 1 should give 2. But wait, maybe they want more details? Let me check if there's any trick here. No, the question is pretty simple. So the answer should be 2. I need to make sure I don't add anything else. Just the number. Yep, that's all.\n",
+          "signature": "c5b08ddcc13a40ea81971996a5670c5c"
+        },
+        {
+          "type": "text",
+          "text": "\n\n2"
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 21,
+        "output_tokens": 102
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -38,6 +38,15 @@ The tests are categorized and outlined below, keep this updated:
 - Batch processing concurrency control:
   * test_max_concurrent_batches (positive)
 
+- Authorization: per-user scoping of batches and credential propagation into
+  background processing:
+  * test_list_batches_scoped_to_creating_user (positive)
+  * test_retrieve_batch_denied_for_other_user (negative)
+  * test_cancel_batch_denied_for_other_user (negative)
+  * test_batch_processing_preserves_creating_users_context (positive)
+  * test_create_batch_denied_by_route_policy (negative)
+  * test_create_batch_permitted_by_route_policy_runs_real_processing (positive)
+
 - Input validation testing (direct _validate_input method tests):
   * test_validate_input_file_not_found (negative)
   * test_validate_input_file_exists_empty_content (positive)
@@ -54,13 +63,23 @@ The tests use temporary SQLite databases for isolation and mock external
 dependencies like inference, files, and models APIs.
 """
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import ValidationError
 
-from ogx_api import BatchObject, ConflictError, ResourceNotFoundError
+from ogx.core.access_control.datatypes import RouteAccessRule, RouteScope
+from ogx.core.datatypes import User
+from ogx.core.request_headers import RequestProviderDataContext, get_authenticated_user
+from ogx_api import (
+    BatchNotFoundError,
+    BatchObject,
+    ConflictError,
+    ResourceNotFoundError,
+    RouteAccessDeniedError,
+)
 from ogx_api.batches.models import (
     CancelBatchRequest,
     CreateBatchRequest,
@@ -774,6 +793,172 @@ class TestReferenceBatchesImpl:
         await asyncio.sleep(0.042)  # let tasks start
 
         assert active_batches == 2, f"Expected 2 active batches, got {active_batches}"
+
+    async def test_list_batches_scoped_to_creating_user(self, provider):
+        """list_batches should only return batches owned by the authenticated caller,
+        not every batch in the store (see AuthorizedSqlStore.fetch_all)."""
+        alice = User(principal="alice", attributes={"roles": ["alice-role"]})
+        bob = User(principal="bob", attributes={"roles": ["bob-role"]})
+
+        with RequestProviderDataContext(user=alice):
+            alice_batch = await provider.create_batch(
+                CreateBatchRequest(input_file_id="file_alice", endpoint="/v1/chat/completions", completion_window="24h")
+            )
+
+        with RequestProviderDataContext(user=bob):
+            bob_batch = await provider.create_batch(
+                CreateBatchRequest(input_file_id="file_bob", endpoint="/v1/chat/completions", completion_window="24h")
+            )
+
+        with RequestProviderDataContext(user=alice):
+            alice_list = await provider.list_batches(ListBatchesRequest())
+        alice_ids = {b.id for b in alice_list.data}
+        assert alice_batch.id in alice_ids
+        assert bob_batch.id not in alice_ids
+
+        with RequestProviderDataContext(user=bob):
+            bob_list = await provider.list_batches(ListBatchesRequest())
+        bob_ids = {b.id for b in bob_list.data}
+        assert bob_batch.id in bob_ids
+        assert alice_batch.id not in bob_ids
+
+    async def test_retrieve_batch_denied_for_other_user(self, provider):
+        """A user cannot retrieve a batch created by a different user."""
+        alice = User(principal="alice", attributes={"roles": ["alice-role"]})
+        bob = User(principal="bob", attributes={"roles": ["bob-role"]})
+
+        with RequestProviderDataContext(user=alice):
+            alice_batch = await provider.create_batch(
+                CreateBatchRequest(input_file_id="file_alice", endpoint="/v1/chat/completions", completion_window="24h")
+            )
+
+        with RequestProviderDataContext(user=bob):
+            with pytest.raises(BatchNotFoundError):
+                await provider.retrieve_batch(RetrieveBatchRequest(batch_id=alice_batch.id))
+
+        with RequestProviderDataContext(user=alice):
+            retrieved = await provider.retrieve_batch(RetrieveBatchRequest(batch_id=alice_batch.id))
+        assert retrieved.id == alice_batch.id
+
+    async def test_cancel_batch_denied_for_other_user(self, provider):
+        """A user cannot cancel a batch created by a different user."""
+        alice = User(principal="alice", attributes={"roles": ["alice-role"]})
+        bob = User(principal="bob", attributes={"roles": ["bob-role"]})
+
+        with RequestProviderDataContext(user=alice):
+            alice_batch = await provider.create_batch(
+                CreateBatchRequest(input_file_id="file_alice", endpoint="/v1/chat/completions", completion_window="24h")
+            )
+
+        with RequestProviderDataContext(user=bob):
+            with pytest.raises(BatchNotFoundError):
+                await provider.cancel_batch(CancelBatchRequest(batch_id=alice_batch.id))
+
+    async def test_batch_processing_preserves_creating_users_context(self, provider):
+        """The background task spawned by create_batch retains the creating user's
+        authenticated identity and provider data for its entire lifetime, since
+        asyncio.create_task() snapshots contextvars at spawn time. This is what lets
+        per-request inference credentials (x-ogx-provider-data) and policy checks apply to
+        batch-processed requests the same way they do for a live request."""
+        provider.process_batches = True
+
+        captured_user = None
+        captured_event = asyncio.Event()
+
+        async def fake_process_batch_impl(batch_id):
+            nonlocal captured_user
+            captured_user = get_authenticated_user()
+            captured_event.set()
+
+        provider._process_batch_impl = fake_process_batch_impl
+
+        alice = User(principal="alice", attributes={"roles": ["alice-role"]})
+        with RequestProviderDataContext(user=alice):
+            await provider.create_batch(
+                CreateBatchRequest(input_file_id="file_id", endpoint="/v1/chat/completions", completion_window="24h")
+            )
+
+        await asyncio.wait_for(captured_event.wait(), timeout=1)
+
+        assert captured_user is not None
+        assert captured_user.principal == "alice"
+
+    async def test_create_batch_denied_by_route_policy(self, provider):
+        """create_batch must enforce the same route_policy that
+        RouteAuthorizationMiddleware applies to a live HTTP request. A route forbidden
+        there must also be denied here, since background processing calls the
+        inference API directly in-process and never passes through that middleware.
+
+        This calls provider.route_policy through is_route_allowed() -- the exact
+        function RouteAuthorizationMiddleware itself calls (see
+        ogx.core.access_control.route_access) -- so it exercises the identical
+        evaluation a live request to /v1/embeddings would get, not a separate
+        reimplementation that could silently drift from the real one."""
+        provider.route_policy = [
+            RouteAccessRule(forbid=RouteScope(paths="/v1/embeddings"), description="No embeddings for this caller"),
+            RouteAccessRule(permit=RouteScope(paths="*"), description="Allow everything else"),
+        ]
+
+        alice = User(principal="alice", attributes={"roles": ["alice-role"]})
+        with RequestProviderDataContext(user=alice):
+            with pytest.raises(RouteAccessDeniedError):
+                await provider.create_batch(
+                    CreateBatchRequest(input_file_id="file_id", endpoint="/v1/embeddings", completion_window="24h")
+                )
+
+        # Denial happens at creation: no row was persisted and background
+        # processing never had a chance to run the forbidden request.
+        with RequestProviderDataContext(user=alice):
+            listed = await provider.list_batches(ListBatchesRequest())
+        assert listed.data == []
+        provider.inference_api.openai_embeddings.assert_not_called()
+
+        # A permitted endpoint for the same caller is unaffected by the forbid rule.
+        with RequestProviderDataContext(user=alice):
+            allowed_batch = await provider.create_batch(
+                CreateBatchRequest(input_file_id="file_id", endpoint="/v1/chat/completions", completion_window="24h")
+            )
+        assert allowed_batch.endpoint == "/v1/chat/completions"
+
+    async def test_create_batch_permitted_by_route_policy_runs_real_processing(self, provider):
+        """A permitted endpoint must still complete via the real (unmocked)
+        background-processing path -- _process_batch, _process_batch_impl,
+        _validate_input, and _process_single_request all run for real here, only the
+        terminal inference call is a mock -- proving the route_policy check in
+        create_batch doesn't interfere with legitimate batches."""
+        provider.route_policy = [
+            RouteAccessRule(permit=RouteScope(paths="/v1/embeddings"), description="Allowed for this caller"),
+        ]
+        provider.process_batches = True
+
+        provider.files_api.openai_retrieve_file = AsyncMock()
+        mock_file_content = MagicMock()
+        mock_file_content.body = (
+            b'{"custom_id": "req-1", "method": "POST", "url": "/v1/embeddings", '
+            b'"body": {"model": "test-model", "input": "hello world"}}'
+        )
+        provider.files_api.openai_retrieve_file_content = AsyncMock(return_value=mock_file_content)
+        provider.files_api.openai_upload_file = AsyncMock(return_value=MagicMock(id="file_output_123"))
+        provider.inference_api.openai_embeddings = AsyncMock(
+            return_value=MagicMock(model_dump_json=MagicMock(return_value="{}"))
+        )
+
+        alice = User(principal="alice", attributes={"roles": ["alice-role"]})
+        with RequestProviderDataContext(user=alice):
+            batch = await provider.create_batch(
+                CreateBatchRequest(input_file_id="file_id", endpoint="/v1/embeddings", completion_window="24h")
+            )
+            task = provider._processing_tasks[batch.id]
+
+        await asyncio.wait_for(task, timeout=1)
+
+        # Retrieving as alice again (rather than with no user) since AuthorizedSqlStore
+        # scopes fetch_one to the caller's own rows -- an unauthenticated read here
+        # would correctly see nothing, which isn't what this test is checking.
+        with RequestProviderDataContext(user=alice):
+            retrieved = await provider.retrieve_batch(RetrieveBatchRequest(batch_id=batch.id))
+        assert retrieved.status == "completed"
+        provider.inference_api.openai_embeddings.assert_called_once()
 
     async def test_create_batch_embeddings_endpoint(self, provider):
         """Test that batch creation succeeds with embeddings endpoint."""

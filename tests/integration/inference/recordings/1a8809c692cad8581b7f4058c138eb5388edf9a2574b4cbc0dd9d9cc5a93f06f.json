@@ -1,0 +1,42 @@
+{
+  "test_id": "tests/integration/inference/test_rerank.py::test_rerank_max_results[rerank=llama-cpp-server/bge-reranker-v2-m3]",
+  "request": {
+    "test_id": "tests/integration/inference/test_rerank.py::test_rerank_max_results[rerank=llama-cpp-server/bge-reranker-v2-m3]",
+    "url": "http://localhost:8080/v1/rerank",
+    "method": "POST",
+    "payload": {
+      "model": "bge-reranker-v2-m3",
+      "query": "string_1",
+      "documents": [
+        "string_1",
+        "string_2",
+        "string_1",
+        "string_2"
+      ],
+      "top_n": 2
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "bge-reranker-v2-m3",
+      "object": "list",
+      "usage": {
+        "prompt_tokens": 30,
+        "total_tokens": 30
+      },
+      "results": [
+        {
+          "index": 0,
+          "relevance_score": 0.5738357305526733
+        },
+        {
+          "index": 2,
+          "relevance_score": 0.5738357305526733
+        }
+      ]
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

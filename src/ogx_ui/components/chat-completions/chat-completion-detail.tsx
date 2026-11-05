@@ -32,7 +32,7 @@ export function ChatCompletionDetailView({
   }
 
   if (isLoading) {
-    return <DetailLoadingView title={title} />;
+    return <DetailLoadingView />;
   }
 
   if (!completion) {

@@ -36,6 +36,24 @@ class TestSqlPostgresEngineStr:
         assert url.port == 5432
         assert url.database == "mydb"
 
+    def test_connection_string_uses_dialect_only_url(self) -> None:
+        config = PostgresSqlStoreConfig(
+            connection_string=(
+                "postgresql://pguser:secret@db.local/mydb?application_name=ogx"
+                "&target_session_attrs=read-write&sslmode=require&sslrootcert=%2Fetc%2Fpostgres%2Fca.pem"
+            )
+        )
+
+        url = config.engine_str
+
+        assert isinstance(url, URL)
+        assert url.drivername == "postgresql+asyncpg"
+        assert url.username is None
+        assert url.password is None
+        assert url.host is None
+        assert url.database is None
+        assert not url.query
+
     @pytest.mark.parametrize(
         "password",
         ["p@ss", "p:ss", "p/ss", "p%ss", "p@ss:w/o%rd", "a@b:c/d%e#f"],

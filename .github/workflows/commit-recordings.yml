@@ -1,11 +1,12 @@
 # Commits recordings from recording workflows back to PRs.
 # This workflow runs with elevated permissions but only executes trusted code from the base repo.
-# Triggered via workflow_run after recording workflows complete successfully.
+# Triggered via workflow_run after recording workflows complete. A failed lane produces no
+# artifact of its own, so only recordings from successful lanes are committed.
 name: Commit Recordings
 
 on:
   workflow_run:
-    workflows: ["Integration Tests (Record)", "Launch GPU EC2 Runner", "vLLM GPU Recording"]
+    workflows: ["Integration Tests (Record)"]
     types:
       - completed
 
@@ -17,8 +18,11 @@ permissions:
 jobs:
   commit-recordings:
     runs-on: ubuntu-latest
-    # Only run if the recording workflow succeeded
-    if: github.event.workflow_run.conclusion == 'success'
+    # Run when the recording workflow succeeded or failed: a failed lane
+    # skips its own artifact upload, so only recordings from successful
+    # lanes are committed. Cancelled and timed-out runs are excluded so a
+    # cancel-in-progress never commits half-finished artifacts.
+    if: github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure'
     steps:
       - name: Download workflow artifacts
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -191,7 +195,7 @@ jobs:
 
       - name: Checkout PR branch (same-repo)
         if: steps.pr-info.outputs.skip != 'true' && steps.pr-info.outputs.is_fork_pr != 'true'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ steps.pr-info.outputs.head_repo }}
           ref: ${{ steps.pr-info.outputs.head_ref }}
@@ -260,6 +264,26 @@ jobs:
               fi
             fi
           fi
+
+      - name: Set up uv
+        if: steps.pr-info.outputs.skip != 'true'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Pin to the project's required Python. Without this, uv falls back to the
+          # runner image's system python (3.14 on Ubuntu 26), where deps like
+          # onnxruntime have no wheel and `uv sync` fails.
+          python-version: "3.12"
+
+      - name: Sync dev dependencies
+        if: steps.pr-info.outputs.skip != 'true'
+        run: uv sync --group dev
+
+      # Model-list recordings accumulate a new digest whenever a provider's
+      # catalog drifts between recordings. Prune the redundant digests here so
+      # the pushed commit is already a fixed point of the CI cleanup check.
+      - name: Prune redundant model-list recordings
+        if: steps.pr-info.outputs.skip != 'true'
+        run: PYTHONPATH=$PWD uv run --no-sync --group dev ./scripts/cleanup_recordings.py --model-lists-only --delete
 
       - name: Commit and push recordings
         id: commit

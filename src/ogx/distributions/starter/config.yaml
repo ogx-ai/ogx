@@ -31,6 +31,16 @@ providers:
       network:
         tls:
           verify: ${env.VLLM_TLS_VERIFY:=true}
+        timeout: ${env.VLLM_TIMEOUT:=300}
+  - provider_id: ${env.SGLANG_URL:+sglang}
+    provider_type: remote::sglang
+    config:
+      base_url: ${env.SGLANG_URL:=}
+      max_tokens: ${env.SGLANG_MAX_TOKENS:=4096}
+      api_token: ${env.SGLANG_API_TOKEN:=fake}
+      network:
+        tls:
+          verify: ${env.SGLANG_TLS_VERIFY:=true}
   - provider_id: fireworks
     provider_type: remote::fireworks
     config:
@@ -73,6 +83,9 @@ providers:
     config:
       project: ${env.VERTEX_AI_PROJECT:=}
       location: ${env.VERTEX_AI_LOCATION:=global}
+      thought_signature_store:
+        namespace: vertexai_thought_signatures
+        backend: kv_default
   - provider_id: groq
     provider_type: remote::groq
     config:
@@ -224,9 +237,15 @@ providers:
         namespace: skills
         backend: kv_default
   tool_runtime:
+  - provider_id: exa-search
+    provider_type: remote::exa-search
+    config:
+      api_key: ${env.EXA_API_KEY:=}
+      max_results: 3
   - provider_id: brave-search
     provider_type: remote::brave-search
     config:
+      base_url: ${env.BRAVE_SEARCH_BASE_URL:=https://api.search.brave.com}
       api_key: ${env.BRAVE_SEARCH_API_KEY:=}
       max_results: 3
   - provider_id: tavily-search
@@ -240,6 +259,11 @@ providers:
       api_key: ${env.NIMBLE_API_KEY:=}
       max_results: 3
       search_depth: lite
+  - provider_id: serply-search
+    provider_type: remote::serply-search
+    config:
+      api_key: ${env.SERPLY_API_KEY:=}
+      max_results: 3
   - provider_id: file-search
     provider_type: inline::file-search
   - provider_id: model-context-protocol

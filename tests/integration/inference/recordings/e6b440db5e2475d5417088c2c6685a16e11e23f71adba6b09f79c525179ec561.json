@@ -1,0 +1,102 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestEdgeCases::test_tool_without_schema[txt=llama-cpp-server/qwen3-0.6b]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Call the no args tool"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "no_args_tool",
+            "description": "Tool with no arguments",
+            "parameters": {
+              "type": "object",
+              "properties": {}
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.17.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-e6b440db5e24",
+        "choices": [
+          {
+            "finish_reason": "tool_calls",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": [
+                {
+                  "id": "6vTkm871PiqLJOuFKrdaLXsw0IBGe0s2",
+                  "function": {
+                    "arguments": "{}",
+                    "name": "no_args_tool"
+                  },
+                  "type": "function"
+                }
+              ],
+              "reasoning_content": "Okay, the user wants me to call the no args tool. Let me check the provided functions. There's only one tool called no_args_tool with no arguments. Since there are no parameters to pass, I just need to return that tool call. I'll make sure to format it correctly in the tool_call tags.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11147-fee39dd92",
+        "usage": {
+          "completion_tokens": 85,
+          "prompt_tokens": 136,
+          "total_tokens": 221,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 51,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 51,
+          "prompt_n": 85,
+          "prompt_ms": 615.226,
+          "prompt_per_token_ms": 7.237952941176471,
+          "prompt_per_second": 138.1606108974588,
+          "predicted_n": 85,
+          "predicted_ms": 2259.14,
+          "predicted_per_token_ms": 26.894523809523808,
+          "predicted_per_second": 37.18229060615987
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

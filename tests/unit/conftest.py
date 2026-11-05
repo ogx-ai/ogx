@@ -24,3 +24,4 @@ def pytest_sessionstart(session) -> None:
 def suppress_httpx_logs(caplog):
     """Suppress httpx INFO logs for all unit tests"""
     caplog.set_level(logging.WARNING, logger="httpx")
+    caplog.set_level(logging.WARNING, logger="httpx2")

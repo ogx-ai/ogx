@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuthClient } from "@/hooks/use-auth-client";
-import { ContentsAPI, VectorStoreContentItem } from "@/lib/contents-api";
+import {
+  ContentsAPI,
+  VectorStoreContent,
+  VectorStoreContentItem,
+} from "@/lib/contents-api";
 import type { VectorStore } from "ogx-client/resources/vector-stores/vector-stores";
 import type { VectorStoreFile } from "ogx-client/resources/vector-stores/files";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +35,7 @@ export default function ContentDetailPage() {
   const contentId = params.contentId as string;
   const client = useAuthClient();
 
-  const getTextFromContent = (content: unknown): string => {
+  const getTextFromContent = (content: VectorStoreContent | string): string => {
     if (typeof content === "string") {
       return content;
     } else if (content && content.type === "text") {
@@ -174,7 +178,7 @@ export default function ContentDetailPage() {
     return <DetailErrorView title={title} id={contentId} error={error} />;
   }
   if (isLoading) {
-    return <DetailLoadingView title={title} />;
+    return <DetailLoadingView />;
   }
   if (!content) {
     return <DetailNotFoundView title={title} id={contentId} />;
@@ -397,8 +401,11 @@ export default function ContentDetailPage() {
         label="Content Length"
         value={`${getTextFromContent(content.content).length} chars`}
       />
-      {content.metadata.chunk_window && (
-        <PropertyItem label="Position" value={content.metadata.chunk_window} />
+      {Boolean(content.metadata.chunk_window) && (
+        <PropertyItem
+          label="Position"
+          value={content.metadata.chunk_window as string}
+        />
       )}
       {file && (
         <>
@@ -414,7 +421,7 @@ export default function ContentDetailPage() {
           <PropertyItem label="Store Name" value={store.name || ""} />
           <PropertyItem
             label="Provider ID"
-            value={(store.metadata.provider_id as string) || ""}
+            value={(store.metadata?.provider_id as string) || ""}
           />
         </>
       )}

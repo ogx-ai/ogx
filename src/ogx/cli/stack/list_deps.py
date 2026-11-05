@@ -15,7 +15,7 @@ class StackListDeps(Subcommand):
         super().__init__()
         self.parser = subparsers.add_parser(
             "list-deps",
-            prog="ogx list-deps",
+            prog="ogx stack list-deps",
             description="list the dependencies for a ogx distribution",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )

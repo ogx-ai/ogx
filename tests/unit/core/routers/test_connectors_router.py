@@ -18,6 +18,7 @@ def anyio_backend():
     return "asyncio"
 
 
+from ogx.core.server.fastapi_router_registry import get_router_routes
 from ogx_api import (
     Connector,
     ConnectorNotFoundError,
@@ -57,9 +58,7 @@ def _create_mock_tool():
 
 def _get_endpoint(router, path: str, method: str = "GET"):
     """Get an endpoint function from router by path and method."""
-    return next(
-        r.endpoint for r in router.routes if getattr(r, "path", None) == path and method in getattr(r, "methods", set())
-    )
+    return next(r.endpoint for r in get_router_routes(router) if r.path == path and method in (r.methods or set()))
 
 
 # --- List Connectors Tests ---

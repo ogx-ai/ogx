@@ -14,9 +14,10 @@ operations (and, or) for complex filtering logic.
 
 from __future__ import annotations
 
+import re
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .schema_utils import json_schema_type
 
@@ -24,6 +25,8 @@ from .schema_utils import json_schema_type
 COMPARISON_FILTER_TYPES = frozenset(["eq", "ne", "gt", "gte", "lt", "lte", "in", "nin"])
 COMPOUND_FILTER_TYPES = frozenset(["and", "or"])
 ALL_FILTER_TYPES = COMPARISON_FILTER_TYPES | COMPOUND_FILTER_TYPES
+
+_VALID_METADATA_KEY_PATTERN = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 
 @json_schema_type
@@ -38,6 +41,16 @@ class ComparisonFilter(BaseModel):
     type: Literal["eq", "ne", "gt", "gte", "lt", "lte", "in", "nin"]
     key: str
     value: Any
+
+    @field_validator("key")
+    @classmethod
+    def _validate_key(cls, v: str) -> str:
+        if not _VALID_METADATA_KEY_PATTERN.match(v):
+            raise ValueError(
+                f"Failed to validate metadata filter key {v!r}: "
+                "keys must contain only alphanumeric characters, underscores, and hyphens"
+            )
+        return v
 
 
 @json_schema_type

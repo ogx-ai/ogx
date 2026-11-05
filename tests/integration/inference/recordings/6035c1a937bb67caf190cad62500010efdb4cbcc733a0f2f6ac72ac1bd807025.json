@@ -1,0 +1,58 @@
+{
+  "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_score[judge=typesafe/jev-latest]",
+  "request": {
+    "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_score[judge=typesafe/jev-latest]",
+    "url": "https://api.typesafe.ai/v1/systemone",
+    "method": "POST",
+    "payload": {
+      "state": "The agent was slightly rude but did resolve the issue.",
+      "model": "jev-latest",
+      "questions": {
+        "quality": {
+          "type": "score",
+          "instructions": "Rate the quality of the interaction.",
+          "criteria": [
+            "Unacceptable",
+            "Poor",
+            "Acceptable",
+            "Good",
+            "Excellent"
+          ]
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "jev-1.13.0",
+      "answers": {
+        "quality": {
+          "type": "score",
+          "score": 2.03,
+          "confidence": 0.93,
+          "legend": {
+            "0": "Unacceptable",
+            "1": "Poor",
+            "2": "Acceptable",
+            "3": "Good",
+            "4": "Excellent"
+          },
+          "probabilities": {
+            "0": 0.0,
+            "1": 0.03,
+            "2": 0.91,
+            "3": 0.06,
+            "4": 0.0
+          }
+        }
+      },
+      "usage": {
+        "input_tokens": 325,
+        "output_tokens": 17
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

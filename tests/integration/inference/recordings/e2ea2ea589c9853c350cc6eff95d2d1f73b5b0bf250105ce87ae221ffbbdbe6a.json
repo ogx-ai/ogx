@@ -1,0 +1,127 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestMCPToolsInChatCompletion::test_mcp_tools_in_inference[txt=llama-cpp-server/qwen3-0.6b]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Calculate 5 + 3"
+        }
+      ],
+      "max_tokens": 256,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "calculate",
+            "description": "Perform a calculation on two numbers.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number",
+                  "description": "First operand"
+                },
+                "y": {
+                  "type": "number",
+                  "description": "Second operand"
+                },
+                "operation": {
+                  "type": "string",
+                  "description": "The operation to perform",
+                  "enum": [
+                    "add",
+                    "sub",
+                    "mul",
+                    "div"
+                  ]
+                }
+              },
+              "required": [
+                "x",
+                "y",
+                "operation"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.17.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-e2ea2ea589c9",
+        "choices": [
+          {
+            "finish_reason": "tool_calls",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": [
+                {
+                  "id": "yuBGLCHM23hg1ervwt5dZD901793mNYJ",
+                  "function": {
+                    "arguments": "{\"x\": 5, \"y\": 3, \"operation\": \"add\"}",
+                    "name": "calculate"
+                  },
+                  "type": "function"
+                }
+              ],
+              "reasoning_content": "Okay, let's see. The user wants to calculate 5 plus 3. I need to use the calculate function here. The function requires three parameters: x, y, and operation. The operation is specified as \"add\". So, I should set x to 5, y to 3, and operation to \"add\". Let me make sure I didn't miss any other parameters. The required fields are all there. Alright, that should do it.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11147-fee39dd92",
+        "usage": {
+          "completion_tokens": 129,
+          "prompt_tokens": 214,
+          "total_tokens": 343,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 51,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 51,
+          "prompt_n": 163,
+          "prompt_ms": 1141.74,
+          "prompt_per_token_ms": 7.004539877300614,
+          "prompt_per_second": 142.76455234992204,
+          "predicted_n": 129,
+          "predicted_ms": 3766.135,
+          "predicted_per_token_ms": 29.4229296875,
+          "predicted_per_second": 33.987098178902244
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

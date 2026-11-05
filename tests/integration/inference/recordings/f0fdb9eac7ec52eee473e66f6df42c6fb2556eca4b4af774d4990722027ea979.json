@@ -1,0 +1,58 @@
+{
+  "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_score[judge=llama-cpp-server/laya]",
+  "request": {
+    "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_score[judge=llama-cpp-server/laya]",
+    "url": "http://localhost:8080/v1/systemone",
+    "method": "POST",
+    "payload": {
+      "state": "The agent was slightly rude but did resolve the issue.",
+      "model": "laya",
+      "questions": {
+        "quality": {
+          "type": "score",
+          "instructions": "Rate the quality of the interaction.",
+          "criteria": [
+            "Unacceptable",
+            "Poor",
+            "Acceptable",
+            "Good",
+            "Excellent"
+          ]
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "laya",
+      "answers": {
+        "quality": {
+          "type": "score",
+          "score": 1.9283608466932183,
+          "legend": {
+            "0": "Unacceptable",
+            "1": "Poor",
+            "2": "Acceptable",
+            "3": "Good",
+            "4": "Excellent"
+          },
+          "probabilities": {
+            "0": 0.07097390435260952,
+            "1": 0.1968538961138087,
+            "2": 0.5055463197359611,
+            "3": 0.18608920808299487,
+            "4": 0.04053667171462571
+          },
+          "confidence": 0.495029786390605
+        }
+      },
+      "usage": {
+        "input_tokens": 52,
+        "output_tokens": 0
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

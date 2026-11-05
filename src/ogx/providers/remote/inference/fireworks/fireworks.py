@@ -5,16 +5,51 @@
 # the root directory of this source tree.
 
 
+from collections.abc import AsyncIterator
+from typing import Any
+
 from ogx.log import get_logger
+from ogx.providers.utils.inference.anthropic_mixin import AnthropicMixin
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx_api import (
+    OpenAIChatCompletion,
+    OpenAIChatCompletionChunk,
+    OpenAIChatCompletionRequestWithExtraBody,
+    OpenAICompletion,
+    OpenAICompletionRequestWithExtraBody,
+)
 
 from .config import FireworksImplConfig
 
 logger = get_logger(name=__name__, category="inference::fireworks")
 
 
-class FireworksInferenceAdapter(OpenAIMixin):
-    """Inference adapter for the Fireworks AI platform."""
+def _wants_usage(stream_options: dict[str, Any] | None) -> bool:
+    return stream_options is not None and stream_options.get("include_usage") is True
+
+
+def _strip_function_type_from_tools(tools: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
+    if tools is None:
+        return None
+    sanitized: list[dict[str, Any]] = []
+    for tool in tools:
+        function = tool.get("function") if isinstance(tool, dict) else None
+        if isinstance(function, dict) and "type" in function:
+            tool = {**tool, "function": {k: v for k, v in function.items() if k != "type"}}
+        sanitized.append(tool)
+    return sanitized
+
+
+class FireworksInferenceAdapter(AnthropicMixin, OpenAIMixin):
+    """Inference adapter for the Fireworks AI platform.
+
+    Chat Completions go through the OpenAI-compatible mixin. Fireworks also exposes the
+    Anthropic Messages API natively, so ``anthropic_messages`` forwards directly to
+    ``/v1/messages`` (via :class:`AnthropicMixin`) instead of the translation fallback,
+    which cannot represent extended thinking, cache control or tool search. Fireworks has
+    no ``/v1/messages/count_tokens`` endpoint, so ``anthropic_count_tokens`` falls back to
+    counting via ``anthropic_messages`` with ``max_tokens=1``.
+    """
 
     config: FireworksImplConfig
 
@@ -27,3 +62,30 @@ class FireworksInferenceAdapter(OpenAIMixin):
 
     def get_base_url(self) -> str:
         return str(self.config.base_url)
+
+    def _anthropic_count_tokens_url(self) -> str | None:
+        """Fireworks has no native /v1/messages/count_tokens endpoint."""
+        return None
+
+    async def openai_chat_completion(
+        self,
+        params: OpenAIChatCompletionRequestWithExtraBody,
+    ) -> OpenAIChatCompletion | AsyncIterator[OpenAIChatCompletionChunk]:
+        # Fireworks rejects extra fields, including the "type" key inside tool
+        # function definitions that some upstream converters emit.
+        if params.tools:
+            params = params.model_copy(update={"tools": _strip_function_type_from_tools(params.tools)})
+        return await super().openai_chat_completion(params)
+
+    async def openai_completion(
+        self,
+        params: OpenAICompletionRequestWithExtraBody,
+    ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
+        # Fireworks appends a usage-only chunk (empty choices) to completions
+        # streams unless include_usage is explicitly false. Opt out explicitly
+        # when the client did not request usage.
+        if params.stream and not _wants_usage(params.stream_options):
+            params = params.model_copy(
+                update={"stream_options": {**(params.stream_options or {}), "include_usage": False}}
+            )
+        return await super().openai_completion(params)

@@ -1,0 +1,47 @@
+{
+  "test_id": "tests/integration/messages/test_count_tokens.py::test_count_tokens_with_tools[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_count_tokens.py::test_count_tokens_with_tools[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages/count_tokens",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What's the weather in San Francisco?"
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "get_weather",
+          "description": "Get the current weather in a given location",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string",
+                "description": "The city and state, e.g. San Francisco, CA"
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "input_tokens": 174,
+      "context_management": {
+        "original_input_tokens": 174
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

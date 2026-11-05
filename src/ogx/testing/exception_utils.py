@@ -14,7 +14,7 @@ exception handling and test replay.
 
 from typing import Any, Protocol, TypeGuard
 
-import httpx
+import httpx2
 
 from ogx.core.exceptions.mapping import EXCEPTION_TYPES_BY_NAME
 from ogx.testing.providers import GenericProviderError, create_provider_error, detect_provider
@@ -43,7 +43,7 @@ class GenericOGXError(OGXError):
     def __init__(self, status_code_value: int, message: str = ""):
         super().__init__(message)
         # Override the class variable with an instance attribute
-        self.status_code = httpx.codes(status_code_value)
+        self.status_code = httpx2.codes(status_code_value)
 
 
 def is_provider_sdk_exception(exc: Exception) -> TypeGuard[ProviderSDKException]:

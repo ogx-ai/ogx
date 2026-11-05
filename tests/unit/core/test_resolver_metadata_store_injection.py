@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import sys
 from types import SimpleNamespace
 from typing import Any
 
@@ -43,9 +44,10 @@ class TestResolverMetadataStoreInjection:
             return SimpleNamespace()
 
         monkeypatch.setattr("ogx.core.resolver.instantiate_class_type", lambda _: DummyRemoteConfig)
-        monkeypatch.setattr(
-            "ogx.core.resolver.importlib.import_module",
-            lambda _: SimpleNamespace(get_adapter_impl=get_adapter_impl),
+        monkeypatch.setitem(
+            sys.modules,
+            "dummy.remote.module",
+            SimpleNamespace(get_adapter_impl=get_adapter_impl),
         )
         monkeypatch.setattr("ogx.core.resolver.check_protocol_compliance", lambda *_args, **_kwargs: None)
 
@@ -84,9 +86,10 @@ class TestResolverMetadataStoreInjection:
             return SimpleNamespace()
 
         monkeypatch.setattr("ogx.core.resolver.instantiate_class_type", lambda _: DummyRemoteConfig)
-        monkeypatch.setattr(
-            "ogx.core.resolver.importlib.import_module",
-            lambda _: SimpleNamespace(get_adapter_impl=get_adapter_impl),
+        monkeypatch.setitem(
+            sys.modules,
+            "dummy.remote.module",
+            SimpleNamespace(get_adapter_impl=get_adapter_impl),
         )
         monkeypatch.setattr("ogx.core.resolver.check_protocol_compliance", lambda *_args, **_kwargs: None)
 

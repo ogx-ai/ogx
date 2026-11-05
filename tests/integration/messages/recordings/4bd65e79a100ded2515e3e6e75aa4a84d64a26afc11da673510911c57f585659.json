@@ -1,0 +1,44 @@
+{
+  "test_id": "tests/integration/messages/test_count_tokens.py::test_count_tokens_with_tools[txt=meta/muse-spark-1.3-contributor]",
+  "request": {
+    "test_id": "tests/integration/messages/test_count_tokens.py::test_count_tokens_with_tools[txt=meta/muse-spark-1.3-contributor]",
+    "url": "https://api.meta.ai/v1/messages/count_tokens",
+    "method": "POST",
+    "payload": {
+      "model": "muse-spark-1.3-contributor",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What's the weather in San Francisco?"
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "get_weather",
+          "description": "Get the current weather in a given location",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string",
+                "description": "The city and state, e.g. San Francisco, CA"
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "input_tokens": 704
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

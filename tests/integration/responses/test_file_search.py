@@ -9,7 +9,19 @@ import time
 
 import pytest
 
-from .helpers import assert_text_contains, new_vector_store, skip_if_provider_is_vertexai, upload_file
+from .helpers import (
+    assert_text_contains,
+    new_vector_store,
+    skip_if_provider_is_vertexai,
+    skip_if_text_model_prefix,
+    upload_file,
+)
+
+
+@pytest.fixture(autouse=True)
+def _skip_file_search_for_bedrock(request):
+    """Skip file search tests for Bedrock — file search is a tool and tool calling is unreliable."""
+    skip_if_text_model_prefix(request, "bedrock/", "Bedrock GPT-OSS does not reliably support tool calling")
 
 
 @pytest.mark.parametrize(
@@ -21,7 +33,14 @@ from .helpers import assert_text_contains, new_vector_store, skip_if_provider_is
             "type": "json_schema",
             "name": "capitals",
             "description": "A schema for the capital of each country",
-            "schema": {"type": "object", "properties": {"capital": {"type": "string"}}},
+            # strict mode requires additionalProperties to be false and
+            # required to list every property
+            "schema": {
+                "type": "object",
+                "properties": {"capital": {"type": "string"}},
+                "required": ["capital"],
+                "additionalProperties": False,
+            },
             "strict": True,
         },
     ],
@@ -164,6 +183,8 @@ def test_response_file_search_filter_by_region(
         model=text_model_id,
         input="What are the updates from the US region?",
         tools=tools,
+        # Force the tool call so the test validates filter mechanics, not model judgment.
+        tool_choice="required",
         stream=False,
         include=["file_search_call.results"],
     )
@@ -253,6 +274,8 @@ def test_response_file_search_filter_by_date_range(
         model=text_model_id,
         input="What happened in Q1 2023?",
         tools=tools,
+        # Force the tool call so the test validates filter mechanics, not model judgment.
+        tool_choice="required",
         stream=False,
         include=["file_search_call.results"],
     )
@@ -295,6 +318,8 @@ def test_response_file_search_filter_compound_and(
         model=text_model_id,
         input="What are the engineering updates from the US?",
         tools=tools,
+        # Force the tool call so the test validates filter mechanics, not model judgment.
+        tool_choice="required",
         stream=False,
         include=["file_search_call.results"],
     )
@@ -371,6 +396,8 @@ def test_response_file_search_streaming_events(responses_client, text_model_id, 
         model=text_model_id,
         input="What are the marketing updates?",
         tools=tools,
+        # Force the tool call so the test validates filter mechanics, not model judgment.
+        tool_choice="required",
         stream=True,
     )
 

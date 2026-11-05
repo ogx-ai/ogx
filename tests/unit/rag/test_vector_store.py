@@ -544,3 +544,41 @@ class TestNeuralRerank:
         # Verify max_num_results was passed to rerank
         rerank_request = store.inference_api.rerank.call_args.args[0]
         assert rerank_request.max_num_results == 2
+
+
+class TestQueryChunksEmbeddingDimensions:
+    """The query must be embedded at the store's dimension; a mismatch (e.g. a
+    provider default of 1536 against a 768-dim index) breaks the search."""
+
+    @pytest.mark.parametrize("explicit_dimensions", [None, 768])
+    async def test_query_embedding_uses_store_dimension(self, explicit_dimensions):
+        mock_vector_store = MagicMock()
+        mock_vector_store.embedding_model = "test-embedding-model"
+        mock_vector_store.embedding_dimension = 768
+        mock_index = AsyncMock()
+        mock_inference_api = AsyncMock()
+        mock_embedding_response = MagicMock()
+        mock_embedding_data = MagicMock()
+        mock_embedding_data.embedding = [0.1, 0.2, 0.3]
+        mock_embedding_response.data = [mock_embedding_data]
+        mock_inference_api.openai_embeddings.return_value = mock_embedding_response
+        mock_index.query_vector.return_value = QueryChunksResponse(chunks=[], scores=[])
+
+        store = VectorStoreWithIndex(
+            vector_store=mock_vector_store,
+            index=mock_index,
+            inference_api=mock_inference_api,
+            vector_stores_config=VectorStoresConfig(),
+        )
+
+        params = {} if explicit_dimensions is None else {"embedding_dimensions": explicit_dimensions}
+        request = QueryChunksRequest(
+            vector_store_id="test-store",
+            query="test query",
+            params=params,
+        )
+
+        await store.query_chunks(request)
+
+        embeddings_request = mock_inference_api.openai_embeddings.call_args.args[0]
+        assert embeddings_request.dimensions == (explicit_dimensions if explicit_dimensions is not None else 768)

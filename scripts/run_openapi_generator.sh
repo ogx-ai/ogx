@@ -16,6 +16,6 @@ stack_dir=$(dirname "$THIS_DIR")
 PYTHONPATH=$PYTHONPATH:$stack_dir \
   python3 -m scripts.openapi_generator "$stack_dir"/docs/static
 
-cp "$stack_dir"/docs/static/stainless-ogx-spec.yaml "$stack_dir"/client-sdks/stainless/openapi.yml
+cp "$stack_dir"/docs/static/stainless-ogx-spec.yaml "$stack_dir"/client-sdks/spec/openapi.yml
 PYTHONPATH=$PYTHONPATH:$stack_dir \
-  python3 -m scripts.openapi_generator.stainless_config.generate_config
+  python3 -m scripts.openapi_generator.resources_config.generate_resources

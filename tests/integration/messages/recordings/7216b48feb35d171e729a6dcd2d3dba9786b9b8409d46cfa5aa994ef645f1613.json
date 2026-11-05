@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_basic[txt=ollama/qwen3.5:0.8b]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_basic[txt=ollama/qwen3.5:0.8b]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "qwen3.5:0.8b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is 2+2? Reply with just the number."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_55470eed0d2fae87d753c819",
+      "type": "message",
+      "role": "assistant",
+      "model": "qwen3.5:0.8b",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Thinking Process:\n\n1.  **Analyze the Request:** The user is asking \"What is 2+2?\" and explicitly requests to reply with \"just the number\".\n\n2.  **Identify Mathematical Fact:** In standard arithmetic (mathematics), $2 + 2 = 4$.\n\n3.  **Check Constraints:**\n    *   Must answer \"2+2? Reply with just the number.\"\n    *   Constraint: \"Reply with just the number.\" This means no conversational filler, no introduction, no explanations other than necessary context (if any), and specifically the number itself.\n    *   Mathematical certainty: 4 is the correct mathematical answer for $2+2$.\n\n4.  **Consider Ambiguity:** Is there a hidden trick? No obvious trick. The question is straightforward addition.\n\n5.  **Draft the Response:** Just \"4\".\n\n6.  **Review against Constraint:** \"Reply with just the number.\"\n    *   Draft: 4\n    *   Does this meet the constraint? Yes, it's a single word/number string.\n\n7.  **Final Decision:** 4."
+        },
+        {
+          "type": "text",
+          "text": "4"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 23,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 246
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

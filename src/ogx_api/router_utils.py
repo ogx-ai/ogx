@@ -12,8 +12,8 @@ in the OpenAPI specification.
 
 It also provides :class:`ExceptionTranslatingRoute`, a reusable route class
 that catches known exception types (``ValueError``, ``OGXError``)
-and translates them to ``HTTPException`` so that FastAPI returns proper
-JSON error responses instead of dropping the connection.
+and responds with the OpenAI-compatible error envelope so that these
+routers return the same error shape as the rest of the server.
 """
 
 import inspect
@@ -21,8 +21,11 @@ from collections.abc import Callable, Coroutine
 from typing import Annotated, Any, TypeVar
 
 from fastapi import HTTPException, Path, Query, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
+
+from ogx_api.common.errors import OpenAIErrorResponse
 
 # OpenAPI extension key to mark routes that don't require authentication.
 # Use this in FastAPI route decorators: @router.get("/health", openapi_extra={PUBLIC_ROUTE_KEY: True})
@@ -189,13 +192,19 @@ def try_translate_to_http_exception(exc: Exception) -> HTTPException | None:
 
 
 class ExceptionTranslatingRoute(APIRoute):
-    """Route class that converts known exception types to HTTPException.
+    """Route class that converts known exception types to JSON error responses.
 
-    ValueError and OGXError (which carry a ``status_code``) are
-    translated to the appropriate HTTPException so that FastAPI's built-in
-    handler returns a proper JSON error response.  All other exceptions
-    are left untouched so they can propagate to the server's global
-    ``Exception`` handler registered via ``app.exception_handler(Exception)``.
+    ValueError and OGXError (which carry a ``status_code``) are translated
+    into the OpenAI-compatible error envelope (``{"error": {"message": ...}}``)
+    -- the same envelope the server's global exception handler produces for
+    the rest of the API. Responding directly instead of re-raising an
+    ``HTTPException`` to FastAPI's built-in handler (which would return
+    ``{"detail": ...}``) keeps OpenAI SDK error messages intact: openai-python
+    >= 3.38 only surfaces the ``message`` field of the error object in
+    exception text (openai/openai-python#4161). It also keeps the connection
+    alive, since no exception reaches ServerErrorMiddleware. All other
+    exceptions are left untouched so they can propagate to the server's
+    global ``Exception`` handler registered via ``app.exception_handler(Exception)``.
     """
 
     def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
@@ -207,7 +216,10 @@ class ExceptionTranslatingRoute(APIRoute):
             except Exception as exc:
                 http_exc = try_translate_to_http_exception(exc)
                 if http_exc is not None:
-                    raise http_exc from exc
+                    return JSONResponse(
+                        status_code=http_exc.status_code,
+                        content=OpenAIErrorResponse.from_message(http_exc.detail).to_dict(),
+                    )
                 raise
             return resp
 

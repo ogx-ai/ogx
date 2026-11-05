@@ -106,6 +106,8 @@ class TestVertexAIConfig:
         sample = VertexAIConfig.sample_run_config(**sample_kwargs)
         assert sample["project"] == expected_project
         assert sample["location"] == expected_location
+        assert sample["thought_signature_store"]["backend"] == "kv_default"
+        assert sample["thought_signature_store"]["namespace"] == "vertexai_thought_signatures"
 
     def test_config_missing_required_project(self):
         """Test that project field is required."""

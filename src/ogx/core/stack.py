@@ -946,6 +946,9 @@ def run_config_from_dynamic_config_spec(
                 f"Failed to parse provider spec '{api_provider}'. Expected format: api=provider (e.g. inference=fireworks)"
             )
         api_str, provider_with_params = api_provider.split("=", 1)
+        # `systemone` is a spelling alias for `inference` (judgment models are inference models).
+        if api_str == "systemone":
+            api_str = "inference"
 
         # Parse provider name and optional config parameters
         # Format: provider_name?param1=value1&param2=value2
