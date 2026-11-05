@@ -18,6 +18,7 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `responses` | `azure` | `responses` only; Responses coverage: 112/131 (85%) |
 | `reasoning` | `gpt` | 4 roots; Responses coverage: 117/131 (89%) |
 | `responses` | `bedrock` | `responses` only; Responses coverage: 22/131 (17%) |
+| `thegrid` | `thegrid` | `test_openai_completion.py` only |
 | `inference` | `vllm` | `inference` only |
 | `inference` | `sglang` | `inference` only |
 | `reasoning` | `vllm` | 4 roots; Responses coverage: 3/131 (2%) |
@@ -60,6 +61,7 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `sglang` | sglang/Qwen/Qwen3-0.6B | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `inference` | — |
 | `sglang-systemone` | — | — | — | — | `systemone` | — |
 | `text-embeddings-inference` | — | — | text-embeddings-inference/nomic-ai/nomic-embed-text-v1.5 | — | `text-embeddings-inference` | — |
+| `thegrid` | thegrid/text-standard | — | — | — | `thegrid` | — |
 | `typesafe` | — | — | — | — | `systemone` | — |
 | `vllm` | vllm/Qwen/Qwen3-0.6B | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `inference`, `reasoning`, `messages` | — |
 | `vllm-systemone` | — | — | — | — | `systemone` | — |
