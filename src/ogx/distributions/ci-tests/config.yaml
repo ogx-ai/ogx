@@ -119,6 +119,11 @@ providers:
       base_url: ${env.WATSONX_BASE_URL:=https://us-south.ml.cloud.ibm.com}
       api_key: ${env.WATSONX_API_KEY:=}
       project_id: ${env.WATSONX_PROJECT_ID:=}
+  - provider_id: ${env.THEGRID_API_KEY:+thegrid}
+    provider_type: remote::thegrid
+    config:
+      base_url: https://api.thegrid.ai/v1
+      api_key: ${env.THEGRID_API_KEY:=}
   - provider_id: ${env.LLAMA_CPP_SERVER_URL:+llama-cpp-server}
     provider_type: remote::llama-cpp-server
     config:
@@ -133,11 +138,6 @@ providers:
       base_url: ${env.DEEPSEEK_BASE_URL:=https://api.deepseek.com/v1}
       anthropic_base_url: ${env.DEEPSEEK_ANTHROPIC_BASE_URL:=https://api.deepseek.com/anthropic}
       api_key: ${env.DEEPSEEK_API_KEY:=}
-  - provider_id: ${env.THEGRID_API_KEY:+thegrid}
-    provider_type: remote::thegrid
-    config:
-      base_url: https://api.thegrid.ai/v1
-      api_key: ${env.THEGRID_API_KEY:=}
   vector_io:
   - provider_id: faiss
     provider_type: inline::faiss
