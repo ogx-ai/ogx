@@ -246,6 +246,18 @@ def ogx_client(request):
     return client
 
 
+@pytest.fixture(scope="session")
+def mock_sentinel():
+    """The fixed reply of the mock model backend, or None when the selected setup uses a real model."""
+    from tests.integration.suites import SETUP_DEFINITIONS
+
+    setup_obj = SETUP_DEFINITIONS.get(os.environ.get("OGX_TEST_SETUP", ""))
+    if setup_obj is None:
+        return None
+    sentinel = setup_obj.defaults.get("sentinel")
+    return str(sentinel) if sentinel else None
+
+
 def parse_vector_io_provider(config_string: str) -> str:
     # Split the string into individual key-value pairs
     pairs = config_string.split(",")
