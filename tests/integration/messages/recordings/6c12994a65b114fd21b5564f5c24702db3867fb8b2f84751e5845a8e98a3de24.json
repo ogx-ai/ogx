@@ -1,0 +1,32 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_upstream_error_preserved",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_upstream_error_preserved",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "this-model-is-not-pulled",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hi"
+        }
+      ],
+      "max_tokens": 16,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "type": "error",
+      "error": {
+        "type": "not_found_error",
+        "message": "model 'this-model-is-not-pulled' not found"
+      },
+      "request_id": "req_ad0404e81d9183771a990370"
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

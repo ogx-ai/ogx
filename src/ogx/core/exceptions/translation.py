@@ -3,7 +3,7 @@
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
-import httpx
+import httpx2
 from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
@@ -19,7 +19,7 @@ def translate_exception(exc: Exception) -> HTTPException:
 
     if isinstance(exc, RequestValidationError):
         return HTTPException(
-            status_code=httpx.codes.BAD_REQUEST,
+            status_code=httpx2.codes.BAD_REQUEST,
             detail={
                 "errors": [
                     {
@@ -44,11 +44,11 @@ def translate_exception(exc: Exception) -> HTTPException:
         # Handle provider SDK exceptions (e.g., OpenAI's APIStatusError and subclasses)
         # These include AuthenticationError (401), PermissionDeniedError (403), etc.
         # This preserves the actual HTTP status code from the provider
-        status_code = getattr(exc, "status_code", httpx.codes.INTERNAL_SERVER_ERROR)
+        status_code = getattr(exc, "status_code", httpx2.codes.INTERNAL_SERVER_ERROR)
         detail = str(exc)
         return HTTPException(status_code=status_code, detail=detail)
 
     return HTTPException(
-        status_code=httpx.codes.INTERNAL_SERVER_ERROR,
+        status_code=httpx2.codes.INTERNAL_SERVER_ERROR,
         detail="Internal server error: An unexpected error occurred.",
     )

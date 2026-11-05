@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 from opentelemetry import metrics
 
+from ogx.core.conversations.item_sync import SyncableConversations
 from ogx.core.datatypes import AccessRule
 from ogx.log import get_logger
 from ogx.providers.utils.responses.responses_store import ResponsesStore
@@ -24,7 +25,6 @@ from ogx_api import (
     CancelResponseRequest,
     CompactResponseRequest,
     Connectors,
-    Conversations,
     CreateResponseRequest,
     DeleteResponseRequest,
     Files,
@@ -106,7 +106,7 @@ class BuiltinResponsesImpl(Responses):
         vector_io_api: VectorIO,
         tool_runtime_api: ToolRuntime,
         tool_groups_api: ToolGroups,
-        conversations_api: Conversations,
+        conversations_api: SyncableConversations,
         prompts_api: Prompts,
         files_api: Files,
         connectors_api: Connectors,

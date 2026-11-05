@@ -445,7 +445,7 @@ class TestUnstructuredApiFileProcessor:
 
     async def test_api_network_error(self, processor: UnstructuredApiFileProcessor, upload_file: UploadFile):
         """Test handling of network/connection errors."""
-        import httpx
+        import httpx2
 
         request = ProcessFileRequest()
 
@@ -454,10 +454,10 @@ class TestUnstructuredApiFileProcessor:
         ) as mock_client_class:
             mock_client = MagicMock()
             # Mock network failure
-            mock_client.general.partition_async = AsyncMock(side_effect=httpx.ConnectError("Connection failed"))
+            mock_client.general.partition_async = AsyncMock(side_effect=httpx2.ConnectError("Connection failed"))
             mock_client_class.return_value = mock_client
 
-            with pytest.raises(httpx.ConnectError):
+            with pytest.raises(httpx2.ConnectError):
                 await processor.process_file(request, file=upload_file)
 
 

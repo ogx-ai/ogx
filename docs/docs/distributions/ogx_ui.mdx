@@ -35,10 +35,13 @@ This will start the UI server on `http://localhost:8322` (default port).
 
 ### Option 2: Using Docker
 
-Run the UI in a container:
+No pre-built UI image is published to a container registry. Build it locally from the
+`Containerfile` at `src/ogx_ui/Containerfile`, which installs the [`ogx-ui`](https://www.npmjs.com/package/ogx-ui)
+npm package:
 
 ```bash
-docker run -p 8322:8322 ogx/ui
+docker build -t ogx-ui -f src/ogx_ui/Containerfile .
+docker run -p 8322:8322 ogx-ui
 ```
 
 Access the UI at `http://localhost:8322`.
@@ -76,7 +79,7 @@ npx ogx-ui
 docker run -p 8080:8080 \
   -e OGX_BACKEND_URL=http://localhost:8321 \
   -e OGX_UI_PORT=8080 \
-  ogx/ui
+  ogx-ui
 ```
 
 ## Using the UI

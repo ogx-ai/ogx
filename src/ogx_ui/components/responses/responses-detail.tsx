@@ -39,7 +39,7 @@ export function ResponseDetailView({
   }
 
   if (isLoading) {
-    return <DetailLoadingView title={title} />;
+    return <DetailLoadingView />;
   }
 
   if (!response) {

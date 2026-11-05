@@ -1,0 +1,81 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_inference_store[client_with_models-txt=llama-cpp-server/qwen3-0.6b-False]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello, world!"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.17.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-161b9e02b6e1",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Hello, world! \ud83d\ude0a How can I assist you today?",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user said \"Hello, world!\" and I need to respond. Let me start by acknowledging their message. Since it's a simple greeting, a friendly reply is appropriate. Maybe add a line about how I can help. Keep it short and positive. Let me check for any typos or errors. Alright, that should do it.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11147-fee39dd92",
+        "usage": {
+          "completion_tokens": 88,
+          "prompt_tokens": 12,
+          "total_tokens": 100,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 3,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 3,
+          "prompt_n": 9,
+          "prompt_ms": 83.335,
+          "prompt_per_token_ms": 9.259444444444444,
+          "prompt_per_second": 107.99784004319915,
+          "predicted_n": 88,
+          "predicted_ms": 2143.488,
+          "predicted_per_token_ms": 24.637793103448274,
+          "predicted_per_second": 40.58805087782157
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -1,0 +1,58 @@
+{
+  "test_id": "tests/integration/inference/test_openai_embeddings.py::test_openai_embeddings_with_dimensions[ogx_client-emb=ollama/nomic-embed-text:v1.5]",
+  "request": {
+    "method": "POST",
+    "url": "http://0.0.0.0:11434/v1/v1/embeddings",
+    "headers": {},
+    "body": {
+      "model": "nomic-embed-text:v1.5",
+      "input": "Test dimensions parameter",
+      "encoding_format": "float",
+      "dimensions": 16
+    },
+    "endpoint": "/v1/embeddings",
+    "model": "nomic-embed-text:v1.5",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.create_embedding_response.CreateEmbeddingResponse",
+      "__data__": {
+        "data": [
+          {
+            "embedding": [
+              0.17522879,
+              0.19709302,
+              -0.603025,
+              -0.24052896,
+              0.08928268,
+              0.24849577,
+              0.31151652,
+              -0.08641582,
+              -0.18490092,
+              0.0003372788,
+              0.0018756489,
+              0.19693777,
+              0.14303966,
+              -0.18948567,
+              -0.16179934,
+              -0.42332447
+            ],
+            "index": 0,
+            "object": "embedding"
+          }
+        ],
+        "model": "nomic-embed-text:v1.5",
+        "object": "list",
+        "usage": {
+          "prompt_tokens": 5,
+          "total_tokens": 5
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

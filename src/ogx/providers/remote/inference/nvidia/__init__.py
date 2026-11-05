@@ -8,7 +8,7 @@ from .config import NVIDIAConfig
 
 
 async def get_adapter_impl(config: NVIDIAConfig, _deps):
-    # import dynamically so `ogx list-deps` does not fail due to missing dependencies
+    # import dynamically so `ogx stack list-deps` does not fail due to missing dependencies
     from .nvidia import NVIDIAInferenceAdapter
 
     if not isinstance(config, NVIDIAConfig):

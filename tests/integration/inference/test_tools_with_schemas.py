@@ -11,8 +11,6 @@ Tests that tools pass through correctly to various LLM providers.
 
 import pytest
 
-from ogx.core.library_client import OGXAsLibraryClient
-
 
 class TestChatCompletionWithTools:
     """Test chat completion with tools that have complex schemas."""
@@ -158,8 +156,6 @@ class TestMCPToolsInChatCompletion:
 
     def test_mcp_tools_in_inference(self, ogx_client, text_model_id):
         """Test that MCP-style tool schemas work in inference."""
-        if not isinstance(ogx_client, OGXAsLibraryClient):
-            pytest.skip("Library client required")
         tools = [
             {
                 "type": "function",

@@ -1,0 +1,60 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_stop_sequences[txt=anthropic/claude-haiku-5-5]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_stop_sequences[txt=anthropic/claude-haiku-5-5]",
+    "url": "https://api.anthropic.com/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "claude-haiku-5-5",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Count: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10"
+        }
+      ],
+      "max_tokens": 128,
+      "stream": false,
+      "stop_sequences": [
+        ","
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "claude-haiku-5-5",
+      "id": "msg_011Cg5w8mZUrUBZofgo8B43g",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "1"
+        }
+      ],
+      "container": null,
+      "stop_reason": "stop_sequence",
+      "stop_sequence": ",",
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 40,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 2,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      },
+      "diagnostics": null
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

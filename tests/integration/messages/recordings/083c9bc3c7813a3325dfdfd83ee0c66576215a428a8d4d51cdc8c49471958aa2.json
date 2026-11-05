@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_cancel_after_end_fails[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_cancel_after_end_fails[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say 'done' and nothing else."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-b05458da9a0cf6b4",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay, the user wants me to say 'done' and nothing else. Let me check the instructions again. They specified to say 'done' and nothing else. So I need to respond with exactly that word without any additional text. I should make sure there's no extra information or punctuation. Let me confirm once more. Yep, that's the correct response. Just output 'done' as the answer.\n",
+          "signature": "fbc9c791cc16446ca6ffb40e7b448572"
+        },
+        {
+          "type": "text",
+          "text": "\n\ndone"
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 16,
+        "output_tokens": 88
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

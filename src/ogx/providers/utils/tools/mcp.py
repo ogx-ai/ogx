@@ -6,18 +6,19 @@
 
 import asyncio
 import hashlib
+import json
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, cast
 from urllib.parse import urlparse
 
-import httpx
-from mcp import ClientSession, McpError
+import httpx2
+from mcp import ClientSession, MCPError
 from mcp import types as mcp_types
 from mcp.client.sse import sse_client
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 from ogx.core.datatypes import AuthenticationRequiredError
 from ogx.log import get_logger
@@ -181,13 +182,28 @@ class MCPSessionManager:
 
         for i, strategy in enumerate(connection_strategies):
             try:
-                client = streamablehttp_client
-                if strategy == MCPProtol.SSE:
-                    client = cast(Any, sse_client)
-
-                # Enter the client context manager manually
-                client_ctx = client(endpoint, headers=headers)
-                client_streams = await client_ctx.__aenter__()
+                # Enter the client context managers manually. Streamable HTTP takes
+                # headers via an httpx2 client (caller-owned, so tracked on the exit
+                # stack); SSE still accepts headers directly.
+                client_stack = AsyncExitStack()
+                try:
+                    if strategy == MCPProtol.SSE:
+                        transport = sse_client(endpoint, headers=headers)
+                    else:
+                        http_client = await client_stack.enter_async_context(httpx2.AsyncClient(headers=headers))
+                        transport = streamable_http_client(endpoint, http_client=http_client)
+                    client_streams = await client_stack.enter_async_context(transport)
+                except httpx2.HTTPStatusError as e:
+                    # A 401 during connect is raised outside the SDK's task group, so
+                    # it bypasses the except* clauses below; map it explicitly.
+                    await client_stack.__aexit__(None, None, None)
+                    if e.response.status_code == 401:
+                        raise AuthenticationRequiredError(e) from e
+                    raise
+                except BaseException:
+                    await client_stack.__aexit__(None, None, None)
+                    raise
+                client_ctx = client_stack
 
                 try:
                     # Enter the session context manager manually
@@ -206,15 +222,15 @@ class MCPSessionManager:
                     await client_ctx.__aexit__(None, None, None)
                     raise
 
-            except* httpx.HTTPStatusError as eg:
+            except* httpx2.HTTPStatusError as eg:
                 for exc in eg.exceptions:
-                    err = cast(httpx.HTTPStatusError, exc)
+                    err = cast(httpx2.HTTPStatusError, exc)
                     if err.response.status_code == 401:
                         raise AuthenticationRequiredError(exc) from exc
                 if i == len(connection_strategies) - 1:
                     raise
                 last_exception = eg
-            except* httpx.ConnectError as eg:
+            except* httpx2.ConnectError as eg:
                 if i == len(connection_strategies) - 1:
                     error_msg = f"Failed to connect to MCP server at {endpoint}: Connection refused"
                     logger.error("MCP connection error", error=error_msg)
@@ -227,7 +243,7 @@ class MCPSessionManager:
                         connection_strategies_i_1_name=connection_strategies[i + 1].name,
                     )
                 last_exception = eg
-            except* httpx.TimeoutException as eg:
+            except* httpx2.TimeoutException as eg:
                 if i == len(connection_strategies) - 1:
                     error_msg = f"MCP server at {endpoint} timed out"
                     logger.error("MCP timeout error", error=error_msg)
@@ -240,7 +256,7 @@ class MCPSessionManager:
                         connection_strategies_i_1_name=connection_strategies[i + 1].name,
                     )
                 last_exception = eg
-            except* httpx.RequestError as eg:
+            except* httpx2.RequestError as eg:
                 if i == len(connection_strategies) - 1:
                     exc_msg = str(eg.exceptions[0]) if eg.exceptions else "Unknown error"
                     error_msg = f"Network error connecting to MCP server at {endpoint}: {exc_msg}"
@@ -254,7 +270,7 @@ class MCPSessionManager:
                         connection_strategies_i_1_name=connection_strategies[i + 1].name,
                     )
                 last_exception = eg
-            except* McpError:
+            except* MCPError:
                 if i < len(connection_strategies) - 1:
                     logger.warning(
                         "failed to connect via , falling back to",
@@ -330,29 +346,40 @@ async def client_wrapper(endpoint: str, headers: dict[str, str]) -> AsyncGenerat
 
     for i, strategy in enumerate(connection_strategies):
         try:
-            client = streamablehttp_client
-            if strategy == MCPProtol.SSE:
-                # sse_client and streamablehttp_client have different signatures, but both
-                # are called the same way here, so we cast to Any to avoid type errors
-                client = cast(Any, sse_client)
+            # Streamable HTTP takes headers via an httpx2 client; SSE accepts them directly.
+            async with AsyncExitStack() as client_stack:
+                if strategy == MCPProtol.SSE:
+                    transport = sse_client(endpoint, headers=headers)
+                else:
+                    http_client = await client_stack.enter_async_context(httpx2.AsyncClient(headers=headers))
+                    transport = streamable_http_client(endpoint, http_client=http_client)
 
-            async with client(endpoint, headers=headers) as client_streams:
-                async with ClientSession(read_stream=client_streams[0], write_stream=client_streams[1]) as session:
-                    await session.initialize()
-                    protocol_cache[endpoint] = strategy
-                    yield session
-                    return
-        except* httpx.HTTPStatusError as eg:
+                # A 401 during connect is raised outside the SDK's task group, so it
+                # bypasses the except* clauses below; map it explicitly.
+                try:
+                    async with transport as client_streams:
+                        async with ClientSession(
+                            read_stream=client_streams[0], write_stream=client_streams[1]
+                        ) as session:
+                            await session.initialize()
+                            protocol_cache[endpoint] = strategy
+                            yield session
+                            return
+                except httpx2.HTTPStatusError as e:
+                    if e.response.status_code == 401:
+                        raise AuthenticationRequiredError(e) from e
+                    raise
+        except* httpx2.HTTPStatusError as eg:
             for exc in eg.exceptions:
                 # mypy does not currently narrow the type of `eg.exceptions` based on the `except*` filter,
-                # so we explicitly cast each item to httpx.HTTPStatusError. This is safe because
-                # `except* httpx.HTTPStatusError` guarantees all exceptions in `eg.exceptions` are of that type.
-                err = cast(httpx.HTTPStatusError, exc)
+                # so we explicitly cast each item to httpx2.HTTPStatusError. This is safe because
+                # `except* httpx2.HTTPStatusError` guarantees all exceptions in `eg.exceptions` are of that type.
+                err = cast(httpx2.HTTPStatusError, exc)
                 if err.response.status_code == 401:
                     raise AuthenticationRequiredError(exc) from exc
             if i == len(connection_strategies) - 1:
                 raise
-        except* httpx.ConnectError as eg:
+        except* httpx2.ConnectError as eg:
             # Connection refused, server down, network unreachable
             if i == len(connection_strategies) - 1:
                 error_msg = f"Failed to connect to MCP server at {endpoint}: Connection refused"
@@ -365,7 +392,7 @@ async def client_wrapper(endpoint: str, headers: dict[str, str]) -> AsyncGenerat
                     name=strategy.name,
                     connection_strategies_i_1_name=connection_strategies[i + 1].name,
                 )
-        except* httpx.TimeoutException as eg:
+        except* httpx2.TimeoutException as eg:
             # Request timeout, server too slow
             if i == len(connection_strategies) - 1:
                 error_msg = f"MCP server at {endpoint} timed out"
@@ -378,7 +405,7 @@ async def client_wrapper(endpoint: str, headers: dict[str, str]) -> AsyncGenerat
                     name=strategy.name,
                     connection_strategies_i_1_name=connection_strategies[i + 1].name,
                 )
-        except* httpx.RequestError as eg:
+        except* httpx2.RequestError as eg:
             # DNS resolution failures, network errors, invalid URLs
             if i == len(connection_strategies) - 1:
                 # Get the first exception's message for the error string
@@ -393,7 +420,7 @@ async def client_wrapper(endpoint: str, headers: dict[str, str]) -> AsyncGenerat
                     name=strategy.name,
                     connection_strategies_i_1_name=connection_strategies[i + 1].name,
                 )
-        except* McpError:
+        except* MCPError:
             if i < len(connection_strategies) - 1:
                 logger.warning(
                     "failed to connect via , falling back to",
@@ -440,8 +467,8 @@ async def list_mcp_tools(
                 ToolDef(
                     name=tool.name,
                     description=tool.description,
-                    input_schema=tool.inputSchema,
-                    output_schema=getattr(tool, "outputSchema", None),
+                    input_schema=tool.input_schema,
+                    output_schema=tool.output_schema,
                     metadata={
                         "endpoint": endpoint,
                     },
@@ -460,8 +487,16 @@ async def list_mcp_tools(
     return ListToolDefsResponse(data=tools)
 
 
-def _parse_mcp_result(result) -> ToolInvocationResult:
+def _parse_mcp_result(result: mcp_types.CallToolResult) -> ToolInvocationResult:
     """Parse MCP tool call result into ToolInvocationResult.
+
+    Every content block becomes something the model can read: text and images
+    pass through, embedded text resources contribute their text, and binary
+    resources, resource links and audio are described in a text item instead
+    of failing the whole call. A result that only carries ``structured_content``
+    is serialized to JSON so the model does not receive an empty tool message;
+    the structured value is also kept under ``metadata["structured_content"]``.
+    When the tool reports ``is_error``, its text becomes ``error_message``.
 
     Args:
         result: The raw MCP tool call result
@@ -476,12 +511,37 @@ def _parse_mcp_result(result) -> ToolInvocationResult:
         elif isinstance(item, mcp_types.ImageContent):
             content.append(ImageContentItem(image=_URLOrData(data=item.data)))
         elif isinstance(item, mcp_types.EmbeddedResource):
-            logger.warning("EmbeddedResource is not supported", item=item)
+            resource = item.resource
+            if isinstance(resource, mcp_types.TextResourceContents):
+                content.append(TextContentItem(text=resource.text))
+            else:
+                mime_type = resource.mime_type or "unknown type"
+                content.append(TextContentItem(text=f"[binary resource {resource.uri}, {mime_type}]"))
+        elif isinstance(item, mcp_types.ResourceLink):
+            description = f": {item.description}" if item.description else ""
+            content.append(TextContentItem(text=f"[resource link {item.uri} ({item.name}){description}]"))
+        elif isinstance(item, mcp_types.AudioContent):
+            content.append(TextContentItem(text=f"[audio content, {item.mime_type}]"))
         else:
-            raise ValueError(f"Unknown content type: {type(item)}")
+            # Keep the call alive and let the model see that something was there.
+            logger.warning("Unsupported MCP content block", block_type=type(item).__name__)
+            content.append(TextContentItem(text=f"[unsupported MCP content block: {type(item).__name__}]"))
+
+    metadata = None
+    if result.structured_content is not None:
+        metadata = {"structured_content": result.structured_content}
+        if not content:
+            content.append(TextContentItem(text=json.dumps(result.structured_content)))
+
+    error_message = None
+    if result.is_error:
+        error_message = "\n".join(item.text for item in content if isinstance(item, TextContentItem)) or None
+
     return ToolInvocationResult(
         content=content,
-        error_code=1 if result.isError else 0,
+        error_code=1 if result.is_error else 0,
+        error_message=error_message,
+        metadata=metadata,
     )
 
 
@@ -555,8 +615,8 @@ async def get_mcp_server_info(
         init_result = await session.initialize()
 
         return MCPServerInfo(
-            name=init_result.serverInfo.name,
-            version=init_result.serverInfo.version,
-            title=init_result.serverInfo.title,
+            name=init_result.server_info.name,
+            version=init_result.server_info.version,
+            title=init_result.server_info.title,
             description=init_result.instructions,
         )

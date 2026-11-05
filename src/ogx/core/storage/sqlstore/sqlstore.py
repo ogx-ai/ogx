@@ -14,7 +14,6 @@ from ogx.core.storage.datatypes import (
     SqliteSqlStoreConfig,
     SqlStoreReference,
     StorageBackendConfig,
-    StorageBackendType,
 )
 from ogx_api.internal.sqlstore import SqlStore
 
@@ -29,20 +28,6 @@ SqlStoreConfig = Annotated[
     SqliteSqlStoreConfig | PostgresSqlStoreConfig,
     Field(discriminator="type"),
 ]
-
-
-def get_pip_packages(store_config: dict | SqlStoreConfig) -> list[str]:
-    """Get pip packages for SQL store config, handling both dict and object cases."""
-    if isinstance(store_config, dict):
-        store_type = store_config.get("type")
-        if store_type == StorageBackendType.SQL_SQLITE.value:
-            return SqliteSqlStoreConfig.pip_packages()
-        elif store_type == StorageBackendType.SQL_POSTGRES.value:
-            return PostgresSqlStoreConfig.pip_packages()
-        else:
-            raise ValueError(f"Unknown SQL store type: {store_type}")
-    else:
-        return store_config.pip_packages()
 
 
 async def _sqlstore_impl(reference: SqlStoreReference) -> SqlStore:

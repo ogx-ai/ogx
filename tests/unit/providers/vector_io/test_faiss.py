@@ -199,6 +199,131 @@ async def test_meta_index_updated_on_delete_chunks(faiss_index, sample_chunks, s
     assert faiss_index._meta_index["document_id"]["mock-doc-2"] == {0}
 
 
+async def test_add_chunks_replaces_existing_chunk_id(
+    faiss_index, sample_chunks, sample_embeddings, embedding_dimension
+):
+    """Re-adding a chunk with an existing chunk_id should replace it, not duplicate it."""
+    embedded_chunks = [
+        EmbeddedChunk(
+            content=chunk.content,
+            chunk_id=chunk.chunk_id,
+            metadata=chunk.metadata,
+            chunk_metadata=chunk.chunk_metadata,
+            embedding=embedding.tolist(),
+            embedding_model="test-embedding-model",
+            embedding_dimension=embedding_dimension,
+        )
+        for chunk, embedding in zip(sample_chunks, sample_embeddings, strict=True)
+    ]
+    # Give the first chunk a metadata value that will change on replacement, so the
+    # stale _meta_index entry must be cleaned up.
+    embedded_chunks[0] = embedded_chunks[0].model_copy(update={"metadata": {"document_id": "mock-doc-1", "version": 1}})
+    await faiss_index.add_chunks(embedded_chunks)
+    assert faiss_index.index.ntotal == 2
+    assert len(faiss_index.chunk_ids) == 2
+
+    new_embedding = np.random.rand(embedding_dimension).astype(np.float32)
+    updated = EmbeddedChunk(
+        content="updated content",
+        chunk_id=sample_chunks[0].chunk_id,
+        metadata={"document_id": "mock-doc-1", "version": 2},
+        chunk_metadata=sample_chunks[0].chunk_metadata,
+        embedding=new_embedding.tolist(),
+        embedding_model="test-embedding-model",
+        embedding_dimension=embedding_dimension,
+    )
+    await faiss_index.add_chunks([updated])
+
+    # Count is unchanged and the stored chunk reflects the new content and vector.
+    assert faiss_index.index.ntotal == 2
+    assert faiss_index.chunk_ids.count(sample_chunks[0].chunk_id) == 1
+    position = faiss_index.chunk_ids.index(sample_chunks[0].chunk_id)
+    assert position == 1
+    stored = faiss_index.chunk_by_index[position]
+    assert stored.content == "updated content"
+    assert np.allclose(faiss_index.index.reconstruct(position), new_embedding)
+
+    # The replaced chunk moved to the end, so the surviving chunk shifted to position 0
+    # and the metadata index reflects both the shift and the replaced metadata.
+    assert faiss_index._meta_index["document_id"] == {"mock-doc-2": {0}, "mock-doc-1": {1}}
+    assert faiss_index._meta_index["version"] == {2: {1}}
+
+
+async def test_add_chunks_deduplicates_within_batch(faiss_index, sample_chunks, embedding_dimension):
+    """A single add_chunks call with repeated chunk_ids should keep only the last occurrence."""
+    embedding = np.random.rand(embedding_dimension).astype(np.float32).tolist()
+    chunk_id = sample_chunks[0].chunk_id
+    embedded_chunks = [
+        EmbeddedChunk(
+            content=f"content {i}",
+            chunk_id=chunk_id,
+            metadata={"document_id": "mock-doc-1"},
+            chunk_metadata=sample_chunks[0].chunk_metadata,
+            embedding=embedding,
+            embedding_model="test-embedding-model",
+            embedding_dimension=embedding_dimension,
+        )
+        for i in range(3)
+    ]
+    await faiss_index.add_chunks(embedded_chunks)
+
+    assert faiss_index.index.ntotal == 1
+    assert faiss_index.chunk_ids == [chunk_id]
+    assert faiss_index.chunk_by_index[0].content == "content 2"
+
+
+async def test_add_chunks_replaces_existing_and_appends_new_in_single_batch(
+    faiss_index, sample_chunks, sample_embeddings, embedding_dimension
+):
+    """A batch mixing an existing chunk_id with a new one should replace the former and append the latter."""
+    embedded_chunks = [
+        EmbeddedChunk(
+            content=chunk.content,
+            chunk_id=chunk.chunk_id,
+            metadata=chunk.metadata,
+            chunk_metadata=chunk.chunk_metadata,
+            embedding=embedding.tolist(),
+            embedding_model="test-embedding-model",
+            embedding_dimension=embedding_dimension,
+        )
+        for chunk, embedding in zip(sample_chunks, sample_embeddings, strict=True)
+    ]
+    await faiss_index.add_chunks(embedded_chunks)
+
+    new_embedding = np.random.rand(embedding_dimension).astype(np.float32)
+    updated = EmbeddedChunk(
+        content="updated content",
+        chunk_id=sample_chunks[0].chunk_id,
+        metadata=sample_chunks[0].metadata,
+        chunk_metadata=sample_chunks[0].chunk_metadata,
+        embedding=sample_embeddings[0].tolist(),
+        embedding_model="test-embedding-model",
+        embedding_dimension=embedding_dimension,
+    )
+    fresh = EmbeddedChunk(
+        content="brand new content",
+        chunk_id="brand-new-chunk",
+        metadata={"document_id": "mock-doc-3"},
+        chunk_metadata=ChunkMetadata(
+            chunk_id="brand-new-chunk",
+            document_id="mock-doc-3",
+            created_timestamp=0,
+            updated_timestamp=0,
+            content_token_count=4,
+        ),
+        embedding=new_embedding.tolist(),
+        embedding_model="test-embedding-model",
+        embedding_dimension=embedding_dimension,
+    )
+    await faiss_index.add_chunks([updated, fresh])
+
+    # The replaced chunk is removed first, so the surviving chunk shifts to position 0
+    # and the two batch chunks are appended at positions 1 and 2.
+    assert faiss_index.index.ntotal == 3
+    assert faiss_index.chunk_ids == [sample_chunks[1].chunk_id, sample_chunks[0].chunk_id, "brand-new-chunk"]
+    assert faiss_index._meta_index["document_id"] == {"mock-doc-2": {0}, "mock-doc-1": {1}, "mock-doc-3": {2}}
+
+
 async def test_resolve_filter_positions_eq(faiss_index, sample_chunks, sample_embeddings, embedding_dimension):
     """eq filter should return only positions whose metadata value matches exactly."""
     embedded_chunks = [

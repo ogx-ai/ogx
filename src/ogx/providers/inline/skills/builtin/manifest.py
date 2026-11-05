@@ -20,6 +20,9 @@ def parse_skill_manifest(content: str) -> SkillManifest:
         description: Does something useful
         ---
         Instructions for the model go here.
+
+    Raises:
+        ValueError: If the frontmatter is not valid YAML.
     """
     lines = content.split("\n")
 
@@ -38,7 +41,11 @@ def parse_skill_manifest(content: str) -> SkillManifest:
     frontmatter_text = "\n".join(lines[1:closing_idx])
     instructions = "\n".join(lines[closing_idx + 1 :]).strip()
 
-    frontmatter = yaml.safe_load(frontmatter_text)
+    try:
+        frontmatter = yaml.safe_load(frontmatter_text)
+    except yaml.YAMLError as e:
+        raise ValueError(f"Failed to parse SKILL.md frontmatter: {e}") from e
+
     if not isinstance(frontmatter, dict):
         return SkillManifest(instructions=instructions)
 

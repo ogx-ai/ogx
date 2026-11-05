@@ -5,7 +5,7 @@
 # the root directory of this source tree.
 
 
-import httpx
+import httpx2
 from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ValidationError
@@ -60,40 +60,40 @@ class TestTranslateExceptionToHttp:
         exc = ValueError("bad input")
         result = translate_exception_to_http(exc)
         assert result is not None
-        assert result.status_code == httpx.codes.BAD_REQUEST
+        assert result.status_code == httpx2.codes.BAD_REQUEST
         assert "bad input" in result.detail
 
     def test_permission_error(self):
         exc = PermissionError("access denied")
         result = translate_exception_to_http(exc)
         assert result is not None
-        assert result.status_code == httpx.codes.FORBIDDEN
+        assert result.status_code == httpx2.codes.FORBIDDEN
         assert "access denied" in result.detail
 
     def test_connection_error(self):
         exc = ConnectionError("connection refused")
         result = translate_exception_to_http(exc)
         assert result is not None
-        assert result.status_code == httpx.codes.BAD_GATEWAY
+        assert result.status_code == httpx2.codes.BAD_GATEWAY
 
     def test_timeout_error(self):
         exc = TimeoutError("timed out")
         result = translate_exception_to_http(exc)
         assert result is not None
-        assert result.status_code == httpx.codes.GATEWAY_TIMEOUT
+        assert result.status_code == httpx2.codes.GATEWAY_TIMEOUT
         assert "timed out" in result.detail
 
     def test_asyncio_timeout_error(self):
         exc = TimeoutError("async timed out")
         result = translate_exception_to_http(exc)
         assert result is not None
-        assert result.status_code == httpx.codes.GATEWAY_TIMEOUT
+        assert result.status_code == httpx2.codes.GATEWAY_TIMEOUT
 
     def test_not_implemented_error(self):
         exc = NotImplementedError("not supported")
         result = translate_exception_to_http(exc)
         assert result is not None
-        assert result.status_code == httpx.codes.NOT_IMPLEMENTED
+        assert result.status_code == httpx2.codes.NOT_IMPLEMENTED
         assert "not supported" in result.detail
 
     # ── Subclass matching via MRO ────────────────────────────────────
@@ -107,7 +107,7 @@ class TestTranslateExceptionToHttp:
         exc = CustomValueError("custom")
         result = translate_exception_to_http(exc)
         assert result is not None
-        assert result.status_code == httpx.codes.BAD_REQUEST
+        assert result.status_code == httpx2.codes.BAD_REQUEST
         assert "custom" in result.detail
 
     def test_subclass_two_levels_deep(self):
@@ -122,7 +122,7 @@ class TestTranslateExceptionToHttp:
         exc = VerySpecificValueError("deep")
         result = translate_exception_to_http(exc)
         assert result is not None
-        assert result.status_code == httpx.codes.BAD_REQUEST
+        assert result.status_code == httpx2.codes.BAD_REQUEST
 
     def test_ogx_error_not_in_map(self):
         """OGXError subclasses (single inheritance) are not in
@@ -147,7 +147,7 @@ class TestTranslateExceptionToHttp:
         result = translate_exception_to_http(exc)
         assert result is not None
         # PermissionError comes first in MRO → 403 FORBIDDEN
-        assert result.status_code == httpx.codes.FORBIDDEN
+        assert result.status_code == httpx2.codes.FORBIDDEN
 
     def test_multiple_mapped_parents_reversed_order(self):
         """Reversing the parent order flips which mapped type wins."""
@@ -159,7 +159,7 @@ class TestTranslateExceptionToHttp:
         result = translate_exception_to_http(exc)
         assert result is not None
         # ValueError comes first in MRO → 400 BAD_REQUEST
-        assert result.status_code == httpx.codes.BAD_REQUEST
+        assert result.status_code == httpx2.codes.BAD_REQUEST
 
     # ── Unmapped types before mapped type in the MRO ─────────────────
 
@@ -175,7 +175,7 @@ class TestTranslateExceptionToHttp:
         exc = LookupAndValueError("missing")
         result = translate_exception_to_http(exc)
         assert result is not None
-        assert result.status_code == httpx.codes.BAD_REQUEST
+        assert result.status_code == httpx2.codes.BAD_REQUEST
 
     # ── No match returns None ────────────────────────────────────────
 
@@ -197,7 +197,7 @@ class TestTranslateExceptionToHttp:
         separately by translate_exception via its status_code attr."""
 
         class BareStackError(OGXError):
-            status_code = httpx.codes.IM_A_TEAPOT
+            status_code = httpx2.codes.IM_A_TEAPOT
 
         exc = BareStackError("teapot")
         assert translate_exception_to_http(exc) is None
@@ -282,77 +282,77 @@ class TestTranslateException:
         """ResourceNotFoundError(OGXError) has status_code 404."""
         exc = ResourceNotFoundError("abc", "Widget")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.NOT_FOUND
+        assert result.status_code == httpx2.codes.NOT_FOUND
 
     def test_model_not_found_error_uses_404(self):
         """ModelNotFoundError -> ResourceNotFoundError -> OGXError.
         Three levels deep, should still get 404."""
         exc = ModelNotFoundError("gpt-missing")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.NOT_FOUND
+        assert result.status_code == httpx2.codes.NOT_FOUND
 
     def test_batch_not_found_error_uses_404(self):
         exc = BatchNotFoundError("batch-123")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.NOT_FOUND
+        assert result.status_code == httpx2.codes.NOT_FOUND
 
     def test_conflict_error_uses_409(self):
         """ConflictError(OGXError) has status_code 409 CONFLICT."""
         exc = ConflictError("resource already exists")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.CONFLICT
+        assert result.status_code == httpx2.codes.CONFLICT
 
     def test_token_validation_error_uses_401(self):
         """TokenValidationError(OGXError) has status_code 401 UNAUTHORIZED."""
         exc = TokenValidationError("expired token")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.UNAUTHORIZED
+        assert result.status_code == httpx2.codes.UNAUTHORIZED
 
     def test_model_type_error_uses_400(self):
         """ModelTypeError(OGXError) has status_code 400 BAD_REQUEST."""
         exc = ModelTypeError("llama-3", "embedding", "llm")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.BAD_REQUEST
+        assert result.status_code == httpx2.codes.BAD_REQUEST
 
     def test_unsupported_model_error_uses_400(self):
         exc = UnsupportedModelError("bad-model", ["llama-3", "gpt-4"])
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.BAD_REQUEST
+        assert result.status_code == httpx2.codes.BAD_REQUEST
 
     def test_invalid_parameter_error_uses_400(self):
         exc = InvalidParameterError("max_tool_calls", 0, "Must be >= 1.")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.BAD_REQUEST
+        assert result.status_code == httpx2.codes.BAD_REQUEST
 
     def test_service_not_enabled_error_uses_503(self):
         exc = ServiceNotEnabledError("moderation_endpoint")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.SERVICE_UNAVAILABLE
+        assert result.status_code == httpx2.codes.SERVICE_UNAVAILABLE
 
     def test_internal_server_error_uses_500(self):
         exc = InternalServerError()
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.INTERNAL_SERVER_ERROR
+        assert result.status_code == httpx2.codes.INTERNAL_SERVER_ERROR
 
     def test_response_not_found_error_uses_404(self):
         exc = ResponseNotFoundError("resp_abc123")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.NOT_FOUND
+        assert result.status_code == httpx2.codes.NOT_FOUND
 
     def test_response_input_item_not_found_error_uses_404(self):
         exc = ResponseInputItemNotFoundError("input_abc", "resp_xyz")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.NOT_FOUND
+        assert result.status_code == httpx2.codes.NOT_FOUND
 
     def test_conversation_not_found_error_uses_404(self):
         exc = ConversationNotFoundError("conv_nonexistent")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.NOT_FOUND
+        assert result.status_code == httpx2.codes.NOT_FOUND
 
     def test_conversation_item_not_found_error_uses_404(self):
         exc = ConversationItemNotFoundError("msg_abc123", "conv_xyz789")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.NOT_FOUND
+        assert result.status_code == httpx2.codes.NOT_FOUND
 
     def test_ogx_error_preserves_message(self):
         exc = ModelNotFoundError("llama-3")
@@ -365,27 +365,27 @@ class TestTranslateException:
     def test_plain_value_error_maps_to_400(self):
         exc = ValueError("invalid input")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.BAD_REQUEST
+        assert result.status_code == httpx2.codes.BAD_REQUEST
 
     def test_permission_error_maps_to_403(self):
         exc = PermissionError("denied")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.FORBIDDEN
+        assert result.status_code == httpx2.codes.FORBIDDEN
 
     def test_not_implemented_error_maps_to_501(self):
         exc = NotImplementedError("coming soon")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.NOT_IMPLEMENTED
+        assert result.status_code == httpx2.codes.NOT_IMPLEMENTED
 
     def test_timeout_error_maps_to_504(self):
         exc = TimeoutError("timed out")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.GATEWAY_TIMEOUT
+        assert result.status_code == httpx2.codes.GATEWAY_TIMEOUT
 
     def test_connection_error_maps_to_502(self):
         exc = ConnectionError("refused")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.BAD_GATEWAY
+        assert result.status_code == httpx2.codes.BAD_GATEWAY
 
     # ── Provider SDK exceptions (duck-typed status_code) ─────────────
 
@@ -417,17 +417,17 @@ class TestTranslateException:
     def test_runtime_error_falls_to_500(self):
         exc = RuntimeError("unexpected")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.INTERNAL_SERVER_ERROR
+        assert result.status_code == httpx2.codes.INTERNAL_SERVER_ERROR
 
     def test_bare_exception_falls_to_500(self):
         exc = Exception("unknown")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.INTERNAL_SERVER_ERROR
+        assert result.status_code == httpx2.codes.INTERNAL_SERVER_ERROR
 
     def test_key_error_falls_to_500(self):
         exc = KeyError("missing_key")
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.INTERNAL_SERVER_ERROR
+        assert result.status_code == httpx2.codes.INTERNAL_SERVER_ERROR
 
     def test_unknown_exception_detail_is_generic(self):
         """Unknown exceptions should NOT leak internal details."""
@@ -441,7 +441,7 @@ class TestTranslateException:
     def test_request_validation_error(self):
         exc = RequestValidationError(errors=[{"loc": ("body", "name"), "msg": "field required", "type": "missing"}])
         result = translate_exception(exc)
-        assert result.status_code == httpx.codes.BAD_REQUEST
+        assert result.status_code == httpx2.codes.BAD_REQUEST
         assert isinstance(result.detail, dict)
         assert "errors" in result.detail
 
@@ -457,7 +457,7 @@ class TestTranslateException:
             StrictModel(name=123, age="not_a_number")  # type: ignore[arg-type]
         except ValidationError as exc:
             result = translate_exception(exc)
-            assert result.status_code == httpx.codes.BAD_REQUEST
+            assert result.status_code == httpx2.codes.BAD_REQUEST
             assert isinstance(result.detail, dict)
             assert "errors" in result.detail
             assert len(result.detail["errors"]) > 0

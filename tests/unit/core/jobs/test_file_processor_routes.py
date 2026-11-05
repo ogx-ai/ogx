@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import json
 from io import BytesIO
 
 import pytest
@@ -21,7 +22,7 @@ class _LegacyFileProcessor:
     async def process_file(self, request, file=None):
         return ProcessFileResponse(
             chunks=[Chunk(content="ok", chunk_id="chunk-1", chunk_metadata={})],
-            metadata={"provider": "legacy"},
+            metadata={"provider": "legacy", "options": request.options},
         )
 
 
@@ -52,6 +53,34 @@ def test_legacy_provider_job_route_rejects_before_reading_upload() -> None:
     )
 
     assert response.status_code == 501
+
+
+def test_file_processor_route_parses_options_json() -> None:
+    app = FastAPI()
+    app.include_router(create_router(_LegacyFileProcessor()))
+
+    response = TestClient(app).post(
+        "/v1alpha/file-processors/process",
+        files={"file": ("input.txt", b"payload")},
+        data={"options": json.dumps({"use_markdown_tables": True})},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["metadata"]["options"] == {"use_markdown_tables": True}
+
+
+@pytest.mark.parametrize("options", ["not JSON", "[]", '"text"'])
+def test_file_processor_route_rejects_invalid_options_json(options: str) -> None:
+    app = FastAPI()
+    app.include_router(create_router(_LegacyFileProcessor()))
+
+    response = TestClient(app).post(
+        "/v1alpha/file-processors/process",
+        files={"file": ("input.txt", b"payload")},
+        data={"options": options},
+    )
+
+    assert response.status_code == 422
 
 
 @pytest.mark.parametrize(

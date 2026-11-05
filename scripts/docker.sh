@@ -342,7 +342,6 @@ start_container() {
     # Build environment variables for docker run
     DOCKER_ENV_VARS=""
     DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OGX_TEST_INFERENCE_MODE=$INFERENCE_MODE"
-    DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OGX_TEST_STACK_CONFIG_TYPE=server"
 
     # Set default OLLAMA_URL if not provided
     # On macOS/Windows, use host.docker.internal to reach host from container

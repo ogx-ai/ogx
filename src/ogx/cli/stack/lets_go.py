@@ -101,10 +101,18 @@ class _FactoryDispatcher:
         return getattr(module, method_name, None)
 
 
+# Unprefixed model IDs the claude CLI requests, so `claude` works against `ogx go` without --model.
+# Keep this in sync with the CLI's default models as new generations ship: an unregistered ID fails
+# to resolve. Older IDs stay for older CLI versions. Newest first within each tier, because
+# `ogx connect claude` picks the first model that matches a tier.
 _CLAUDE_CODE_ALIASES: list[str] = [
     "claude-haiku-4-5",
+    "claude-sonnet-5",
     "claude-sonnet-4-6",
+    "claude-opus-5",
     "claude-opus-4-7",
+    "claude-fable-5",
+    "claude-mythos-5",
 ]
 
 # Inference provider IDs checked in priority order when building Claude Code aliases.
@@ -225,6 +233,16 @@ def add_letsgo_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _remove_api(run_config: StackConfig, api: str) -> None:
+    """Drop an API from an explicit `apis:` list.
+
+    A config without an `apis:` list serves whatever the providers supply, so dropping
+    the provider is enough.
+    """
+    if run_config.apis is not None:
+        run_config.apis = [a for a in run_config.apis if a != api]
+
+
 def _add_file_search_and_responses(run_config: StackConfig) -> None:
     """Add file-search and responses providers to the stack config.
 
@@ -237,8 +255,9 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
         run_config.providers["tool_runtime"].append(
             Provider(provider_id="file-search", provider_type="inline::file-search")
         )
-    # Add tool_runtime to APIs if not already present
-    if "tool_runtime" not in run_config.apis:
+    # Add tool_runtime to APIs if not already present. A config without an `apis:` list
+    # serves every provider-backed API, so there is nothing to add there.
+    if run_config.apis is not None and "tool_runtime" not in run_config.apis:
         run_config.apis.append("tool_runtime")
 
     # Add responses API with builtin provider
@@ -260,15 +279,17 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
             )
         )
     # Add responses to APIs if not already present
-    if "responses" not in run_config.apis:
+    if run_config.apis is not None and "responses" not in run_config.apis:
         run_config.apis.append("responses")
 
-    # Add web search providers in priority order: brave -> tavily -> bing
+    # Add web search providers in priority order: brave -> tavily -> bing -> nimble -> serply -> exa
     _web_search_order = [
         ("remote::brave-search", "brave-search"),
         ("remote::tavily-search", "tavily-search"),
         ("remote::bing-search", "bing-search"),
         ("remote::nimble-search", "nimble-search"),
+        ("remote::serply-search", "serply-search"),
+        ("remote::exa-search", "exa-search"),
     ]
     tool_runtime_registry = get_provider_registry().get(Api.tool_runtime, {})
     existing_web_search: set[str] = {
@@ -321,14 +342,17 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
         added = True
 
     if not added:
+        run_config.providers["tool_runtime"].append(
+            Provider(provider_id="placeholder", provider_type="inline::placeholder")
+        )
         if all_env_vars:
             vars_str = ", ".join(dict.fromkeys(all_env_vars))
             cprint(
-                f"  ✗ web search disabled (no API key set — set {vars_str})",
+                f"  ✓ web search (built-in placeholder — returns a 'not available' notice; set {vars_str} for real search)",
                 color="yellow",
             )
         else:
-            cprint("  ✗ web search disabled", color="yellow")
+            cprint("  ✓ web search (built-in placeholder)", color="yellow")
 
     cprint("  ✓ inline::file-search (built-in)", color="green")
     cprint("  ✓ inline::builtin responses (built-in)", color="green")
@@ -430,7 +454,7 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
                     color="yellow",
                 )
                 run_config.providers.pop("vector_io", None)
-                run_config.apis = [a for a in run_config.apis if a != "vector_io"]
+                _remove_api(run_config, "vector_io")
             else:
                 existing = run_config.vector_stores or VectorStoresConfig()
                 run_config.vector_stores = existing.model_copy(update={"default_embedding_model": detected})
@@ -462,7 +486,7 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
                 color="yellow",
             )
             run_config.providers.pop("vector_io", None)
-            run_config.apis = [a for a in run_config.apis if a != "vector_io"]
+            _remove_api(run_config, "vector_io")
     else:
         cprint(
             "  ✗ No vector store provider detected — file-search and responses disabled.",
@@ -570,7 +594,9 @@ async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[Qualifi
         # provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env
         ("remote::ollama", "OLLAMA_URL", "http://localhost:11434/v1", None, None),
         ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", None, "VLLM_API_TOKEN"),
+        ("remote::sglang", "SGLANG_URL", "http://localhost:30000/v1", None, "SGLANG_API_TOKEN"),
         ("remote::llama-cpp-server", "LLAMA_CPP_SERVER_URL", "http://localhost:8080/v1", None, None),
+        ("remote::text-embeddings-inference", "TEI_URL", "http://localhost:8080/v1", None, None),
         ("remote::openai", "OPENAI_BASE_URL", "https://api.openai.com/v1", "OPENAI_API_KEY", None),
         (
             "remote::llama-openai-compat",
@@ -583,6 +609,7 @@ async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[Qualifi
         ("remote::gemini", None, "https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY", None),
         ("remote::azure", "AZURE_API_BASE", "", "AZURE_API_KEY", None),
         ("remote::meta", None, "https://api.meta.ai/v1", "META_API_KEY", None),
+        ("remote::typesafe", "TYPESAFE_BASE_URL", "https://api.typesafe.ai", "TYPESAFE_API_KEY", None),
     ]
 
     passed: list[str] = []

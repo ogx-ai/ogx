@@ -126,6 +126,20 @@ def _ensure_tenancy_defaults(config_dict: dict[str, Any]) -> None:
         server["tenancy"] = {"mode": "disabled"}
 
 
+def _warn_bare_apis_key(config_dict: dict[str, Any]) -> None:
+    """Warn when the `apis` key is present but has no value.
+
+    YAML parses a bare `apis:` key to None, which is treated the same as an
+    absent key: all provider-backed APIs are served. That is the maximally
+    permissive outcome for what is usually a typo, so call it out at startup.
+    """
+    if "apis" in config_dict and config_dict["apis"] is None:
+        logger.warning(
+            "The 'apis' key is present but has no value; it is treated the same as an absent key, "
+            "so all provider-backed APIs are served. Use 'apis: []' to serve no provider-backed APIs."
+        )
+
+
 def parse_and_maybe_upgrade_config(config_dict: dict[str, Any]) -> StackConfig:
     """Parse a configuration dictionary into a StackConfig, upgrading from legacy format if needed.
 
@@ -145,4 +159,5 @@ def parse_and_maybe_upgrade_config(config_dict: dict[str, Any]) -> StackConfig:
     config_dict["version"] = OGX_RUN_CONFIG_VERSION
 
     processed_config_dict = replace_env_vars(config_dict)
+    _warn_bare_apis_key(processed_config_dict)
     return StackConfig(**cast_distro_name_to_string(processed_config_dict))

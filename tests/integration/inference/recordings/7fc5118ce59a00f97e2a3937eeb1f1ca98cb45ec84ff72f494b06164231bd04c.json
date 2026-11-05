@@ -1,0 +1,137 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestEdgeCases::test_multiple_tools_with_different_schemas[txt=llama-cpp-server/qwen3-0.6b]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Use one of the available tools"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "simple",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "complex",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "$ref": "#/$defs/Complex"
+                }
+              },
+              "$defs": {
+                "Complex": {
+                  "type": "object",
+                  "properties": {
+                    "nested": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "with_output",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "input": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.17.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-7fc5118ce59a",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "The tools provided don't include a function that requires input parameters in the current state. Please provide the necessary details or clarify your request.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user wants me to use one of the available tools. Let me check the functions provided.\n\nFirst, there's the simple function with a parameter x. Then there's the complex function that requires data, which is an array of numbers. And the with_output function takes an input string.\n\nThe user hasn't provided specific parameters yet. They just mentioned using a tool. But since the tools are empty except for the complex function which needs data, perhaps the user expects me to call the complex function. However, without any data given, maybe I should ask for more information. But wait, the user might have intended to use the complex function. Let me check the parameters again. The complex function's data is an array of numbers. Since the user hasn't provided any data, maybe the answer is to use the complex function but with an empty array. Alternatively, maybe the simple function is intended here. But without more context, I should respond that I can't proceed without additional information.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11147-fee39dd92",
+        "usage": {
+          "completion_tokens": 232,
+          "prompt_tokens": 262,
+          "total_tokens": 494,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 51,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 51,
+          "prompt_n": 211,
+          "prompt_ms": 1510.041,
+          "prompt_per_token_ms": 7.156592417061611,
+          "prompt_per_second": 139.7313053089287,
+          "predicted_n": 232,
+          "predicted_ms": 7047.763,
+          "predicted_per_token_ms": 30.509796536796536,
+          "predicted_per_second": 32.77635754777793
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

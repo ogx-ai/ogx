@@ -23,7 +23,7 @@ setup_logging()
 import pytest
 import requests
 import yaml
-from ogx_open_client import OgxClient
+from ogx_client import OgxClient
 from openai import OpenAI
 
 from ogx.core.datatypes import QualifiedModel, RerankerModel, VectorStoresConfig
@@ -33,6 +33,15 @@ from ogx.core.utils.config_resolution import resolve_config_or_distro
 from ogx.env import get_env_or_fail
 
 DEFAULT_PORT = 8321
+
+
+def _client_timeout() -> float:
+    # scripts/integration-tests.sh exports OGX_CLIENT_TIMEOUT=300 for CI; the
+    # 120s default covers direct pytest runs, where CPU inference (e.g. vLLM)
+    # can go idle for well over 30s while the server buffers a
+    # constrained-decoding response. "or" (not just a .get default) keeps an
+    # exported-but-empty value from crashing float().
+    return float(os.environ.get("OGX_CLIENT_TIMEOUT") or "120")
 
 
 def is_port_available(port: int, host: str = "localhost") -> bool:
@@ -134,6 +143,7 @@ def get_provider_data():
     # like sample run config on which we can do replace_env_vars()
     keymap = {
         "TAVILY_SEARCH_API_KEY": "tavily_search_api_key",
+        "EXA_API_KEY": "exa_search_api_key",
         "BRAVE_SEARCH_API_KEY": "brave_search_api_key",
         "FIREWORKS_API_KEY": "fireworks_api_key",
         "GEMINI_API_KEY": "gemini_api_key",
@@ -141,7 +151,6 @@ def get_provider_data():
         "TOGETHER_API_KEY": "together_api_key",
         "ANTHROPIC_API_KEY": "anthropic_api_key",
         "GROQ_API_KEY": "groq_api_key",
-        "WOLFRAM_ALPHA_API_KEY": "wolfram_alpha_api_key",
     }
     provider_data = {}
     for key, value in keymap.items():
@@ -237,6 +246,18 @@ def ogx_client(request):
     return client
 
 
+@pytest.fixture(scope="session")
+def mock_sentinel():
+    """The fixed reply of the mock model backend, or None when the selected setup uses a real model."""
+    from tests.integration.suites import SETUP_DEFINITIONS
+
+    setup_obj = SETUP_DEFINITIONS.get(os.environ.get("OGX_TEST_SETUP", ""))
+    if setup_obj is None:
+        return None
+    sentinel = setup_obj.defaults.get("sentinel")
+    return str(sentinel) if sentinel else None
+
+
 def parse_vector_io_provider(config_string: str) -> str:
     # Split the string into individual key-value pairs
     pairs = config_string.split(",")
@@ -312,7 +333,7 @@ def instantiate_ogx_client(session):
         return OgxClient(
             base_url=base_url,
             default_headers=get_provider_data_headers(),
-            timeout=int(os.environ.get("OGX_CLIENT_TIMEOUT", "30")),
+            timeout=_client_timeout(),
         )
 
     # check if this looks like a URL using proper URL parsing
@@ -390,8 +411,16 @@ def require_server(ogx_client):
 
 @pytest.fixture(scope="session")
 def openai_client(ogx_client, require_server):
+    from ogx.testing.api_recorder import build_test_id_http_client
+
     base_url = f"{ogx_client.base_url}/v1"
-    client = OpenAI(base_url=base_url, api_key="fake", max_retries=0, timeout=30.0)
+    client = OpenAI(
+        base_url=base_url,
+        api_key="fake",
+        max_retries=0,
+        timeout=_client_timeout(),
+        http_client=build_test_id_http_client(),
+    )
     yield client
     # Cleanup: close HTTP connections
     try:

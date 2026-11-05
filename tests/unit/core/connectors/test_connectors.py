@@ -67,7 +67,6 @@ async def connector_service(tmp_path_factory):
 
     mock_run_config = StackConfig(
         distro_name="test-distribution",
-        apis=[],
         providers={},
         storage=storage,
     )

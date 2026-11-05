@@ -1,0 +1,42 @@
+{
+  "test_id": "tests/integration/messages/test_count_tokens.py::test_count_tokens_monotonic_in_prompt_length[txt=ollama/qwen3.5:0.8b]",
+  "request": {
+    "test_id": "tests/integration/messages/test_count_tokens.py::test_count_tokens_monotonic_in_prompt_length[txt=ollama/qwen3.5:0.8b]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "qwen3.5:0.8b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello."
+        }
+      ],
+      "max_tokens": 1,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_bb2c2fff353d014d66bf5e26",
+      "type": "message",
+      "role": "assistant",
+      "model": "qwen3.5:0.8b",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Okay"
+        }
+      ],
+      "stop_reason": "max_tokens",
+      "usage": {
+        "input_tokens": 12,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 1
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

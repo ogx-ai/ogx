@@ -2,7 +2,7 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ResponsesTable } from "./responses-table";
-import { OpenAIResponse } from "@/lib/types";
+import { OpenAIResponse, ResponseOutput } from "@/lib/types";
 
 // Mock next/navigation
 const mockPush = jest.fn();
@@ -36,6 +36,7 @@ jest.mock("@/hooks/use-auth-client", () => ({
 
 // Mock the usePagination hook
 const mockLoadMore = jest.fn();
+const mockRefetch = jest.fn();
 jest.mock("@/hooks/use-pagination", () => ({
   usePagination: jest.fn(() => ({
     data: [],
@@ -43,6 +44,7 @@ jest.mock("@/hooks/use-pagination", () => ({
     hasMore: false,
     error: null,
     loadMore: mockLoadMore,
+    refetch: mockRefetch,
   })),
 }));
 
@@ -78,6 +80,7 @@ describe("ResponsesTable", () => {
       hasMore: false,
       error: null,
       loadMore: mockLoadMore,
+      refetch: mockRefetch,
     });
   });
 
@@ -116,6 +119,7 @@ describe("ResponsesTable", () => {
       hasMore: false,
       error: null,
       loadMore: mockLoadMore,
+      refetch: mockRefetch,
     });
 
     render(<ResponsesTable {...defaultProps} />);
@@ -137,6 +141,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       const { container } = render(<ResponsesTable {...defaultProps} />);
@@ -172,6 +177,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: { name: "Error", message: errorMessage } as Error,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ResponsesTable {...defaultProps} />);
@@ -190,6 +196,7 @@ describe("ResponsesTable", () => {
           hasMore: false,
           error: errorObject as Error,
           loadMore: mockLoadMore,
+          refetch: mockRefetch,
         });
 
         render(<ResponsesTable {...defaultProps} />);
@@ -269,6 +276,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ResponsesTable {...defaultProps} />);
@@ -325,6 +333,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ResponsesTable {...defaultProps} />);
@@ -357,6 +366,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ResponsesTable {...defaultProps} />);
@@ -385,6 +395,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       const { container } = render(<ResponsesTable {...defaultProps} />);
@@ -420,6 +431,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ResponsesTable {...defaultProps} />);
@@ -452,6 +464,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ResponsesTable {...defaultProps} />);
@@ -483,6 +496,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ResponsesTable {...defaultProps} />);
@@ -515,6 +529,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ResponsesTable {...defaultProps} />);
@@ -544,6 +559,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ResponsesTable {...defaultProps} />);
@@ -565,7 +581,7 @@ describe("ResponsesTable", () => {
             id: "unknown_123",
             status: "completed",
             custom_field: "custom_value",
-          } as unknown,
+          } as unknown as ResponseOutput,
         ],
         input: [{ type: "message", content: "input" }],
       };
@@ -576,6 +592,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ResponsesTable {...defaultProps} />);
@@ -594,7 +611,7 @@ describe("ResponsesTable", () => {
           {
             type: "unknown_type",
             data: "some data",
-          } as unknown,
+          } as unknown as ResponseOutput,
         ],
         input: [{ type: "message", content: "input" }],
       };
@@ -605,6 +622,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ResponsesTable {...defaultProps} />);
@@ -659,6 +677,7 @@ describe("ResponsesTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ResponsesTable {...defaultProps} />);

@@ -18,7 +18,7 @@ The starter distribution consists of the following provider configurations:
 | files | `inline::localfs`                                                                                                                                                                                                                                                                                                                              |
 | inference | `remote::openai`, `remote::fireworks`, `remote::together`, `remote::ollama`, `remote::anthropic`, `remote::gemini`, `remote::groq`, `remote::sambanova`, `remote::vllm`, `remote::cerebras`, `remote::llama-openai-compat`, `remote::nvidia`, `inline::sentence-transformers` |
 | scoring | `inline::basic`, `inline::llm-as-judge`, `inline::braintrust`                                                                                                                                                                                                                                                                                  |
-| tool_runtime | `remote::brave-search`, `remote::tavily-search`, `remote::nimble-search`, `inline::file-search`, `remote::model-context-protocol`                                                                                                                                                                                                              |
+| tool_runtime | `remote::exa-search`, `remote::brave-search`, `remote::tavily-search`, `remote::nimble-search`, `remote::serply-search`, `inline::file-search`, `remote::model-context-protocol`                                                                                                                                                                                     |
 | vector_io | `inline::faiss`, `inline::sqlite-vec`, `inline::milvus`, `remote::chromadb`, `remote::pgvector`, `remote::qdrant`, `remote::weaviate`, `remote::elasticsearch`, `remote::infinispan`                                                                                                                                                                 |
 
 ## Inference Providers
@@ -125,7 +125,9 @@ The following environment variables can be configured:
 
 - `BRAVE_SEARCH_API_KEY`: Brave Search API key
 - `TAVILY_SEARCH_API_KEY`: Tavily Search API key
+- `EXA_API_KEY`: Exa Search API key
 - `NIMBLE_API_KEY`: Nimble Search API key
+- `SERPLY_API_KEY`: Serply Search API key
 
 ## Enabling Providers
 
@@ -176,9 +178,16 @@ By default, the starter distribution uses SQLite. For production, use PostgreSQL
 uvx --from 'ogx[starter]' ogx run starter::run-with-postgres-store.yaml
 ```
 
+To configure both stores with a PostgreSQL URI, use the URI variant:
+
+```bash
+POSTGRES_CONNECTION_STRING='postgresql://ogx:ogx@localhost:5432/ogx' \
+  uvx --from 'ogx[starter]' ogx run starter::run-with-postgres-uri-store.yaml
+```
+
 A pre-built container image with PostgreSQL storage is also available as [`ogxai/distribution-postgres-demo`](https://hub.docker.com/r/ogxai/distribution-postgres-demo).
 
-Required environment variables for PostgreSQL:
+The existing PostgreSQL configuration and postgres-demo image use these environment variables:
 
 | Variable | Default |
 |----------|---------|
