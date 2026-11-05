@@ -16,6 +16,7 @@ from ogx.core.testing_context import get_test_context
 
 # Import fixtures from common module to make them available in this test directory
 from tests.integration.fixtures.common import (  # noqa: F401
+    mock_sentinel,
     openai_client,
     require_server,
 )
@@ -32,18 +33,6 @@ def messages_base_url(ogx_client):
     if isinstance(ogx_client, OGXAsLibraryClient):
         pytest.skip("Messages API tests are not supported in library client mode")
     return ogx_client.base_url
-
-
-@pytest.fixture(scope="session")
-def mock_sentinel():
-    """The fixed reply of the mock model backend, or None when the selected setup uses a real model."""
-    from tests.integration.suites import SETUP_DEFINITIONS
-
-    setup_obj = SETUP_DEFINITIONS.get(os.environ.get("OGX_TEST_SETUP", ""))
-    if setup_obj is None:
-        return None
-    sentinel = setup_obj.defaults.get("sentinel")
-    return str(sentinel) if sentinel else None
 
 
 # Single timeout for every messages request in this suite. Mirrors
@@ -71,6 +60,9 @@ def messages_client(messages_base_url):
 #   - vllm (Qwen3-0.6B): thinks by default in a typical deployment; keep the
 #     deployment standard and just raise max_tokens so text follows the
 #     thinking blocks.
+#   - ollama (qwen3.5:0.8b): hybrid-thinking model that thinks by default,
+#     like vllm's Qwen3-0.6B; keep the deployment standard and just raise
+#     max_tokens so text follows the thinking blocks.
 #   - gpt (gpt-5-nano): OpenAI reasoning models charge reasoning tokens
 #     against max_tokens (translated to max_completion_tokens), so a small
 #     explicit budget is exhausted before any text is emitted; raise
@@ -78,7 +70,7 @@ def messages_client(messages_base_url):
 # Other providers default to non-thinking models.
 _THINKING_DISABLED_SETUPS = frozenset({"fireworks"})
 _THINKING_BUDGET_SETUPS = frozenset({"meta"})
-_THINKING_FLOOR_SETUPS = frozenset({"meta", "vllm", "gpt"})
+_THINKING_FLOOR_SETUPS = frozenset({"meta", "vllm", "gpt", "ollama", "ollama-postgres"})
 _THINKING_BUDGET_TOKENS = 1024
 _THINKING_MAX_TOKENS = 2048
 
@@ -190,6 +182,16 @@ def _build_headers() -> dict[str, str]:
         provider_data = {"__test_id": test_id}
         headers["X-OGX-Provider-Data"] = json.dumps(provider_data)
     return headers
+
+
+def _all_block_text(content: list[dict]) -> str:
+    """Readable output of a message: text blocks plus thinking blocks.
+
+    Thinking content is accepted as evidence the model processed the turn:
+    a thinking model truncated at max_tokens still proves the request (system
+    prompt, conversation history) reached it, even without any text block.
+    """
+    return " ".join(b.get("text") or b.get("thinking") or "" for b in content if b["type"] in ("text", "thinking"))
 
 
 def make_messages_request(

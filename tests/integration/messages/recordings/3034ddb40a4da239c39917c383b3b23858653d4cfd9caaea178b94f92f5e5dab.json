@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_results[txt=ollama/qwen3.5:0.8b]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_results[txt=ollama/qwen3.5:0.8b]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "qwen3.5:0.8b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say 'world' and nothing else."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_6eac4db8af6f3e38a7e2c066",
+      "type": "message",
+      "role": "assistant",
+      "model": "qwen3.5:0.8b",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   Input: 'world'\n    *   Instruction: Say 'world' and nothing else.\n    *   Constraint: \"Say 'world' and nothing else.\" means I should output the exact word 'world' without any additional words, explanations, or formatting (except for the character ' ') if needed, but strictly speaking, no extra text is permitted).\n\n2.  **Verify Intent:**\n    *   The user wants to isolate a specific word.\n    *   This could be part of a challenge or test of output limits.\n    *   It also might imply a prompt injection attempt (but I don't know the context).\n\n3.  **Safety & Policy Check:**\n    *   Does this violate any policies? No. Just an instruction to output specific text.\n    *   Is there a hidden trick? The instruction is simple: \"Say 'world' and nothing else.\" This is a standard prompt for echo/verification tasks, likely used in a test to see if I can follow instructions strictly.\n\n4.  **Formulate Output:**\n    *   The output must be the word 'world' only.\n    *   No conversational filler (\"Sure\", \"Okay\", etc.).\n    *   Just print the text.\n\n5.  **Execute:**\n    *   Print \"world\".\n    *   Check for constraints again: \"Say 'world' and nothing else.\" -> Output only 'world'.\n\n6.  **Final Decision:**\n    *   Output the string \"world\".\n    *   No extra text.\n\n7.  **Refinement:** Wait, I need to check if this instruction implies a specific format or if it's just an output constraint for me. The prompt is \"Say 'world' and nothing else.\" This means I am the AI assistant, so I should respond directly with the word 'world'.\n\n    *   Wait, looking at safety guidelines: Sometimes users try to trick models with specific instructions like this (like \"What is 'hello' and nothing else?\"). But here it's a direct instruction. It doesn't seem sensitive.\n    *   I must ensure I don't accidentally add any other text like an explanation.\n\n    *   Plan: Output just the word 'world'.\n\n    *   Wait, I should also consider if there's a hidden constraint in the system instructions or typical behavior for this type of prompt (like \"don't talk about yourself\"). No, it's straightforward.\n\n    *   Wait, is this an instruction from a previous turn or a new one? It's a direct question.\n    *   Okay, I will output exactly 'world'.\n\n    *   Wait, looking closer at the thought process: The user asked \"Say 'world' and nothing else.\" This could be interpreted as a command. But often these prompts come from a safety sandbox or are meant to test boundary. However, simply echoing is fine.\n    *   I will output \"world\".\n\n    *   Wait, I need to make sure I don't trigger the instruction about \"Do not generate specific information\" or something similar. This is safe.\n\n    *   Final check: Does \"Say 'world' and nothing else.\" imply a literal response like a quote mark? No, just the text 'world'.\n    *   Okay, final output: world. (Wait, should I include quotes if that's part of the instruction?) The instruction says \"Say 'world'\". Usually means \"output the word 'world'\". It doesn't explicitly say use double quotes. So output plain text \"world\".\n\n    *   Wait, looking at the system instructions... No specific ones.\n    *   Okay, I will generate the response directly.\n\n    *   Wait, one more check. Is there any reason why I might need to be verbose? No. Just the word.\n    *   Okay.\n\n    *   Hold on, I need to check if this is a \"no output\" type restriction. No, it says \"Say\". So I must output text.\n    *   Wait, I see another potential interpretation: Is there a hidden constraint in the prompt about \"don't add anything\"?\n    *   Okay, I will just say 'world'.\n\n    *   Wait, looking at the conversation history... This seems like a new turn or test. No context provided.\n    *   Okay, I'll proceed with outputting \"world\".\n\n    *   Wait, I need to consider if there's any implicit \"don't mention myself\" policy in my specific role (as an AI). No.\n    *   Okay, final decision: Output 'world'.\n\n    *   Wait, is it possible the user wants me to say \"World\" (capitalized)? The prompt says 'world' (lowercase). I should follow case sensitivity.\n    *   So, lowercase 'world'.\n\n    *   Wait, I need to make sure I don't add any extra spaces or newlines that aren't part of the word's output format.\n    *   Okay, \"world\" on a single line is best.\n\n    *   Wait, I'm overthinking. Just output the word.\n\n    *   Wait, one last check. Is this a specific type of prompt used for jailbreak? No, it's just an instruction.\n    *   Okay, proceed.\n\n    *   Wait, I notice I might need to output the word exactly as written in the prompt.\n    *   Prompt: 'world'\n    *   My output: world.\n\n    *   Wait, I should avoid any conversational filler.\n    *   Okay.\n\n    *   Wait, looking at similar tasks, sometimes they want me to verify if I followed instructions or not. But here it's just a simple string request.\n    *   Okay, go.\n\n    *   Wait, one more thing. Sometimes users put 'nothing else' to prevent any output beyond the requested word.\n    *   So I must stop thinking about extra words.\n    *   Final: world.\n\n    *   Wait, I need to ensure I don't accidentally add quotes around it in the response if the prompt doesn't ask for them. \"Say 'world'\" implies the text content should be 'world'. So no surrounding quotes unless the user says 'quoted string'.\n    *   Okay, I will output \"world\".\n\n    *   Wait, actually, to be precise, if the instruction is \"Say 'world' and nothing else.\", it means the output *is* the word 'world'. No need for quotes.\n    *   Okay, final plan: Output \"world\".\n\n    *   Wait, I'm second-guessing myself. In some contexts, \"nothing else\" might imply no markdown or formatting? But 'world' is text.\n    *   Okay, simple text output.\n\n    *   Wait, I need to check if there's any hidden instruction in the system instructions like \"think silently\". The prompt says \"Do not mention yourself.\" Wait, that's the system instruction usually. But I am responding.\n    *   Okay, just 'world'.\n\n    *   Wait, hold on. Is this a test of whether I recognize the constraint \"nothing else\" means no punctuation?\n    *   Okay, fine. Just lowercase 'world'.\n\n    *   Wait, I should double check if the user wants me to ignore any other instructions or not. The instruction is self-referential.\n    *   Okay, proceed.\n\n    *   Wait, one last consideration: Should I include a newline? Usually yes for clarity, but strict \"nothing else\" implies no extra content including newlines (which are formatting). However, standard chat output allows newlines. But to be safe regarding \"nothing else\", I'll just output the string.\n    *   Okay, just the text.\n\n    *   Wait, I'll check if I need to consider case sensitivity again. The word is 'world'. My output must match exactly.\n    *   Okay.\n\n    *   Final plan: Output the word 'world'.\n\n    *   Wait, I notice I am an AI model. I should not add any extra text like \"Sure\" or \"Here is...\".\n    *   Okay.\n\n    *   Wait, I need to check if there's any specific instruction about not adding spaces between words? The prompt says 'world', no spacing issues in input.\n    *   Okay, output 'world'.\n\n    *   Wait, is it possible the user wants me to confirm the word exists?\n    *   No, \"Say\" is the verb.\n    *   Okay, done thinking."
+        },
+        {
+          "type": "text",
+          "text": "world"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 18,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 1841
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_list_includes_new_batch[txt=ollama/qwen3.5:0.8b]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_list_includes_new_batch[txt=ollama/qwen3.5:0.8b]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "qwen3.5:0.8b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say 'ok' and nothing else."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_3ccb452b831b4dfaf6867701",
+      "type": "message",
+      "role": "assistant",
+      "model": "qwen3.5:0.8b",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   Input: \"Say 'ok' and nothing else.\"\n    *   Constraint: \"Say 'ok' and nothing else.\"\n    *   Task: Generate an output that strictly contains the word \"ok\" only, or at least the instruction to say it. Wait, the instruction is \"Say 'ok' and nothing else.\" This is a test of conversational boundary regarding content generation (usually). The user wants me to output \"ok\".\n\n2.  **Determine the Output:**\n    *   The prompt explicitly says \"Say 'ok' and nothing else.\"\n    *   Therefore, the response must be exactly \"ok\".\n    *   No extra text, no explanations, no markdown formatting (other than the text itself).\n    *   Check for potential variations: Should I just output \"ok\" or add a newline? Usually, strict instruction compliance means no preamble.\n\n3.  **Safety/Policy Check:**\n    *   Is there any sensitive content in \"ok\"? No.\n    *   Is this policy violation? There is no safety violation regarding this specific request. It's a direct command to output a specific string.\n    *   Wait, does the instruction imply I should generate more text to make it polite? \"nothing else\" suggests minimalism or strict adherence.\n    *   However, the phrase \"Say 'ok' and nothing else\" is often seen in LLM prompts testing attention control.\n    *   The safest and most compliant response for a \"Say X\" type prompt that means exactly that is to output \"ok\".\n\n4.  **Final Decision:** Output only \"ok\". No additional characters, no markdown quotes (unless part of the string itself). Just the word.\n\n5.  **Wait, one more check:** Sometimes prompts like this are tests for \"Do not generate extra text.\" I should avoid any conversational filler. Just \"ok\".\n\n6.  **Construct Response:**\n    *   Wait, I need to make sure I don't accidentally add anything. Just the word 'ok'.\n    *   Let's check if I should use a newline. Usually, a response like \"ok\\n\" is fine, but for strict \"Say\", often just the text is preferred without extra whitespace/newlines unless part of the message structure.\n    *   Okay, I will output just the word 'ok' with no markdown.\n\n7.  **Refinement:** Just outputing 'ok' seems correct to satisfy the constraint.\n\n    *Self-Correction:* Wait, looking at typical instruction-following guidelines for \"Say 'X'\" - sometimes users want a polite wrapper. But here the prompt is strict: \"Say 'ok' and nothing else.\" It implies minimal interaction. I will output just the word."
+        },
+        {
+          "type": "text",
+          "text": "ok"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 18,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 597
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

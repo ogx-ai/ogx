@@ -37,7 +37,7 @@ Options:
     --stack-config STRING    Stack configuration to use (required)
     --suite STRING           Test suite to run (default: 'base')
     --setup STRING           Test setup (models, env) to use (e.g., 'ollama', 'ollama-vision', 'gpt', 'vllm')
-    --text-model STRING      Override text model (e.g. 'ollama/llama3.2:3b', 'openai/gpt-4o')
+    --text-model STRING      Override text model (e.g. 'ollama/qwen3.5:0.8b', 'openai/gpt-4o')
     --vision-model STRING    Override vision model (e.g. 'ollama/qwen3-vl:2b')
     --rerank-model STRING    Override rerank model (e.g. 'vllm/Qwen/Qwen3-Reranker-0.6B')
     --inference-mode STRING  Inference mode: replay, record-if-missing or record (default: replay)
@@ -79,7 +79,7 @@ Examples:
     $0 --stack-config server:ci-tests --file tests/integration/responses/test_responses_access_control.py --setup gpt
 
     # Override model (setup still provides env, e.g. OLLAMA_URL)
-    $0 --stack-config server:ci-tests --suite base --setup ollama --text-model ollama/llama3.2:1b
+    $0 --stack-config server:ci-tests --suite base --setup ollama --text-model ollama/qwen3.5:0.8b
 
     # Test against the in-repo generated ogx-client (CI client-version=latest equivalent)
     $0 --stack-config server:ci-tests --suite base --setup gpt --client-version latest
