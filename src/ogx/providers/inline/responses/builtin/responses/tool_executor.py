@@ -434,8 +434,12 @@ class ToolExecutor:
                 mcp_tool = mcp_tool_to_server[function_name]
                 if not mcp_tool.server_url:
                     raise ValueError(f"Failed to invoke MCP tool {function_name}: server_url is not set")
+                endpoint_pins = None
                 if mcp_tool.server_url not in self.trusted_mcp_endpoints:
-                    validate_mcp_endpoint(mcp_tool.server_url)
+                    # Re-validate with a fresh resolution right before connecting,
+                    # and pin the connection to the validated address so a
+                    # DNS-rebinding swap cannot redirect it.
+                    endpoint_pins = validate_mcp_endpoint(mcp_tool.server_url)
                 attributes = {
                     "server_label": mcp_tool.server_label,
                     "server_url": mcp_tool.server_url,
@@ -452,6 +456,7 @@ class ToolExecutor:
                         headers=mcp_tool.headers,
                         authorization=mcp_tool.authorization,
                         session_manager=self.mcp_session_manager,
+                        endpoint_pins=endpoint_pins,
                     )
             elif function_name == "file_search":
                 response_file_search_tool = (
