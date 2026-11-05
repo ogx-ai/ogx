@@ -38,6 +38,14 @@ def available_providers() -> list[ProviderSpec]:
             toolgroup_id="builtin::file_search",
             description="File search tool runtime for document ingestion, chunking, and semantic search.",
         ),
+        InlineProviderSpec(
+            api=Api.tool_runtime,
+            provider_type="inline::placeholder",
+            module="ogx.providers.inline.tool_runtime.placeholder",
+            config_class="ogx.providers.inline.tool_runtime.placeholder.config.PlaceholderWebSearchToolConfig",
+            toolgroup_id="builtin::websearch",
+            description="Placeholder web search tool runtime. Hosts the web_search tool without a search backend; invocations return a notice that web search is not configured. Registered by ogx go when no web search provider is configured.",
+        ),
         RemoteProviderSpec(
             api=Api.tool_runtime,
             adapter_type="brave-search",

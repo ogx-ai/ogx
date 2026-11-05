@@ -94,13 +94,13 @@ class TestUrlResolution:
     def test_default(self, connect_group: argparse.ArgumentParser, monkeypatch: pytest.MonkeyPatch) -> None:
         self._clean_env(monkeypatch)
         args = connect_group.parse_args(["connect", "claude"])
-        assert args.connect_url == "http://localhost:8321/v1"
+        assert args.connect_url == "https://localhost:8321/v1"
 
     def test_port_from_env(self, connect_group: argparse.ArgumentParser, monkeypatch: pytest.MonkeyPatch) -> None:
         self._clean_env(monkeypatch)
         monkeypatch.setenv("OGX_PORT", "9999")
         args = connect_group.parse_args(["connect", "claude"])
-        assert args.connect_url == "http://localhost:9999/v1"
+        assert args.connect_url == "https://localhost:9999/v1"
 
     def test_base_url_from_env(self, connect_group: argparse.ArgumentParser, monkeypatch: pytest.MonkeyPatch) -> None:
         self._clean_env(monkeypatch)
@@ -117,13 +117,22 @@ class TestUrlResolution:
         args = connect_group.parse_args(["connect", "claude"])
         assert args.connect_url == "https://ogx.example.com/custom/v1"
 
+    def test_empty_base_url_env_exits(
+        self, connect_group: argparse.ArgumentParser, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A set-but-empty OGX_BASE_URL is a user mistake: fail, don't fall back."""
+        self._clean_env(monkeypatch)
+        monkeypatch.setenv("OGX_BASE_URL", "")
+        with pytest.raises(SystemExit):
+            connect_group.parse_args(["connect", "claude"])
+
     def test_resolved_for_every_agent(
         self, connect_group: argparse.ArgumentParser, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         self._clean_env(monkeypatch)
         for agent in ("claude", "codex", "opencode"):
             args = connect_group.parse_args(["connect", agent])
-            assert args.connect_url == "http://localhost:8321/v1"
+            assert args.connect_url == "https://localhost:8321/v1"
 
     def test_not_resolved_without_subcommand(
         self, connect_group: argparse.ArgumentParser, monkeypatch: pytest.MonkeyPatch

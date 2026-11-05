@@ -45,7 +45,7 @@ class TestArguments:
         monkeypatch.delenv("OGX_BASE_URL", raising=False)
         args = parse_group_args(["opencode"])
         assert args.model is None
-        assert args.connect_url == "http://localhost:8321/v1"
+        assert args.connect_url == "https://localhost:8321/v1"
 
     def test_group_url_is_used(self) -> None:
         args = parse_group_args(["--url", "https://group.example.com/v1", "opencode"])
@@ -65,7 +65,7 @@ class TestArguments:
         monkeypatch.delenv("OGX_BASE_URL", raising=False)
         monkeypatch.setenv("OGX_PORT", "9999")
         args = parse_group_args(["opencode"])
-        assert args.connect_url == "http://localhost:9999/v1"
+        assert args.connect_url == "https://localhost:9999/v1"
 
 
 class TestOpenCodeDetection:
@@ -92,6 +92,21 @@ class TestOpenCodeDetection:
             with pytest.raises(SystemExit) as exc_info:
                 connect_opencode._run_connect_opencode_cmd(args)
             assert exc_info.value.code == 0
+            assert mock_run.call_args.args[0] == ["opencode"]
+
+    def test_forwards_opencode_args(self, connect_opencode: ConnectOpenCode) -> None:
+        args = parse_group_args(["opencode", "--model", "gpt-4o", "--", "run", "What is 2+2?"])
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+
+        with (
+            patch("ogx.cli.connect.opencode.shutil.which", return_value="/usr/bin/opencode"),
+            patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client),
+            patch("ogx.cli.connect.opencode.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0)
+            with pytest.raises(SystemExit):
+                connect_opencode._run_connect_opencode_cmd(args)
+            assert mock_run.call_args.args[0] == ["opencode", "run", "What is 2+2?"]
 
 
 class TestServerProbe:
@@ -299,7 +314,7 @@ class TestConnect:
             call_env = mock_run.call_args.kwargs["env"]
             assert "OPENCODE_CONFIG_CONTENT" in call_env
             config = json.loads(call_env["OPENCODE_CONFIG_CONTENT"])
-            assert config["provider"]["ogx"]["options"]["baseURL"] == "http://localhost:8321/v1"
+            assert config["provider"]["ogx"]["options"]["baseURL"] == "https://localhost:8321/v1"
 
     def test_propagates_exit_code(self, connect_opencode: ConnectOpenCode) -> None:
         args = parse_group_args(["opencode", "--model", "gpt-4o"])

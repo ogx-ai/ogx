@@ -16,6 +16,7 @@ from ogx.core.testing_context import get_test_context
 
 # Import fixtures from common module to make them available in this test directory
 from tests.integration.fixtures.common import (  # noqa: F401
+    mock_sentinel,
     openai_client,
     require_server,
 )
@@ -32,18 +33,6 @@ def messages_base_url(ogx_client):
     if isinstance(ogx_client, OGXAsLibraryClient):
         pytest.skip("Messages API tests are not supported in library client mode")
     return ogx_client.base_url
-
-
-@pytest.fixture(scope="session")
-def mock_sentinel():
-    """The fixed reply of the mock model backend, or None when the selected setup uses a real model."""
-    from tests.integration.suites import SETUP_DEFINITIONS
-
-    setup_obj = SETUP_DEFINITIONS.get(os.environ.get("OGX_TEST_SETUP", ""))
-    if setup_obj is None:
-        return None
-    sentinel = setup_obj.defaults.get("sentinel")
-    return str(sentinel) if sentinel else None
 
 
 # Single timeout for every messages request in this suite. Mirrors

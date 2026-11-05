@@ -428,7 +428,17 @@ base_roots = [
     str(p)
     for p in this_dir.glob("*")
     if p.is_dir()
-    and p.name not in ("__pycache__", "fixtures", "test_cases", "recordings", "responses", "messages", "interactions")
+    and p.name
+    not in (
+        "__pycache__",
+        "fixtures",
+        "test_cases",
+        "recordings",
+        "responses",
+        "messages",
+        "interactions",
+        "connect_cli",
+    )
 ]
 
 SUITE_DEFINITIONS: dict[str, Suite] = {
@@ -490,6 +500,16 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         name="messages",
         roots=["tests/integration/messages"],
         default_setup="ollama",
+    ),
+    # Drives the real agent CLIs (Claude Code, Codex, OpenCode) through
+    # `ogx connect <agent>`. The mock setup is the default: the deterministic
+    # sentinel proves each request round-tripped. The CLIs are not installed
+    # in other lanes, so the tests self-skip there; they always run live,
+    # never in replay mode.
+    "connect-cli": Suite(
+        name="connect-cli",
+        roots=["tests/integration/connect_cli"],
+        default_setup="mock",
     ),
     "interactions": Suite(
         name="interactions",
