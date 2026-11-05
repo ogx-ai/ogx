@@ -12,7 +12,7 @@ inputs:
   ollama-version:
     description: 'Ollama server release to run (Docker Hub tag, without the leading v). Tracked weekly by check-provider-versions.yml.'
     required: false
-    default: '0.40.6'
+    default: '0.40.13'
 runs:
   using: "composite"
   steps:
@@ -53,7 +53,7 @@ runs:
           pull_model "deepseek-r1:1.5b"
           pull_model "nomic-embed-text:v1.5"
         else
-          pull_model "llama3.2:3b-instruct-fp16"
+          pull_model "qwen3.5:0.8b"
           pull_model "nomic-embed-text:v1.5"
           pull_model "llama-guard3:1b"
         fi

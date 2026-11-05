@@ -14,7 +14,13 @@ Anthropic-to-OpenAI translation path.
 import json
 import time
 
-from .conftest import _REQUEST_TIMEOUT, _build_headers, _max_tokens_floor, _thinking_params_fragment
+from .conftest import (
+    _REQUEST_TIMEOUT,
+    _all_block_text,
+    _build_headers,
+    _max_tokens_floor,
+    _thinking_params_fragment,
+)
 
 
 def _poll_until_ended(client, batch_id: str, timeout: float = _REQUEST_TIMEOUT) -> dict:
@@ -107,7 +113,9 @@ def test_messages_batch_results(messages_client, text_model_id):
         assert entry["result"]["type"] == "succeeded"
         assert entry["result"]["message"]["type"] == "message"
         assert entry["result"]["message"]["role"] == "assistant"
-        assert len(entry["result"]["message"]["content"]) > 0
+        assert _all_block_text(entry["result"]["message"]["content"]), (
+            f"No output content in: {entry['result']['message']['content']}"
+        )
         custom_ids.add(entry["custom_id"])
 
     assert custom_ids == {"r1", "r2"}

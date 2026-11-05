@@ -342,14 +342,17 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
         added = True
 
     if not added:
+        run_config.providers["tool_runtime"].append(
+            Provider(provider_id="placeholder", provider_type="inline::placeholder")
+        )
         if all_env_vars:
             vars_str = ", ".join(dict.fromkeys(all_env_vars))
             cprint(
-                f"  ✗ web search disabled (no API key set — set {vars_str})",
+                f"  ✓ web search (built-in placeholder — returns a 'not available' notice; set {vars_str} for real search)",
                 color="yellow",
             )
         else:
-            cprint("  ✗ web search disabled", color="yellow")
+            cprint("  ✓ web search (built-in placeholder)", color="yellow")
 
     cprint("  ✓ inline::file-search (built-in)", color="green")
     cprint("  ✓ inline::builtin responses (built-in)", color="green")

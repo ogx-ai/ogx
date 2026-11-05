@@ -72,7 +72,7 @@ class TestArguments:
         monkeypatch.delenv("OGX_BASE_URL", raising=False)
         args = parse_group_args(["codex"])
         assert args.model is None
-        assert args.connect_url == "http://localhost:8321/v1"
+        assert args.connect_url == "https://localhost:8321/v1"
 
     def test_group_url_is_used(self) -> None:
         args = parse_group_args(["--url", "https://group.example.com/v1", "codex"])
@@ -86,9 +86,15 @@ class TestArguments:
         args = parse_group_args(["codex", "--model", "openai/gpt-4o"])
         assert args.model == "openai/gpt-4o"
 
-    def test_exec_prompt(self, connect_codex: ConnectCodex) -> None:
-        args = parse_group_args(["codex", "--exec", "Reply with only Paris"])
-        assert args.exec_prompt == "Reply with only Paris"
+    def test_codex_args_forwarded(self, connect_codex: ConnectCodex) -> None:
+        args = parse_group_args(["codex", "--", "exec", "Reply with only Paris"])
+        assert args.codex_args == ["--", "exec", "Reply with only Paris"]
+
+    def test_deprecated_exec_flag_is_hidden(
+        self, connect_codex: ConnectCodex, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        connect_codex.parser.print_help()
+        assert "--exec" not in capsys.readouterr().out
 
     def test_url_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OGX_BASE_URL", "https://ogx.example.com/custom/v1")
@@ -294,12 +300,12 @@ class TestSessionConfigGeneration:
     def test_builds_interactive_codex_command(self, connect_codex: ConnectCodex) -> None:
         assert connect_codex._build_codex_command() == ["codex", "-p", "ogx"]
 
-    def test_builds_exec_codex_command(self, connect_codex: ConnectCodex) -> None:
-        assert connect_codex._build_codex_command("Reply with only Paris") == [
+    def test_builds_forwarded_codex_command(self, connect_codex: ConnectCodex) -> None:
+        assert connect_codex._build_codex_command(["exec", "Reply with only Paris"]) == [
             "codex",
-            "exec",
             "-p",
             "ogx",
+            "exec",
             "Reply with only Paris",
         ]
 
@@ -464,11 +470,13 @@ class TestConnect:
         catalog = json.loads((tmp_path / "ogx-model-catalog.json").read_text())
         assert config["model"] == "openai/gpt-4o"
         assert config["features"]["multi_agent"] is False
-        assert config["model_providers"]["ogx"]["base_url"] == "http://localhost:8321/v1"
+        assert config["model_providers"]["ogx"]["base_url"] == "https://localhost:8321/v1"
         assert catalog["models"][0]["context_window"] == 200000
 
-    def test_launches_codex_exec_with_generated_session_home(self, connect_codex: ConnectCodex, tmp_path) -> None:
-        args = parse_group_args(["codex", "--model", "openai/gpt-4o", "--exec", "Reply with only Paris"])
+    def test_launches_forwarded_codex_args_with_generated_session_home(
+        self, connect_codex: ConnectCodex, tmp_path
+    ) -> None:
+        args = parse_group_args(["codex", "--model", "openai/gpt-4o", "--", "exec", "Reply with only Paris"])
         mock_client = _make_mock_client([_make_model("openai/gpt-4o")])
 
         with (
@@ -485,11 +493,34 @@ class TestConnect:
                 connect_codex._run_connect_codex_cmd(args)
 
         assert exc_info.value.code == 0
-        assert mock_run.call_args.args[0] == ["codex", "exec", "-p", "ogx", "Reply with only Paris"]
+        assert mock_run.call_args.args[0] == ["codex", "-p", "ogx", "exec", "Reply with only Paris"]
         assert mock_run.call_args.kwargs["env"]["CODEX_HOME"] == str(tmp_path)
 
-    def test_propagates_exec_exit_code(self, connect_codex: ConnectCodex, tmp_path) -> None:
+    def test_deprecated_exec_flag_still_works(
+        self, connect_codex: ConnectCodex, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         args = parse_group_args(["codex", "--model", "openai/gpt-4o", "--exec", "Reply with only Paris"])
+        mock_client = _make_mock_client([_make_model("openai/gpt-4o")])
+
+        with (
+            patch("ogx.cli.connect.codex.shutil.which", return_value="/usr/bin/codex"),
+            patch("ogx.cli.connect.codex.OpenAI", return_value=mock_client),
+            patch(
+                "ogx.cli.connect.codex.tempfile.TemporaryDirectory",
+                return_value=contextlib.nullcontext(str(tmp_path)),
+            ),
+            patch("ogx.cli.connect.codex.subprocess.run") as mock_run,
+            pytest.warns(FutureWarning, match="--exec.*deprecated"),
+        ):
+            mock_run.return_value = MagicMock(returncode=0)
+            with pytest.raises(SystemExit) as exc_info:
+                connect_codex._run_connect_codex_cmd(args)
+
+        assert exc_info.value.code == 0
+        assert mock_run.call_args.args[0] == ["codex", "-p", "ogx", "exec", "Reply with only Paris"]
+
+    def test_propagates_forwarded_exit_code(self, connect_codex: ConnectCodex, tmp_path) -> None:
+        args = parse_group_args(["codex", "--model", "openai/gpt-4o", "--", "exec", "Reply with only Paris"])
         mock_client = _make_mock_client([_make_model("openai/gpt-4o")])
 
         with (

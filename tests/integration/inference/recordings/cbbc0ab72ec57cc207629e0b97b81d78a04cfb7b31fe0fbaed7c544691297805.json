@@ -1,0 +1,86 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_with_tool_choice_none[txt=llama-cpp-server/qwen3-0.6b-inference:chat_completion:tool_calling]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Pretend you are a weather assistant."
+        },
+        {
+          "role": "user",
+          "content": "What's the weather like in San Francisco, CA?"
+        }
+      ],
+      "stream": false,
+      "reasoning_effort": "low"
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-cbbc0ab72ec5",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "I don't have real-time data to provide the current weather in San Francisco, CA. For the most accurate and up-to-date information, I recommend checking a trusted weather service like the National Weather Service (NWS) or a mobile app such as Weather.com, AccuWeather, or the local San Francisco city council website. Let me know if you'd like help with anything else!",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user is asking about the weather in San Francisco, CA. I need to provide accurate information. Let me check the current weather. Since I can't access real-time data, I'll mention that I can't provide live updates and suggest checking a reliable weather service for the latest updates. I should also mention factors like temperature, precipitation, and possible conditions. Let me make sure the response is helpful and clear.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11669-620d2225c",
+        "usage": {
+          "completion_tokens": 168,
+          "prompt_tokens": 33,
+          "total_tokens": 201,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 11,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 11,
+          "prompt_n": 22,
+          "prompt_ms": 162.662,
+          "prompt_per_token_ms": 7.393727272727273,
+          "prompt_per_second": 135.24978175603397,
+          "predicted_n": 168,
+          "predicted_ms": 4308.215,
+          "predicted_per_token_ms": 25.797694610778443,
+          "predicted_per_second": 38.76315364948128
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}
