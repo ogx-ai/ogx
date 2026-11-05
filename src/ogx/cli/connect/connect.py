@@ -28,12 +28,11 @@ def _exit_with_error(message: str) -> NoReturn:
 def default_base_url() -> str:
     """The fallback OGX server URL, resolved in one place for all subcommands.
 
-    Precedence: OGX_BASE_URL (a full URL) > http://localhost:OGX_PORT/v1.
+    Precedence: OGX_BASE_URL (a full URL) > https://localhost:OGX_PORT/v1.
+    The default is HTTPS because `ogx go` serves TLS (with a generated
+    self-signed certificate) unless it is started with --insecure.
     """
-    env_url = os.getenv("OGX_BASE_URL")
-    if env_url:
-        return env_url
-    return f"http://localhost:{os.getenv('OGX_PORT', 8321)}/v1"
+    return os.getenv("OGX_BASE_URL", f"https://localhost:{os.getenv('OGX_PORT', 8321)}/v1")
 
 
 def validate_base_url(raw_base_url: str) -> str:
@@ -86,7 +85,7 @@ class ConnectParser(Subcommand):
             help=(
                 "Base URL of the OGX server, including /v1. Applies to all connect subcommands. "
                 "If omitted, falls back to the OGX_BASE_URL env var, then to "
-                "http://localhost:OGX_PORT/v1."
+                "https://localhost:OGX_PORT/v1 (ogx go serves TLS by default)."
             ),
         )
         self.parser.add_argument(

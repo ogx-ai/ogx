@@ -49,7 +49,7 @@ class TestArguments:
         assert args.opus_model is None
         assert args.print_env is False
         assert args.claude_args == []
-        assert args.connect_url == "http://localhost:8321/v1"
+        assert args.connect_url == "https://localhost:8321/v1"
 
     def test_group_url_is_used(self) -> None:
         args = parse_group_args(["--url", "https://group.example.com/v1", "claude"])
@@ -83,7 +83,7 @@ class TestArguments:
         monkeypatch.delenv("OGX_BASE_URL", raising=False)
         monkeypatch.setenv("OGX_PORT", "9999")
         args = parse_group_args(["claude"])
-        assert args.connect_url == "http://localhost:9999/v1"
+        assert args.connect_url == "https://localhost:9999/v1"
 
     def test_claude_args_after_separator(self, connect_claude: ConnectClaude) -> None:
         args = parse_group_args(["claude", "--", "-p", "hello world"])
@@ -418,7 +418,7 @@ class TestPrintEnv:
             connect_claude._run_connect_claude_cmd(args)
 
         output = capsys.readouterr().out
-        assert "export ANTHROPIC_BASE_URL=http://localhost:8321" in output
+        assert "export ANTHROPIC_BASE_URL=https://localhost:8321" in output
         assert "export ANTHROPIC_AUTH_TOKEN=ogx" in output
         assert "export ANTHROPIC_DEFAULT_HAIKU_MODEL=gpt-4o" in output
         assert "export ANTHROPIC_DEFAULT_SONNET_MODEL=gpt-4o" in output
@@ -491,7 +491,7 @@ class TestConnect:
 
             mock_run.assert_called_once()
             call_env = mock_run.call_args.kwargs["env"]
-            assert call_env["ANTHROPIC_BASE_URL"] == "http://localhost:8321"
+            assert call_env["ANTHROPIC_BASE_URL"] == "https://localhost:8321"
             assert call_env["ANTHROPIC_AUTH_TOKEN"] == "ogx"
             assert call_env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "gpt-4o"
 

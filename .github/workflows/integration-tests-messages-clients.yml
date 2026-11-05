@@ -1,6 +1,6 @@
-name: Messages API - Claude Code Client Smoke Tests
+name: Messages API - Claude Agent SDK Smoke Test
 
-run-name: Drive the latest Claude Code CLI and Agent SDK against /v1/messages (mock provider backend)
+run-name: Drive the latest Claude Agent SDK against /v1/messages (mock provider backend)
 
 # Deliberately not a required status check, and should stay out of branch protection: it tracks
 # upstream client releases we don't control, not our own code, so it must never gate a merge. See
@@ -47,7 +47,7 @@ permissions:
 
 jobs:
   claude-code-client-smoke:
-    name: Claude Code CLI + Agent SDK smoke (mock provider backend)
+    name: Claude Agent SDK smoke (mock provider backend)
     runs-on: ubuntu-latest
     # The mock backend answers instantly; the time is dominated by environment
     # setup and the client sessions' own timeouts.
@@ -73,10 +73,11 @@ jobs:
           inference-mode: 'live'
           enable-hf-cache: 'false'
 
-      # Both clients need the Claude Code CLI at runtime: the CLI test invokes it directly, and the SDK
-      # test points the SDK at it (the SDK would otherwise prefer the CLI bundled in its own package).
-      # No channel resolution: the installer's own `latest` already gives the newest release, and an
-      # exact override (for bisecting a failure) is passed straight through.
+      # The Agent SDK test points the SDK at the Claude Code CLI (the SDK would
+      # otherwise prefer the CLI bundled in its own package). No channel
+      # resolution: the installer's own `latest` already gives the newest
+      # release, and an exact override (for bisecting a failure) is passed
+      # straight through.
       - name: Install Claude Code CLI
         env:
           CLI_VERSION: ${{ inputs.claude-code-version || 'latest' }}
@@ -118,7 +119,7 @@ jobs:
             echo ""
             echo "| Client | Version |"
             echo "| --- | --- |"
-            echo "| Claude Code CLI (used by both smoke tests) | ${cli_version} |"
+            echo "| Claude Code CLI (used by the Agent SDK smoke test) | ${cli_version} |"
             echo "| Claude Agent SDK | ${sdk_version} |"
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
@@ -131,8 +132,8 @@ jobs:
           setup: 'mock'
           suite: 'messages'
           inference-mode: 'live'
-          # Selects both test_claude_code_cli_smoke and test_claude_agent_sdk_smoke.
-          # Must stay a single shell word: run-and-record-tests passes --pattern
-          # unquoted, so a -k expression with spaces would be split into separate
-          # arguments.
+          # Selects test_claude_agent_sdk_smoke (the CLI smoke moved to
+          # integration-tests-connect-cli.yml). Must stay a single shell word:
+          # run-and-record-tests passes --pattern unquoted, so a -k expression
+          # with spaces would be split into separate arguments.
           pattern: 'test_claude'
