@@ -14,7 +14,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, Path, Query
 
-from ogx_api.router_utils import create_path_dependency, standard_responses
+from ogx_api.router_utils import ExceptionTranslatingRoute, create_path_dependency, standard_responses
 from ogx_api.version import OGX_API_V1
 
 from .api import Prompts
@@ -49,6 +49,7 @@ def create_router(impl: Prompts) -> APIRouter:
         prefix=f"/{OGX_API_V1}",
         tags=["Prompts"],
         responses=standard_responses,
+        route_class=ExceptionTranslatingRoute,
     )
 
     @router.get(

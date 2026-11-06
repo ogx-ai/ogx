@@ -24,9 +24,7 @@ export type FunctionCallOutputItem = BaseItem & {
 };
 
 export type AnyResponseItem =
-  | ResponseInput
-  | ResponseOutput
-  | FunctionCallOutputItem;
+  ResponseInput | ResponseOutput | FunctionCallOutputItem;
 
 export function isMessageInput(
   item: ResponseInput

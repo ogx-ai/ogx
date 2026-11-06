@@ -11,6 +11,7 @@ from typing import Any
 
 from openai import APIStatusError
 from openai.types.chat import ChatCompletionToolParam
+from openai.types.shared_params import FunctionDefinition
 from opentelemetry import trace
 
 from ogx.log import get_logger
@@ -23,6 +24,7 @@ from ogx_api import (
     Connectors,
     GetConnectorRequest,
     Inference,
+    InvalidParameterError,
     MCPListToolsTool,
     ModelNotFoundError,
     OpenAIAssistantMessageParam,
@@ -57,6 +59,7 @@ from ogx_api import (
     OpenAIResponseInputToolChoiceMCPTool,
     OpenAIResponseInputToolChoiceMode,
     OpenAIResponseInputToolChoiceWebSearch,
+    OpenAIResponseInputToolFunction,
     OpenAIResponseInputToolMCP,
     OpenAIResponseMCPApprovalRequest,
     OpenAIResponseMessage,
@@ -107,6 +110,9 @@ from ogx_api import (
 )
 from ogx_api.inference import ServiceTier
 
+from .truncation import build_turn_groups as _build_turn_groups
+from .truncation import drop_oldest_turn
+from .truncation import is_context_length_error as _is_context_length_error
 from .types import (
     AssistantMessageWithReasoning,
     ChatCompletionContext,
@@ -118,17 +124,45 @@ from .utils import (
     convert_mcp_tool_choice,
     extract_citations_from_text,
     is_function_tool_call,
+    merge_namespace_tool_description,
+    qualified_namespace_tool_name,
     run_guardrails,
     should_summarize_reasoning,
+    split_qualified_tool_name,
     summarize_reasoning,
 )
 
 logger = get_logger(name=__name__, category="agents::builtin")
 tracer = trace.get_tracer(__name__)
 
+
+class _InferenceResult:
+    """Mutable result container for _run_inference_loop."""
+
+    completion_result: ChatCompletionResult | None
+    final_status: str
+    incomplete_reason: str | None
+    messages: list[OpenAIMessageParam] | None
+
+    def __init__(self) -> None:
+        self.completion_result: ChatCompletionResult | None = None
+        self.final_status: str = "completed"
+        self.incomplete_reason: str | None = None
+        # Snapshot of the messages _run_inference_loop was operating on for its
+        # current attempt. _run_inference_loop grows this list locally (e.g. across
+        # tool-calling rounds) via reassignment, which never propagates back to the
+        # caller's own `messages` variable -- so the caller reads this instead of its
+        # own (potentially stale) copy when it needs to know what was actually sent.
+        self.messages: list[OpenAIMessageParam] | None = None
+
+
+class _ContextLengthRetryError(Exception):
+    """Raised by _run_inference_loop to request a context-length truncation retry."""
+
+
 # Built-in tool names that the server knows how to execute itself.
 # Anything else is either a registered function tool (client-side) or a hallucinated name.
-_SERVER_SIDE_BUILTIN_TOOL_NAMES = frozenset({"web_search", "knowledge_search", "file_search"})
+_SERVER_SIDE_BUILTIN_TOOL_NAMES = frozenset({"web_search", "file_search"})
 
 _MAX_HALLUCINATED_TOOL_RETRIES = 3
 
@@ -207,6 +241,22 @@ def extract_openai_error(exc: Exception) -> tuple[str, str]:
     message: str = raw_message if isinstance(raw_message, str) else fallback_message
 
     return final_code, message
+
+
+def convert_input_tool_to_chat_tool(input_tool: OpenAIResponseInputToolFunction) -> ChatCompletionToolParam:
+    """Convert an OpenAIResponseInputToolFunction to a ChatCompletionToolParam.
+
+    Explicitly maps only the fields that belong inside FunctionDefinition, avoiding
+    leaking OpenAIResponseInputToolFunction.type into the inner function dict.
+    """
+    function_def: FunctionDefinition = {"name": input_tool.name}
+    if input_tool.description is not None:
+        function_def["description"] = input_tool.description
+    if input_tool.parameters is not None:
+        function_def["parameters"] = input_tool.parameters
+    if input_tool.strict is not None:
+        function_def["strict"] = input_tool.strict
+    return ChatCompletionToolParam(type="function", function=function_def)
 
 
 def convert_tooldef_to_chat_tool(tool_def):
@@ -434,25 +484,11 @@ class StreamingResponseOrchestrator:
                 headers=self.moderation_headers,
             )
             if input_violation_message:
-                logger.debug("Input guardrail violation", input_violation_message=input_violation_message)
                 yield await self._create_refusal_response(input_violation_message)
                 return
 
-        # Only 'disabled' truncation is supported for now
-        # TODO: Implement actual truncation logic when 'auto' mode is supported
-        if self.truncation == ResponseTruncation.auto:
-            logger.warning("Truncation mode 'auto' is not yet supported")
-            self.sequence_number += 1
-            error = OpenAIResponseError(
-                code="server_error",
-                message="Truncation mode 'auto' is not supported. Use 'disabled' to let the inference provider reject oversized contexts.",
-            )
-            failure_response = self._snapshot_response("failed", output_messages, error=error)
-            yield OpenAIResponseObjectStreamResponseFailed(
-                response=failure_response,
-                sequence_number=self.sequence_number,
-            )
-            return
+        # Pass through: truncation=auto is handled reactively below by catching
+        # context-length errors, dropping the oldest semantic turn, and retrying.
 
         async for stream_event in self._process_tools(output_messages):
             yield stream_event
@@ -466,6 +502,7 @@ class StreamingResponseOrchestrator:
                 self.ctx.chat_tools,
                 self.ctx.tool_choice,
                 self.server_label_to_tools,
+                self.ctx.response_tools,
             )
             # chat_tool_choice can be str, dict-like object, or None
             if isinstance(processed_tool_choice, str | type(None)):
@@ -486,15 +523,117 @@ class StreamingResponseOrchestrator:
             else:
                 chat_tool_choice = processed_tool_choice.model_dump()
 
+        messages: list[OpenAIMessageParam] = self.ctx.messages.copy()
+        inference_succeeded = False
+        context_length_exhausted = False
+        for _ in range(self.max_infer_iters):
+            ic = _InferenceResult()
+            try:
+                async for event in self._run_inference_loop(
+                    messages,
+                    output_messages,
+                    chat_tool_choice,
+                    allowed_tool_names,
+                    ic,
+                ):
+                    yield event
+                inference_succeeded = True
+            except ModelNotFoundError:
+                raise
+            except _ContextLengthRetryError:
+                # Context-length from provider - truncate oldest turn and retry.
+                # Use ic.messages (what _run_inference_loop actually sent) rather than
+                # our own `messages`: _run_inference_loop grows the conversation across
+                # tool-calling rounds via a local reassignment that never propagates
+                # back to this scope, so our `messages` can be stale by the time a
+                # context-length error surfaces here.
+                current_messages = ic.messages if ic.messages is not None else messages
+                groups = _build_turn_groups(current_messages)
+                if groups.turns_turns:
+                    new_messages = drop_oldest_turn(current_messages, groups)
+                    if new_messages:
+                        messages = new_messages
+                        continue
+                # No more turns to drop - truncation is exhausted.
+                messages = current_messages
+                context_length_exhausted = True
+                break
+
+            break  # success; exit retry loop
+        else:
+            # Hit max_infer_iters while still getting context-length errors on every
+            # attempt (e.g. many small turns, each retry only dropping one).
+            context_length_exhausted = True
+
+        # _run_inference_loop sets self.final_messages on success (includes assistant response).
+        # For context-length retry where no more turns to drop, set from truncated messages.
+        if not inference_succeeded:
+            self.final_messages = messages.copy()
+
+        if context_length_exhausted:
+            # ic here is either fresh (default final_status="completed") or from an
+            # unrelated earlier iteration -- neither reflects reality. Report the
+            # truncation exhaustion explicitly instead of falling through to the
+            # completed/incomplete checks below, which would otherwise report false
+            # success (see issue #6501).
+            self.sequence_number += 1
+            error = OpenAIResponseError(
+                code="context_length_exceeded",
+                message="The conversation exceeds the model's context window and could not be reduced "
+                "further by truncation.",
+            )
+            failure_response = self._snapshot_response("failed", output_messages, error=error)
+            yield OpenAIResponseObjectStreamResponseFailed(
+                response=failure_response,
+                sequence_number=self.sequence_number,
+            )
+            return
+
+        if ic.final_status == "incomplete":
+            self.sequence_number += 1
+            incomplete_details = (
+                OpenAIResponseIncompleteDetails(reason=ic.incomplete_reason) if ic.incomplete_reason else None
+            )
+            final_response = self._snapshot_response(
+                "incomplete", output_messages, incomplete_details=incomplete_details
+            )
+            yield OpenAIResponseObjectStreamResponseIncomplete(
+                response=final_response,
+                sequence_number=self.sequence_number,
+            )
+        if ic.final_status == "completed":
+            self.sequence_number += 1
+            final_response = self._snapshot_response("completed", output_messages)
+            yield OpenAIResponseObjectStreamResponseCompleted(
+                response=final_response, sequence_number=self.sequence_number
+            )
+
+    async def _run_inference_loop(
+        self,
+        messages: list[OpenAIMessageParam],
+        output_messages: list,
+        chat_tool_choice: str | dict[str, Any] | None,
+        allowed_tool_names: set[str] | None,
+        ic: _InferenceResult,
+    ) -> AsyncIterator[OpenAIResponseObjectStream]:
+        """Run the streaming inference while-True loop, yielding events as we go.
+
+        Populates ``ic`` with the final result for inspection by the caller.
+        May raise ``ModelNotFoundError`` or ``InvalidParameterError`` to propagate to the caller.
+        """
+
         n_iter = 0
         n_hallucinated_retries = 0
-        messages = self.ctx.messages.copy()
-        final_status = "completed"
-        incomplete_reason: str | None = None
         last_completion_result: ChatCompletionResult | None = None
 
         try:
             while True:
+                # Keep ic.messages current so a caller catching an exception raised
+                # below (e.g. _ContextLengthRetryError) sees the messages this
+                # iteration was actually operating on, including any growth from
+                # earlier tool-calling rounds in this same call.
+                ic.messages = messages
+
                 if (
                     self.max_output_tokens is not None
                     and self.accumulated_builtin_output_tokens >= self.max_output_tokens
@@ -504,8 +643,8 @@ class StreamingResponseOrchestrator:
                         accumulated_builtin_output_tokens=self.accumulated_builtin_output_tokens,
                         max_output_tokens=self.max_output_tokens,
                     )
-                    final_status = "incomplete"
-                    incomplete_reason = "max_output_tokens"
+                    ic.final_status = "incomplete"
+                    ic.incomplete_reason = "max_output_tokens"
                     break
 
                 remaining_output_tokens = (
@@ -526,7 +665,6 @@ class StreamingResponseOrchestrator:
                         for tool in self.ctx.chat_tools
                         if tool.get("function", {}).get("name") in allowed_tool_names
                     ]
-                logger.debug("calling openai_chat_completion with tools", effective_tools=effective_tools)
 
                 logprobs = (
                     True
@@ -715,8 +853,8 @@ class StreamingResponseOrchestrator:
                             "Exiting inference loop; model keeps hallucinating tool names",
                             retries=n_hallucinated_retries,
                         )
-                        final_status = "incomplete"
-                        incomplete_reason = "max_iterations_exceeded"
+                        ic.final_status = "incomplete"
+                        ic.incomplete_reason = "max_iterations_exceeded"
                         break
                 else:
                     n_hallucinated_retries = 0
@@ -740,19 +878,35 @@ class StreamingResponseOrchestrator:
                         n_iter=n_iter,
                         max_infer_iters=self.max_infer_iters,
                     )
-                    final_status = "incomplete"
-                    incomplete_reason = "max_iterations_exceeded"
+                    ic.final_status = "incomplete"
+                    ic.incomplete_reason = "max_iterations_exceeded"
                     break
 
             if last_completion_result and last_completion_result.finish_reason == "length":
-                final_status = "incomplete"
-                incomplete_reason = "length"
+                ic.final_status = "incomplete"
+                ic.incomplete_reason = "length"
+
+            # Store final messages (includes assistant response from last turn)
+            self.final_messages = messages.copy()
 
         except ModelNotFoundError:
             raise
+        except InvalidParameterError:
+            # A rejected client parameter (e.g. ranking_options.hybrid_search on a vector store whose
+            # provider cannot apply the weights) is a 400, not a generated response that failed. Let it
+            # propagate so responses.create raises it instead of reporting a "server_error" failure.
+            raise
         except Exception as exc:  # noqa: BLE001
+            if _is_context_length_error(exc):
+                # Context-length exceeded from provider - signal retry with truncation
+                logger.warning(
+                    "Context length exceeded during response generation - will retry with truncated history",
+                    error_type=type(exc).__name__,
+                )
+                raise _ContextLengthRetryError() from exc
             self.final_messages = messages.copy()
             self.sequence_number += 1
+            ic.final_status = "failed"
 
             if isinstance(exc, APIStatusError) or (hasattr(exc, "status_code") and hasattr(exc, "body")):
                 logger.warning("Provider SDK error during response generation", exc=exc)
@@ -772,27 +926,6 @@ class StreamingResponseOrchestrator:
                 sequence_number=self.sequence_number,
             )
             return
-
-        self.final_messages = messages.copy()
-
-        if final_status == "incomplete":
-            self.sequence_number += 1
-            incomplete_details = (
-                OpenAIResponseIncompleteDetails(reason=incomplete_reason) if incomplete_reason else None
-            )
-            final_response = self._snapshot_response(
-                "incomplete", output_messages, incomplete_details=incomplete_details
-            )
-            yield OpenAIResponseObjectStreamResponseIncomplete(
-                response=final_response,
-                sequence_number=self.sequence_number,
-            )
-        else:
-            self.sequence_number += 1
-            final_response = self._snapshot_response("completed", output_messages)
-            yield OpenAIResponseObjectStreamResponseCompleted(
-                response=final_response, sequence_number=self.sequence_number
-            )
 
     def _separate_tool_calls(
         self, current_response, messages, reasoning_content: str | None = None
@@ -825,8 +958,6 @@ class StreamingResponseOrchestrator:
                     reasoning_content=reasoning_content,
                 )
             next_turn_messages.append(message)
-            logger.debug("Choice message content", content=choice.message.content)
-            logger.debug("Choice message tool_calls", tool_calls=choice.message.tool_calls)
 
             if choice.message.tool_calls and self.ctx.response_tools:
                 executed_tool_calls: list = []
@@ -843,7 +974,9 @@ class StreamingResponseOrchestrator:
                         # The model hallucinated a tool name — it doesn't match
                         # any registered function tool, server-side built-in, or
                         # MCP tool.
-                        has_client_tools = any(t.type == "function" for t in self.ctx.response_tools)
+                        has_client_tools = any(
+                            t.type == "function" or (t.type == "namespace" and t.tools) for t in self.ctx.response_tools
+                        )
                         if has_client_tools:
                             # A client is expected to handle function calls, so
                             # surface the hallucinated name as a client-side
@@ -941,14 +1074,21 @@ class StreamingResponseOrchestrator:
                 output_tokens=self.accumulated_usage.output_tokens + usage.completion_tokens,
                 total_tokens=self.accumulated_usage.total_tokens + usage.total_tokens,
                 input_tokens_details=OpenAIResponseUsageInputTokensDetails(
-                    cached_tokens=usage.prompt_tokens_details.cached_tokens
-                    if usage.prompt_tokens_details and usage.prompt_tokens_details.cached_tokens is not None
-                    else self.accumulated_usage.input_tokens_details.cached_tokens
+                    cached_tokens=self.accumulated_usage.input_tokens_details.cached_tokens
+                    + (
+                        usage.prompt_tokens_details.cached_tokens
+                        if usage.prompt_tokens_details and usage.prompt_tokens_details.cached_tokens is not None
+                        else 0
+                    )
                 ),
                 output_tokens_details=OpenAIResponseUsageOutputTokensDetails(
-                    reasoning_tokens=usage.completion_tokens_details.reasoning_tokens
-                    if usage.completion_tokens_details and usage.completion_tokens_details.reasoning_tokens is not None
-                    else self.accumulated_usage.output_tokens_details.reasoning_tokens
+                    reasoning_tokens=self.accumulated_usage.output_tokens_details.reasoning_tokens
+                    + (
+                        usage.completion_tokens_details.reasoning_tokens
+                        if usage.completion_tokens_details
+                        and usage.completion_tokens_details.reasoning_tokens is not None
+                        else 0
+                    )
                 ),
             )
 
@@ -1262,12 +1402,14 @@ class StreamingResponseOrchestrator:
                             is_mcp_tool = tool_call.function.name and tool_call.function.name in self.mcp_tool_to_server
                             if not is_mcp_tool and tool_call.function.name not in _SERVER_SIDE_BUILTIN_TOOL_NAMES:
                                 # for MCP tools (and even other non-function tools) we emit an output message item later
+                                call_name, call_namespace = self._function_call_identity(tool_call.function.name)
                                 function_call_item = OpenAIResponseOutputMessageFunctionToolCall(
                                     arguments="",  # Will be filled incrementally via delta events
                                     call_id=tool_call.id or "",
-                                    name=tool_call.function.name if tool_call.function else "",
+                                    name=call_name,
                                     id=tool_call_item_id,
                                     status="in_progress",
+                                    namespace=call_namespace,
                                 )
                                 yield OpenAIResponseObjectStreamResponseOutputItemAdded(
                                     response_id=self.response_id,
@@ -1323,7 +1465,6 @@ class StreamingResponseOrchestrator:
                     headers=self.moderation_headers,
                 )
                 if violation_message:
-                    logger.debug("Output guardrail violation", violation_message=violation_message)
                     pending_guardrail_events.clear()
                     yield await self._create_refusal_response(violation_message)
                     self.violation_detected = True
@@ -1342,7 +1483,6 @@ class StreamingResponseOrchestrator:
                 headers=self.moderation_headers,
             )
             if violation_message:
-                logger.debug("Output guardrail violation", violation_message=violation_message)
                 pending_guardrail_events.clear()
                 yield await self._create_refusal_response(violation_message)
                 self.violation_detected = True
@@ -1480,6 +1620,20 @@ class StreamingResponseOrchestrator:
             reasoning_content="".join(reasoning_text_accumulated) if reasoning_text_accumulated else None,
         )
 
+    def _function_call_identity(self, name: str | None) -> tuple[str, str | None]:
+        """Map a chat-layer tool name back to the (bare name, namespace) to emit.
+
+        Namespaced tools reach the chat backend under a qualified name
+        (namespace + delimiter + function name), so the call the model makes
+        identifies the exact tool it picked, even when the same bare name is
+        declared in several namespaces or also at the top level. Clients such
+        as codex read the namespace back off the function_call output to route
+        the call to the handler that owns the group.
+        """
+        if not name or not self.ctx.response_tools:
+            return (name or "", None)
+        return split_qualified_tool_name(name, self.ctx.response_tools)
+
     def _build_chat_completion(self, result: ChatCompletionResult) -> OpenAIChatCompletion:
         """Build OpenAIChatCompletion from ChatCompletionResult."""
         # Convert collected chunks to complete response
@@ -1556,7 +1710,7 @@ class StreamingResponseOrchestrator:
                     id=matching_item_id,
                     status="in_progress",
                 )
-            elif tool_call.function.name in ("knowledge_search", "file_search"):
+            elif tool_call.function.name == "file_search":
                 item = OpenAIResponseOutputMessageFileSearchToolCall(
                     id=matching_item_id,
                     status="in_progress",
@@ -1627,12 +1781,14 @@ class StreamingResponseOrchestrator:
             # Use existing item_id or create new one if not found
             final_item_id = matching_item_id or f"fc_{uuid.uuid4()}"
 
+            call_name, call_namespace = self._function_call_identity(tool_call.function.name)
             function_call_item = OpenAIResponseOutputMessageFunctionToolCall(
                 arguments=tool_call.function.arguments or "",
                 call_id=tool_call.id,
-                name=tool_call.function.name or "",
+                name=call_name,
                 id=final_item_id,
                 status="completed",
+                namespace=call_namespace,
             )
             output_messages.append(function_call_item)
 
@@ -1663,9 +1819,20 @@ class StreamingResponseOrchestrator:
 
         for input_tool in tools:
             if input_tool.type == "function":
-                self.ctx.chat_tools.append(
-                    ChatCompletionToolParam(type="function", function=input_tool.model_dump(exclude_none=True))  # type: ignore[typeddict-item,arg-type]  # Dict compatible with FunctionDefinition
-                )
+                self.ctx.chat_tools.append(convert_input_tool_to_chat_tool(input_tool))
+            elif input_tool.type == "namespace":
+                # Flatten the namespace's function tools under a qualified
+                # name so same-named tools from different namespaces stay
+                # distinguishable for the model and on the way back. The
+                # namespace's model-facing description is merged into each
+                # member's description.
+                for function_tool in input_tool.tools:
+                    qualified = qualified_namespace_tool_name(input_tool.name, function_tool.name)
+                    description = merge_namespace_tool_description(input_tool.description, function_tool.description)
+                    chat_tool = convert_input_tool_to_chat_tool(function_tool)
+                    chat_tool["function"]["name"] = qualified
+                    chat_tool["function"]["description"] = description
+                    self.ctx.chat_tools.append(chat_tool)
             elif input_tool.type in WebSearchToolTypes:
                 tool_name = "web_search"
                 # Need to access tool_groups_api from tool_executor
@@ -1797,12 +1964,52 @@ class StreamingResponseOrchestrator:
             logger.exception("Failed to list MCP tools", server_url=mcp_tool.server_url, error=str(e))
             raise
 
+    def _validate_qualified_tool_names(self) -> None:
+        """Reject tool declarations whose chat-layer names collide across tools.
+
+        Namespaced functions reach the chat layer under a qualified name
+        (namespace + delimiter + function name). A top-level function, or a
+        member of another namespace, whose name equals one of those makes the
+        chat-layer name map to two different tools, so calls cannot be routed
+        back unambiguously and the request is rejected. Duplicate member names
+        within a single namespace are allowed, matching the OpenAI API: the
+        qualified name still maps to exactly one (name, namespace) pair and
+        clients disambiguate overloads via the arguments.
+        """
+        top_level = {t.name for t in (self.ctx.response_tools or []) if t.type == "function"}
+        seen_qualified: dict[str, str] = {}
+        for t in self.ctx.response_tools or []:
+            if t.type != "namespace":
+                continue
+            for f in t.tools:
+                qualified = qualified_namespace_tool_name(t.name, f.name)
+                if qualified in top_level:
+                    raise InvalidParameterError(
+                        "tools",
+                        qualified,
+                        "conflicts with a top-level function tool of the same name; "
+                        "rename one so namespaced and top-level tools stay distinguishable",
+                    )
+                # A qualified name from another namespace always names a
+                # distinct tool, so it is ambiguous. Duplicate members of the
+                # same namespace share one (name, namespace) identity and are
+                # allowed (overloads, matching the OpenAI API).
+                other_ns = seen_qualified.get(qualified)
+                if other_ns is not None and other_ns != t.name:
+                    raise InvalidParameterError(
+                        "tools",
+                        qualified,
+                        f"conflicts with a function tool in namespace '{other_ns}'",
+                    )
+                seen_qualified[qualified] = t.name
+
     async def _process_tools(
         self, output_messages: list[OpenAIResponseOutput]
     ) -> AsyncIterator[OpenAIResponseObjectStream]:
         # Handle all mcp tool lists from previous response that are still valid:
         # tool_context can be None when no tools are provided in the response request
         if self.ctx.tool_context:
+            self._validate_qualified_tool_names()
             for tool in self.ctx.tool_context.previous_tool_listings:
                 async for evt in self._reuse_mcp_list_tools(tool, output_messages):
                     yield evt
@@ -1915,18 +2122,35 @@ async def _process_tool_choice(
     chat_tools: list[ChatCompletionToolParam],
     tool_choice: OpenAIResponseInputToolChoice,
     server_label_to_tools: dict[str, list[str]],
+    response_tools: list[OpenAIResponseInputTool] | None = None,
 ) -> str | OpenAIChatCompletionToolChoice | None:
     """Process and validate the OpenAI Responses tool choice and return the appropriate chat completion tool choice object.
 
     :param chat_tools: The list of chat tools to enforce tool choice against.
     :param tool_choice: The OpenAI Responses tool choice to process.
     :param server_label_to_tools: A dictionary mapping server labels to the list of tools available on that server.
+    :param response_tools: The original request tools, used to resolve bare
+        names of namespaced functions to their qualified chat-layer names.
     :return: The appropriate chat completion tool choice object.
     """
 
     # retrieve all function tool names from the chat tools
     # Note: chat_tools contains dicts, not objects
     chat_tool_names = [tool["function"]["name"] for tool in chat_tools if tool["type"] == "function"]
+
+    def to_chat_tool_name(name: str) -> str:
+        # Clients reference namespaced functions by bare name; the chat layer
+        # knows them by qualified name. A top-level function of the same bare
+        # name wins; a name shared by several namespaces cannot be resolved
+        # and is left bare (no enforcement rather than the wrong tool).
+        if not name:
+            return name
+        if any(t.type == "function" and t.name == name for t in response_tools or []):
+            return name
+        matches = [t for t in response_tools or [] if t.type == "namespace" and any(f.name == name for f in t.tools)]
+        if len(matches) == 1:
+            return qualified_namespace_tool_name(matches[0].name, name)
+        return name
 
     if isinstance(tool_choice, OpenAIResponseInputToolChoiceMode):
         if tool_choice.value == "required":
@@ -1947,7 +2171,9 @@ async def _process_tool_choice(
         for tool in tool_choice.tools:
             match tool.get("type"):
                 case "function":
-                    final_tools.append({"type": "function", "function": {"name": tool.get("name")}})
+                    final_tools.append(
+                        {"type": "function", "function": {"name": to_chat_tool_name(tool.get("name") or "")}}
+                    )
                 case "custom":
                     final_tools.append({"type": "custom", "custom": {"name": tool.get("name")}})
                 case "mcp":
@@ -1984,10 +2210,11 @@ async def _process_tool_choice(
                 return OpenAIChatCompletionToolChoiceCustomTool(name=tool_choice.name)
 
             case OpenAIResponseInputToolChoiceFunctionTool():
-                if tool_choice.name and tool_choice.name not in chat_tool_names:
+                resolved_name = to_chat_tool_name(tool_choice.name) if tool_choice.name else tool_choice.name
+                if resolved_name and resolved_name not in chat_tool_names:
                     logger.warning("Tool not found in chat tools", tool_name=tool_choice.name)
                     return None
-                return OpenAIChatCompletionToolChoiceFunctionTool(name=tool_choice.name)
+                return OpenAIChatCompletionToolChoiceFunctionTool(name=resolved_name)
 
             case OpenAIResponseInputToolChoiceFileSearch():
                 if "file_search" not in chat_tool_names:

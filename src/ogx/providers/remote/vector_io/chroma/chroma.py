@@ -290,6 +290,11 @@ class ChromaVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         await super().shutdown()
 
     async def register_vector_store(self, vector_store: VectorStore) -> None:
+        if self.kvstore is None:
+            raise RuntimeError("KVStore not initialized. Call initialize() before registering vector stores.")
+        key = f"{VECTOR_DBS_PREFIX}{vector_store.identifier}"
+        await self.kvstore.set(key=key, value=vector_store.model_dump_json())
+
         collection = await maybe_await(
             self.client.get_or_create_collection(
                 name=vector_store.identifier, metadata={"vector_store": vector_store.model_dump_json()}
@@ -300,12 +305,15 @@ class ChromaVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         )
 
     async def unregister_vector_store(self, vector_store_id: str) -> None:
-        if vector_store_id not in self.cache:
-            log.warning(f"Vector DB {vector_store_id} not found")
-            return
+        if vector_store_id in self.cache:
+            await self.cache[vector_store_id].index.delete()
+            del self.cache[vector_store_id]
+        else:
+            log.warning("Vector DB not found", vector_store_id=vector_store_id)
 
-        await self.cache[vector_store_id].index.delete()
-        del self.cache[vector_store_id]
+        if self.kvstore is None:
+            raise RuntimeError("KVStore not initialized. Call initialize() before unregistering vector stores.")
+        await self.kvstore.delete(key=f"{VECTOR_DBS_PREFIX}{vector_store_id}")
 
     async def insert_chunks(self, request: InsertChunksRequest) -> None:
         index = await self._get_and_cache_vector_store_index(request.vector_store_id)

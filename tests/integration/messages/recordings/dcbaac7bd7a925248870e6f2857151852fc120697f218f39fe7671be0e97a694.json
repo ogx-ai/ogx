@@ -1,0 +1,47 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_temperature[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_temperature[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say hello."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false,
+      "temperature": 0.0
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-8c59626455b8331e",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay, the user said \"Say hello.\" I need to respond in a friendly and welcoming manner. Let me start by acknowledging their greeting. Maybe say something like \"Hello!\" to confirm. Then, add a bit more to make it engaging. Perhaps mention a friendly activity or a common thing people do when greeting. For example, \"Hi there! How are you today?\" That keeps it open and invites further conversation. I should keep the tone positive and approachable. Let me check if there's any specific context I should consider, but since there isn't, just a simple and cheerful response should work. Alright, time to put it all together.\n",
+          "signature": "aa0f1308283e4e5db455d74be4150310"
+        },
+        {
+          "type": "text",
+          "text": "\n\nHello! How are you today? \ud83d\ude0a"
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 11,
+        "output_tokens": 145
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

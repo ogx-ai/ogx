@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import httpx
+import httpx2
 from pydantic import BaseModel, Field
 
 
@@ -25,5 +25,5 @@ class BaseToolRuntimeConfig(BaseModel):
         description="TCP connect timeout in seconds. Shorter than the overall timeout to fail fast on unreachable hosts.",
     )
 
-    def to_httpx_timeout(self) -> httpx.Timeout:
-        return httpx.Timeout(self.timeout, connect=self.connect_timeout)
+    def to_httpx_timeout(self) -> httpx2.Timeout:
+        return httpx2.Timeout(self.timeout, connect=self.connect_timeout)

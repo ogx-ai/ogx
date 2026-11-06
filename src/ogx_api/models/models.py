@@ -27,11 +27,14 @@ class ModelType(StrEnum):
     :cvar llm: Large language model for text generation and completion
     :cvar embedding: Embedding model for converting text to vector representations
     :cvar rerank: Reranking model for reordering documents based on their relevance to a query
+    :cvar systemone: Judgment/decision model that returns a calibrated probability or score
+        instead of generated text (SystemOne wire format)
     """
 
     llm = "llm"
     embedding = "embedding"
     rerank = "rerank"
+    systemone = "systemone"
 
 
 class CommonModelFields(BaseModel):
@@ -200,6 +203,27 @@ class OpenAIListModelsResponse(BaseModel):
     data: list[OpenAIModel] = Field(..., description="List of OpenAI model objects.")
 
 
+@json_schema_type
+class TypeSafeModelInfo(BaseModel):
+    """A model in TypeSafe's ``GET /v1/models`` response shape.
+
+    :name: Model name or alias accepted by the ``model`` field of a SystemOne request
+    :description: Human-readable description of the model and its capabilities
+    :release_date: Model release date, formatted as YYYY-MM-DD
+    """
+
+    name: str = Field(..., description="Model name or alias accepted by a SystemOne request's model field.")
+    description: str = Field(default="", description="Human-readable description of the model and its capabilities.")
+    release_date: str = Field(default="", description="Model release date, formatted as YYYY-MM-DD.")
+
+
+@json_schema_type
+class TypeSafeListModelsResponse(BaseModel):
+    """Response containing a list of TypeSafe model objects (SystemOne judgment models)."""
+
+    models: list[TypeSafeModelInfo] = Field(..., description="List of SystemOne (judgment) model objects.")
+
+
 # Request models for each endpoint
 
 
@@ -246,5 +270,7 @@ __all__ = [
     "OpenAIListModelsResponse",
     "OpenAIModel",
     "RegisterModelRequest",
+    "TypeSafeListModelsResponse",
+    "TypeSafeModelInfo",
     "UnregisterModelRequest",
 ]

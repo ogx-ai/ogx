@@ -32,6 +32,8 @@ from .models import (
     OpenAIListModelsResponse,
     OpenAIModel,
     RegisterModelRequest,
+    TypeSafeListModelsResponse,
+    TypeSafeModelInfo,
     UnregisterModelRequest,
 )
 
@@ -51,5 +53,7 @@ __all__ = [
     "OpenAIListModelsResponse",
     "OpenAIModel",
     "RegisterModelRequest",
+    "TypeSafeListModelsResponse",
+    "TypeSafeModelInfo",
     "UnregisterModelRequest",
 ]

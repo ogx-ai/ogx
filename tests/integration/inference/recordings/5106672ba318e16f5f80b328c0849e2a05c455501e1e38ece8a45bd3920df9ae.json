@@ -1,0 +1,58 @@
+{
+  "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_score[judge=ollama/tev1:0.8b]",
+  "request": {
+    "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_score[judge=ollama/tev1:0.8b]",
+    "url": "http://0.0.0.0:11434/v1/systemone",
+    "method": "POST",
+    "payload": {
+      "state": "The agent was slightly rude but did resolve the issue.",
+      "model": "tev1:0.8b",
+      "questions": {
+        "quality": {
+          "type": "score",
+          "instructions": "Rate the quality of the interaction.",
+          "criteria": [
+            "Unacceptable",
+            "Poor",
+            "Acceptable",
+            "Good",
+            "Excellent"
+          ]
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "tev1:0.8b",
+      "answers": {
+        "quality": {
+          "type": "score",
+          "score": 2.1257512302660624,
+          "legend": {
+            "0": "Unacceptable",
+            "1": "Poor",
+            "2": "Acceptable",
+            "3": "Good",
+            "4": "Excellent"
+          },
+          "probabilities": {
+            "0": 0.019600453534593183,
+            "1": 0.06087966817766502,
+            "2": 0.7135908052477214,
+            "3": 0.18602634056712664,
+            "4": 0.019902732472893654
+          },
+          "confidence": 0.4537888172837298
+        }
+      },
+      "usage": {
+        "input_tokens": 190,
+        "output_tokens": 1
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

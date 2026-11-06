@@ -1,0 +1,132 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestEdgeCases::test_multiple_tools_with_different_schemas[txt=sglang/Qwen/Qwen3-0.6B]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:30000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Use one of the available tools"
+        }
+      ],
+      "max_tokens": 4096,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "simple",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "complex",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "$ref": "#/$defs/Complex"
+                }
+              },
+              "$defs": {
+                "Complex": {
+                  "type": "object",
+                  "properties": {
+                    "nested": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "with_output",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "input": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "Qwen/Qwen3-0.6B",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-8d15f4640b46",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "\n\nThe instructions don't provide specific details to determine which tool to use. Could you clarify the purpose of the query or provide additional context?",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "\nOkay, let's see. The user wants to use one of the available tools. The tools provided are 'simple', 'complex', and 'with_output'. The 'simple' function takes an 'x' parameter as a string. The 'complex' function requires a 'data' object with an array of numbers, and 'with_output' takes an 'input' string.\n\nThe user's query isn't specific enough to determine which tool to use. They just mentioned using one of the tools. Since there's no explicit question or input, I can't know which tool to call. However, maybe the user expects me to pick the most appropriate one based on their request. But since the tools are listed as options, I should check if any of them can be used. Since the user hasn't provided any details, I'll need to ask for more information to choose the correct tool.\n"
+            },
+            "matched_stop": 151645
+          }
+        ],
+        "created": 0,
+        "model": "Qwen/Qwen3-0.6B",
+        "object": "chat.completion",
+        "metadata": {
+          "weight_version": "default",
+          "weight_versions": [
+            {
+              "version": "default",
+              "start": 0,
+              "end": 211
+            }
+          ]
+        },
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 211,
+          "prompt_tokens": 295,
+          "total_tokens": 506,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "reasoning_tokens": 182
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

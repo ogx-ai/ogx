@@ -14,7 +14,7 @@ from ... import OgxClient
 
 
 def _get_version():
-    for dist_name in ("ogx-client", "ogx-open-client"):
+    for dist_name in ("ogx-client",):
         try:
             return version(dist_name)
         except Exception:

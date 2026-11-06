@@ -1,0 +1,37 @@
+{
+  "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_is_replayed[judge=sglang/togethercomputer/Tev1-0.8B-experimental]",
+  "request": {
+    "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_is_replayed[judge=sglang/togethercomputer/Tev1-0.8B-experimental]",
+    "url": "http://localhost:30000/v1/systemone",
+    "method": "POST",
+    "payload": {
+      "state": "I was charged twice. Please help.",
+      "model": "togethercomputer/Tev1-0.8B-experimental",
+      "questions": {
+        "billing": {
+          "type": "noul",
+          "instructions": "Is this about billing?"
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "togethercomputer/Tev1-0.8B-experimental",
+      "answers": {
+        "billing": {
+          "type": "noul",
+          "noul": 0.6513548646660542,
+          "x_label_mass": 0.8966386189012463
+        }
+      },
+      "usage": {
+        "input_tokens": 39,
+        "output_tokens": 0
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

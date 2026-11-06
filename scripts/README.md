@@ -19,7 +19,7 @@ scripts/
   check-init-py.sh             # Verify all packages have __init__.py
   check-no-fstring-logging.sh  # Verify no f-string logging usage
   check-workflows-use-hashes.sh # Verify GitHub Actions use commit hashes
-  cleanup_recordings.py        # Remove orphaned test recordings
+  cleanup_recordings.py        # Remove orphaned test recordings (incl. stale model-list recordings)
   diagnose_recordings.py       # Debug test recording issues
   normalize_recordings.py      # Normalize test recordings for consistency
   docker.sh                    # Docker build helper
@@ -31,8 +31,9 @@ scripts/
   get_setup_env.py             # Get setup environment variables
   generate_prompt_format.py    # Generate prompt format documentation
   generate_openai_coverage_docs.py # Generate OpenAI API coverage docs
-  openai_coverage.py           # OpenAI API coverage analysis
-  provider_compat_matrix.py    # Provider compatibility matrix
+   openai_coverage.py           # OpenAI API coverage analysis
+   systemone_coverage.py        # TypeSafe SystemOne API conformance analysis
+   provider_compat_matrix.py    # Provider compatibility matrix
   responses_test_coverage.py   # Responses API test coverage
 ```
 
@@ -57,6 +58,11 @@ uv run python scripts/provider_codegen.py
 ./scripts/integration-tests.sh --stack-config starter
 ```
 
+Pass `--client-version latest` to generate the Python client from
+`client-sdks/openapi` and install it over the PyPI pin before running
+(the CI `client-version=latest` equivalent), or `--client-version published`
+to verify the `uv.lock`-resolved PyPI client is installed.
+
 ### Manage test recordings
 
 ```bash
@@ -66,7 +72,18 @@ uv run python scripts/cleanup_recordings.py
 uv run python scripts/diagnose_recordings.py
 # Normalize recordings
 uv run python scripts/normalize_recordings.py
+
+# Only check model-list recordings (skips CI test collection)
+uv run python scripts/cleanup_recordings.py --model-lists-only
 ```
+
+`cleanup_recordings.py` also prunes model-list recordings (`models-*.json`):
+files whose filename hash no longer matches the current hash function are dead
+(no replay lookup can find them), and model-set digests that add nothing the
+kept files of the same (directory, request hash) do not cover are redundant,
+since replay unions all digests of one hash. Only model IDs referenced by the
+test suites (recording requests + CI stack-config registrations) are required
+to survive; every kept group still covers all of them.
 
 ### Remote test recording (via GitHub Actions)
 

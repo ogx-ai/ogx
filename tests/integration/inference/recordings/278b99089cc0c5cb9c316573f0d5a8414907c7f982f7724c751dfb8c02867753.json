@@ -1,0 +1,76 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=sglang/Qwen/Qwen3-0.6B-inference:chat_completion:non_streaming_02]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:30000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet has rings around it with a name starting with letter S?"
+        }
+      ],
+      "max_tokens": 4096,
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "Qwen/Qwen3-0.6B",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-278b99089cc0",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "\n\nThe planet with rings around it and a name starting with the letter S is **Saturn**.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "\nOkay, so the user is asking which planet has rings around it and the name starts with the letter S. Let me think. First, I know that the planets are in our solar system, right? Mercury, Venus, Earth, Mars, Jupiter, Saturn, etc. Now, the question is about a planet with rings. \n\nI remember that Saturn is a planet with rings. But wait, are there other planets with rings? Oh, right! Neptune is a planet with a ring system too. Wait, but Neptune's rings are actually a bit more complex and have been studied. Also, there's a possibility of a planet like Uranus, but I don't think it has rings. \n\nWait, maybe I'm mixing up some facts. Let me verify. The outer planets are Jupiter, Saturn, Uranus, Neptune. Their rings are all there. So Saturn's rings are the most famous. Neptune's rings are also present. But the user is asking for the planet that has rings and the name starts with S. So both Saturn and Neptune have rings. But the question might be looking for one of them. \n\nBut maybe the answer is Saturn. Because Saturn is the one that's known for its rings. Neptune's rings are also there. However, the user might be expecting one. Let me check again. \n\nWait, I think Saturn is the planet with rings. Because Saturn is the one with the rings, and Neptune has rings too. But the user is asking for the planet that has rings and the name starts with S. So both Saturn and Neptune have rings. But maybe the answer is Saturn. Let me confirm. \n\nYes, Saturn is the planet with rings. So the answer should be Saturn. But let me make sure. Another way: the planet with rings is Saturn. So the answer is Saturn.\n"
+            },
+            "matched_stop": 151645
+          }
+        ],
+        "created": 0,
+        "model": "Qwen/Qwen3-0.6B",
+        "object": "chat.completion",
+        "metadata": {
+          "weight_version": "default",
+          "weight_versions": [
+            {
+              "version": "default",
+              "start": 0,
+              "end": 396
+            }
+          ]
+        },
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 396,
+          "prompt_tokens": 22,
+          "total_tokens": 418,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "reasoning_tokens": 374
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

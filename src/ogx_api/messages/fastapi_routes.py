@@ -10,19 +10,16 @@ This module defines the FastAPI router for the /v1/messages endpoint,
 serving the Anthropic Messages API format.
 """
 
-import asyncio
-import contextvars
-import json
 import logging  # allow-direct-logging
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
 
 from ogx_api.common.errors import ModelNotFoundError
-from ogx_api.router_utils import standard_responses
+from ogx_api.router_utils import standard_responses, try_translate_to_http_exception
+from ogx_api.utils import create_sse_event_with_type, get_sse_error_message, sse_stream
 from ogx_api.version import OGX_API_V1
 
 from .api import Messages
@@ -46,59 +43,19 @@ from .models import (
 logger = logging.LoggerAdapter(logging.getLogger(__name__), {"category": "messages"})
 
 
-def _create_anthropic_sse_event(event_type: str, data: Any) -> str:
-    """Create an Anthropic-format SSE event with named event type.
-
-    Anthropic SSE format: event: <type>\ndata: <json>\n\n
-    """
-    if isinstance(data, BaseModel):
-        data = data.model_dump_json()
-    else:
-        data = json.dumps(data)
-    return f"event: {event_type}\ndata: {data}\n\n"
+def _format_anthropic_sse_event(event: Any) -> str:
+    """Format an Anthropic stream event as a named SSE event."""
+    event_type = event.type if hasattr(event, "type") else "unknown"
+    return create_sse_event_with_type(event_type, event)
 
 
-async def _anthropic_sse_generator(event_gen: AsyncIterator) -> AsyncIterator[str]:
-    """Convert an async generator of Anthropic stream events to SSE format."""
-    try:
-        async for event in event_gen:
-            event_type = event.type if hasattr(event, "type") else "unknown"
-            yield _create_anthropic_sse_event(event_type, event)
-    except asyncio.CancelledError:
-        if hasattr(event_gen, "aclose"):
-            await event_gen.aclose()
-        raise
-    except Exception as e:
-        logger.exception("Error in Anthropic SSE generator")
-        error_resp = AnthropicErrorResponse(
-            error=_AnthropicErrorDetail(type="api_error", message=str(e)),
-        )
-        yield _create_anthropic_sse_event("error", error_resp)
-
-
-def _preserve_context_for_sse(event_gen):
-    """Preserve request context for SSE streaming.
-
-    StreamingResponse runs in a different task, losing request contextvars.
-    This wrapper captures and restores the context.
-    """
-    context = contextvars.copy_context()
-
-    async def wrapper():
-        try:
-            while True:
-                try:
-                    task = context.run(asyncio.create_task, event_gen.__anext__())
-                    item = await task
-                except StopAsyncIteration:
-                    break
-                yield item
-        except (asyncio.CancelledError, GeneratorExit):
-            if hasattr(event_gen, "aclose"):
-                await event_gen.aclose()
-            raise
-
-    return wrapper()
+def _format_anthropic_sse_error_event(e: Exception) -> str:
+    """Log and format an SSE stream error as an Anthropic error event."""
+    logger.exception("Error in Anthropic SSE generator")
+    error_resp = AnthropicErrorResponse(
+        error=_AnthropicErrorDetail(type="api_error", message=get_sse_error_message(e)),
+    )
+    return create_sse_event_with_type("error", error_resp)
 
 
 def _anthropic_error_response(status_code: int, message: str) -> JSONResponse:
@@ -115,6 +72,20 @@ def _anthropic_error_response(status_code: int, message: str) -> JSONResponse:
         error=_AnthropicErrorDetail(type=error_type, message=message),
     )
     return JSONResponse(status_code=status_code, content=body.model_dump())
+
+
+def _anthropic_error_response_for_exception(exc: Exception, log_message: str) -> JSONResponse:
+    """Anthropic-format error response for an exception not already handled by a more specific
+    except clause. Preserves the status of anything try_translate_to_http_exception recognizes
+    (HTTPException, ValueError, or an exception carrying a ``status_code`` attribute, such as
+    the AnthropicAPIError raised by the native /v1/messages passthrough providers), and falls
+    back to a generic 500 for everything else.
+    """
+    http_exc = try_translate_to_http_exception(exc)
+    if http_exc is not None:
+        return _anthropic_error_response(http_exc.status_code, str(http_exc.detail))
+    logger.exception(log_message)
+    return _anthropic_error_response(500, "Internal server error")
 
 
 def create_router(impl: Messages) -> APIRouter:
@@ -161,15 +132,14 @@ def create_router(impl: Messages) -> APIRouter:
             return _anthropic_error_response(400, str(e))
         except HTTPException as e:
             return _anthropic_error_response(e.status_code, e.detail)
-        except Exception:
-            logger.exception("Failed to create message")
-            return _anthropic_error_response(500, "Internal server error")
+        except Exception as e:
+            return _anthropic_error_response_for_exception(e, "Failed to create message")
 
         response_headers = {"anthropic-version": ANTHROPIC_VERSION}
 
         if isinstance(result, AsyncIterator):
             return StreamingResponse(
-                _preserve_context_for_sse(_anthropic_sse_generator(result)),
+                sse_stream(result, _format_anthropic_sse_event, _format_anthropic_sse_error_event),
                 media_type="text/event-stream",
                 headers=response_headers,
             )
@@ -195,9 +165,14 @@ def create_router(impl: Messages) -> APIRouter:
             result = await impl.count_message_tokens(params)
         except NotImplementedError as e:
             return _anthropic_error_response(501, str(e))
-        except Exception:
-            logger.exception("Failed to count message tokens")
-            return _anthropic_error_response(500, "Internal server error")
+        except ModelNotFoundError as e:
+            return _anthropic_error_response(404, str(e))
+        except ValueError as e:
+            return _anthropic_error_response(400, str(e))
+        except HTTPException as e:
+            return _anthropic_error_response(e.status_code, e.detail)
+        except Exception as e:
+            return _anthropic_error_response_for_exception(e, "Failed to count message tokens")
 
         return JSONResponse(
             content=result.model_dump(),

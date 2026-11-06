@@ -14,13 +14,15 @@ External APIs can also provide a `create_router` function in their module
 (the same module that provides `available_providers`).
 """
 
+import copy
 import importlib
 import importlib.util
 from collections.abc import Callable
 from typing import Any, cast
 
 from fastapi import APIRouter
-from fastapi.routing import APIRoute
+from fastapi.routing import APIRoute, iter_route_contexts
+from starlette.routing import compile_path
 
 from ogx.log import get_logger
 from ogx_api.datatypes import Api, ExternalApiSpec
@@ -95,6 +97,35 @@ def build_fastapi_router(api: "Api", impl: Any) -> APIRouter | None:
     return cast(APIRouter, router_factory(impl))
 
 
+def _with_path(route: APIRoute, path: str) -> APIRoute:
+    """Copy a route carrying `path`, the way include_router() serves it."""
+    served = copy.copy(route)
+    served.path = path
+    served.path_regex, served.path_format, served.param_convertors = compile_path(path)
+    return served
+
+
+def collect_api_routes(routes: list[Any]) -> list[APIRoute]:
+    """Collect all APIRoute objects, recursing into included routers.
+
+    Defers to `fastapi.routing.iter_route_contexts`, which resolves included routers and
+    their prefixes itself.
+
+    The other include-time options (tags, deprecated, include_in_schema) are not merged —
+    no OGX router passes them, and every consumer of this helper keys off the path.
+    """
+    collected: list[APIRoute] = []
+    for context in iter_route_contexts(routes):
+        route = context.original_route
+        if not isinstance(route, APIRoute):
+            continue
+        # RouteContext.path is `str | None` in general (it falls back to `getattr(..., "path", None)`
+        # for routes without one, e.g. Mount), but an APIRoute always has a path.
+        path = context.path if context.path is not None else route.path
+        collected.append(_with_path(route, path) if path != route.path else route)
+    return collected
+
+
 def get_router_routes(router: APIRouter) -> list[APIRoute]:
-    """Extract APIRoute objects from a FastAPI router."""
-    return [route for route in router.routes if isinstance(route, APIRoute)]
+    """Extract APIRoute objects from a FastAPI router, including those of included routers."""
+    return collect_api_routes(router.routes)

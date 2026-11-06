@@ -12,4 +12,5 @@ async def get_adapter_impl(config: LlamaCppServerConfig, _deps):
     from .llama_cpp_server import LlamaCppServerInferenceAdapter
 
     adapter = LlamaCppServerInferenceAdapter(config=config)
+    await adapter.initialize()
     return adapter

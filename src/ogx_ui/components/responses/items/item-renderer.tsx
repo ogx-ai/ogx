@@ -3,6 +3,7 @@ import {
   isFunctionCallItem,
   isWebSearchCallItem,
   AnyResponseItem,
+  BaseItem,
 } from "../utils/item-types";
 import { MessageItemComponent } from "./message-item";
 import { FunctionCallItemComponent } from "./function-call-item";
@@ -52,7 +53,7 @@ export function ItemRenderer({
   // Fallback to generic item for unknown types
   return (
     <GenericItemComponent
-      item={item as Record<string, unknown>}
+      item={item as unknown as BaseItem}
       index={index}
       keyPrefix={keyPrefix}
     />

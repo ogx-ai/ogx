@@ -26,5 +26,5 @@ if [ $FOUND_PYTHON -ne 0 ]; then
 fi
 
 # Run unit tests with coverage
-uv run --python "$PYTHON_VERSION" --with-editable . --group unit \
+uv run --python "$PYTHON_VERSION" --with-editable . --group dev \
     coverage run --source=src/ogx -m pytest -s -v tests/unit/ "$@"

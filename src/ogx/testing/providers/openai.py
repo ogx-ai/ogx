@@ -6,7 +6,7 @@
 
 """OpenAI provider exception handling for test recording/replay."""
 
-import httpx
+import httpx2
 import openai as openai_sdk
 from openai import (
     APIStatusError,
@@ -37,8 +37,8 @@ _ERROR_BY_STATUS: dict[int, type[APIStatusError]] = {
 def create_error(status_code: int, body: dict | None, message: str) -> APIStatusError:
     """Reconstruct an OpenAI API error from recorded data."""
     error_class = _ERROR_BY_STATUS.get(status_code, APIStatusError)
-    request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
-    response = httpx.Response(status_code, json=body or {}, request=request)
+    request = httpx2.Request("POST", "https://api.openai.com/v1/chat/completions")
+    response = httpx2.Response(status_code, json=body or {}, request=request)
     return error_class(message=message, response=response, body=body)
 
 

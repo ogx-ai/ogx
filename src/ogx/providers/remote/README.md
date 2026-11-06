@@ -21,15 +21,17 @@ remote/
     oci/               # Oracle Cloud Infrastructure
     ollama/            # Ollama
     openai/            # OpenAI
+    passthrough/       # Generic passthrough to any endpoint
     runpod/            # RunPod
     sambanova/         # SambaNova
+    text_embeddings_inference/ # HuggingFace Text-Embeddings-Inference
     together/          # Together AI
     vertexai/          # Google Vertex AI
     vllm/              # vLLM
     watsonx/           # IBM WatsonX
   vector_io/           # Remote vector storage (chroma, elasticsearch, milvus, pgvector, qdrant, weaviate, etc.)
   files/               # Remote file storage (openai, s3)
-  tool_runtime/        # Remote tool runtimes (bing, brave, mcp, nimble, tavily, wolfram_alpha)
+  tool_runtime/        # Remote tool runtimes (bing, brave, exa, mcp, nimble, serply, tavily)
   __init__.py
 ```
 

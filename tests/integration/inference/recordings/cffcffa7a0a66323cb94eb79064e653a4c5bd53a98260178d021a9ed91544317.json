@@ -1,0 +1,44 @@
+{
+  "test_id": "tests/integration/inference/test_rerank.py::test_rerank_semantic_correctness[rerank=llama-cpp-server/bge-reranker-v2-m3-What are good learning habits? -items2-Good learning habits include reading daily and taking notes. ]",
+  "request": {
+    "test_id": "tests/integration/inference/test_rerank.py::test_rerank_semantic_correctness[rerank=llama-cpp-server/bge-reranker-v2-m3-What are good learning habits? -items2-Good learning habits include reading daily and taking notes. ]",
+    "url": "http://localhost:8080/v1/rerank",
+    "method": "POST",
+    "payload": {
+      "model": "bge-reranker-v2-m3",
+      "query": "What are good learning habits? ",
+      "documents": [
+        "Cooking pasta is a fun activity. ",
+        "Plants need water and sunlight. ",
+        "Good learning habits include reading daily and taking notes. "
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "bge-reranker-v2-m3",
+      "object": "list",
+      "usage": {
+        "prompt_tokens": 57,
+        "total_tokens": 57
+      },
+      "results": [
+        {
+          "index": 2,
+          "relevance_score": 6.761934280395508
+        },
+        {
+          "index": 1,
+          "relevance_score": -11.035030364990234
+        },
+        {
+          "index": 0,
+          "relevance_score": -11.0352144241333
+        }
+      ]
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -1,0 +1,65 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_multi_turn[txt=anthropic/claude-haiku-5-5]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_multi_turn[txt=anthropic/claude-haiku-5-5]",
+    "url": "https://api.anthropic.com/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "claude-haiku-5-5",
+      "messages": [
+        {
+          "role": "user",
+          "content": "My name is Alice."
+        },
+        {
+          "role": "assistant",
+          "content": "Hello Alice! Nice to meet you."
+        },
+        {
+          "role": "user",
+          "content": "What is my name?"
+        }
+      ],
+      "max_tokens": 64,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "claude-haiku-5-5",
+      "id": "msg_011Cg5w8Wa6EXxz2v8mmihVc",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Your name is Alice."
+        }
+      ],
+      "container": null,
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 39,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 10,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      },
+      "diagnostics": null
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -1,0 +1,99 @@
+{
+  "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_mixed_questions[judge=vllm/togethercomputer/Tev1-0.8B-experimental]",
+  "request": {
+    "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_mixed_questions[judge=vllm/togethercomputer/Tev1-0.8B-experimental]",
+    "url": "http://localhost:8000/v1/systemone",
+    "method": "POST",
+    "payload": {
+      "state": "I was charged twice and the agent was rude about it.",
+      "model": "togethercomputer/Tev1-0.8B-experimental",
+      "questions": {
+        "billing": {
+          "type": "noul",
+          "instructions": "Is this about billing?"
+        },
+        "tone": {
+          "type": "choice",
+          "instructions": "What is the tone?",
+          "criteria": {
+            "calm": null,
+            "angry": null
+          }
+        },
+        "quality": {
+          "type": "score",
+          "instructions": "Rate the interaction.",
+          "criteria": [
+            "Bad",
+            "Ok",
+            "Good"
+          ]
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "decision-932fe00810038d74",
+      "object": "structured_decision",
+      "created": 1792769757,
+      "model": "togethercomputer/Tev1-0.8B-experimental",
+      "answers": {
+        "billing": {
+          "type": "noul",
+          "noul": 0.5,
+          "probabilities": {
+            "yes": 0.5,
+            "no": 0.5
+          },
+          "confidence": 0.49583025678377585
+        },
+        "tone": {
+          "type": "choice",
+          "choice": "angry",
+          "probabilities": {
+            "calm": 0.46879062662624377,
+            "angry": 0.5312093733737563
+          },
+          "confidence": 0.5219978099948908
+        },
+        "quality": {
+          "type": "score",
+          "score": 0.7865876940156713,
+          "legend": {
+            "0": "Bad",
+            "1": "Ok",
+            "2": "Good"
+          },
+          "probabilities": {
+            "0": 0.4044707686614429,
+            "1": 0.4044707686614429,
+            "2": 0.1910584626771142
+          },
+          "confidence": 0.39844770879987884
+        }
+      },
+      "usage": {
+        "input_tokens": 147,
+        "output_tokens": 3
+      },
+      "diagnostics": {
+        "billing": {
+          "label_mass": 0.9916605135675517,
+          "argmax_is_label": true
+        },
+        "tone": {
+          "label_mass": 0.982659260471324,
+          "argmax_is_label": true
+        },
+        "quality": {
+          "label_mass": 0.9851087882531121,
+          "argmax_is_label": true
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -1,0 +1,45 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_results[txt=deepseek/deepseek-chat]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_results[txt=deepseek/deepseek-chat]",
+    "url": "https://api.deepseek.com/anthropic/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "deepseek-chat",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say 'world' and nothing else."
+        }
+      ],
+      "max_tokens": 32,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "aae2104c-9225-4dec-af98-110a6c426b8d",
+      "type": "message",
+      "role": "assistant",
+      "model": "deepseek-chat",
+      "content": [
+        {
+          "type": "text",
+          "text": "world"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 1,
+        "service_tier": "standard"
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -1,0 +1,36 @@
+{
+  "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_is_replayed[judge=ollama/tev1:0.8b]",
+  "request": {
+    "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_is_replayed[judge=ollama/tev1:0.8b]",
+    "url": "http://0.0.0.0:11434/v1/systemone",
+    "method": "POST",
+    "payload": {
+      "state": "I was charged twice. Please help.",
+      "model": "tev1:0.8b",
+      "questions": {
+        "billing": {
+          "type": "noul",
+          "instructions": "Is this about billing?"
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "tev1:0.8b",
+      "answers": {
+        "billing": {
+          "type": "noul",
+          "noul": 0.9463802839906125
+        }
+      },
+      "usage": {
+        "input_tokens": 127,
+        "output_tokens": 1
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

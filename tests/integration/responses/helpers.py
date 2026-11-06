@@ -9,7 +9,7 @@ import time
 import pytest
 from langchain_openai import ChatOpenAI
 
-from ..helpers import assert_text_contains, normalize_text
+from ..helpers import assert_text_contains, normalize_text, provider_from_model
 
 __all__ = [
     "assert_text_contains",
@@ -17,26 +17,13 @@ __all__ = [
     "new_vector_store",
     "provider_from_model",
     "skip_if_provider_is_vertexai",
+    "skip_if_text_model_prefix",
     "upload_file",
     "wait_for_file_attachment",
     "setup_mcp_tools",
     "extract_text_content",
     "langchain_chat",
 ]
-
-
-def provider_from_model(client_with_models, model_id):
-    models = {m.id: m for m in client_with_models.models.list().data}
-    models.update(
-        {
-            m.custom_metadata["provider_resource_id"]: m
-            for m in client_with_models.models.list().data
-            if m.custom_metadata
-        }
-    )
-    provider_id = models[model_id].custom_metadata["provider_id"]
-    providers = {p.provider_id: p for p in client_with_models.providers.list()}
-    return providers[provider_id]
 
 
 def skip_if_provider_is_vertexai(client_with_models, model_id, reason=""):
@@ -46,6 +33,31 @@ def skip_if_provider_is_vertexai(client_with_models, model_id, reason=""):
         if reason:
             msg += f": {reason}"
         pytest.skip(msg)
+
+
+def is_gpt_5_nano(model_id) -> bool:
+    return bool(model_id) and model_id.rsplit("/", 1)[-1] == "gpt-5-nano"
+
+
+# gpt-5-nano rejects the logprobs and top_p parameters in chat completions
+# ("You are not allowed to request logprobs from this model" / "Unsupported
+# parameter: 'top_p'"), so tests exercising those parameters skip for it.
+def skip_if_gpt_nano_limited_params(model_id, param):
+    if is_gpt_5_nano(model_id):
+        pytest.skip(f"Model {model_id} does not support {param}.")
+
+
+def skip_if_text_model_prefix(request, prefix, reason):
+    """Skip the test when the text model ID starts with the given provider prefix.
+
+    Intended for module-level autouse fixtures that exclude a whole file for
+    models that cannot reliably run a category of tests (e.g. WatsonX and
+    Bedrock GPT-OSS tool calling).
+    """
+    if "text_model_id" in request.fixturenames:
+        text_model_id = request.getfixturevalue("text_model_id")
+        if text_model_id and text_model_id.startswith(prefix):
+            pytest.skip(reason)
 
 
 def new_vector_store(openai_client, name, embedding_model, embedding_dimension):
@@ -132,6 +144,8 @@ def extract_text_content(content: str | list[str] | list[dict]):
 
 def langchain_chat(responses_client, text_model_id, use_previous_response_id: bool | None = False):
     """Return a langchain chat instance"""
+    from ogx.testing.api_recorder import build_test_id_async_http_client, build_test_id_http_client
+
     base_url = str(responses_client.base_url)
     url = base_url if base_url.endswith("/v1/") else base_url + "/v1/"
 
@@ -143,4 +157,10 @@ def langchain_chat(responses_client, text_model_id, use_previous_response_id: bo
         model=text_model_id,
         use_responses_api=True,
         use_previous_response_id=use_previous_response_id,
+        # ChatOpenAI constructs its own OpenAI/AsyncOpenAI clients internally (.invoke() uses
+        # the sync one; LangGraph and .ainvoke()/.astream() callers use the async one), so
+        # __test_id needs to reach both. This was previously the one gap the old
+        # _prepare_request patch never covered, since it only ever patched openai.OpenAI (#6627).
+        http_client=build_test_id_http_client(),
+        http_async_client=build_test_id_async_http_client(),
     )

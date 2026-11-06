@@ -227,6 +227,25 @@ async def test_connect_wraps_connection_error():
             await store.get("k1")
 
 
+async def test_connection_string_is_passed_as_asyncpg_dsn() -> None:
+    from ogx.core.storage.kvstore.postgres.postgres import PostgresKVStoreImpl
+
+    dsn = "postgresql://user:secret@db.example/app?application_name=ogx"
+    config = PostgresKVStoreConfig(connection_string=SecretStr(dsn), ssl_mode="require")
+    store = PostgresKVStoreImpl(config)
+    store._table_created = True
+
+    with patch(
+        "ogx.core.storage.kvstore.postgres.postgres.asyncpg.create_pool", new_callable=AsyncMock
+    ) as mock_create_pool:
+        await store._acquire()
+
+    mock_create_pool.assert_awaited_once()
+    assert mock_create_pool.call_args.kwargs["dsn"] == dsn
+    assert mock_create_pool.call_args.kwargs["ssl"] == "require"
+    assert "host" not in mock_create_pool.call_args.kwargs
+
+
 # -- Connection lifecycle ------------------------------------------------------
 
 

@@ -2,7 +2,7 @@ import {
   extractTextFromContentPart,
   extractDisplayableText,
 } from "./format-message-content";
-import { ChatMessage } from "@/lib/types";
+import { ChatMessage, ChatMessageContentPart } from "@/lib/types";
 
 describe("extractTextFromContentPart", () => {
   it("should return an empty string for null or undefined input", () => {
@@ -53,7 +53,10 @@ describe("extractTextFromContentPart", () => {
   });
 
   it("should handle arrays with plain strings", () => {
-    const content = ["This is", " a test."] as unknown;
+    const content = [
+      "This is",
+      " a test.",
+    ] as unknown as ChatMessageContentPart[];
     expect(extractTextFromContentPart(content)).toBe("This is  a test.");
   });
 
@@ -65,7 +68,7 @@ describe("extractTextFromContentPart", () => {
       null,
       undefined,
       { type: "text", noTextProperty: true },
-    ] as unknown;
+    ] as unknown as ChatMessageContentPart[];
     expect(extractTextFromContentPart(content)).toBe("Valid");
   });
 
@@ -75,7 +78,7 @@ describe("extractTextFromContentPart", () => {
       "Just a string.",
       { type: "image_url", image_url: { url: "http://example.com/image.png" } },
       { type: "text", text: "Last part." },
-    ] as unknown;
+    ] as unknown as ChatMessageContentPart[];
     expect(extractTextFromContentPart(content)).toBe(
       "First part. Just a string. [Image] Last part."
     );

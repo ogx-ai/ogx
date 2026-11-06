@@ -90,6 +90,7 @@ def test_vector_store_retrieve(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -113,6 +114,7 @@ def test_vector_store_register(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -151,6 +153,8 @@ def test_insert_chunks(
         name=vector_store_name,
         extra_body={
             "provider_id": vector_io_provider_id,
+            "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -198,6 +202,8 @@ def test_insert_chunks_with_precomputed_embeddings(
         name=vector_store_name,
         extra_body={
             "provider_id": vector_io_provider_id,
+            "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -259,6 +265,7 @@ def test_query_returns_valid_object_when_identical_to_embedding_in_vdb(
         name=vector_store_name,
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -327,7 +334,13 @@ def test_provider_auto_selection_single_provider(
         pytest.skip(f"Test requires exactly one vector_io provider, found {len(providers)}")
 
     # Test that when only one provider is available, it's auto-selected (no provider_id needed)
-    vs = client_with_empty_registry.vector_stores.create(name="test_auto_provider")
+    vs = client_with_empty_registry.vector_stores.create(
+        name="test_auto_provider",
+        extra_body={
+            "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
+        },
+    )
     assert vs.id is not None
 
 
@@ -341,9 +354,30 @@ def test_provider_id_override(
 
     provider_id = providers[0].provider_id
 
-    # Test explicit provider_id specification (using default embedding model)
+    # Test explicit provider_id specification
     vs = client_with_empty_registry.vector_stores.create(
-        name="test_provider_override", extra_body={"provider_id": provider_id}
+        name="test_provider_override",
+        extra_body={
+            "provider_id": provider_id,
+            "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
+        },
     )
     assert vs.id is not None
     assert vs.metadata.get("provider_id") == provider_id
+
+
+@vector_provider_wrapper
+def test_create_without_model_uses_default_embedding_model(client_with_empty_registry, vector_io_provider_id):
+    # Creating a store without embedding_model/embedding_dimension makes the router
+    # fall back to vector_stores.default_embedding_model from the stack config.
+    # This is the ci-tests default (see src/ogx/distributions/ci-tests/config.yaml).
+    vector_store = client_with_empty_registry.vector_stores.create(
+        name="test_default_embedding_model",
+        extra_body={"provider_id": vector_io_provider_id},
+    )
+    assert vector_store.id is not None
+
+    retrieved = client_with_empty_registry.vector_stores.retrieve(vector_store_id=vector_store.id)
+    assert retrieved.metadata.get("embedding_model") == "sentence-transformers/nomic-ai/nomic-embed-text-v1.5"
+    assert retrieved.metadata.get("embedding_dimension") == "768"

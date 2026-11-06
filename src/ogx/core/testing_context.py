@@ -5,7 +5,7 @@
 # the root directory of this source tree.
 
 import os
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 
 from ogx.core.request_headers import PROVIDER_DATA_VAR
 
@@ -21,7 +21,7 @@ def get_test_context() -> str | None:
     return TEST_CONTEXT.get()
 
 
-def set_test_context(value: str | None):
+def set_test_context(value: str | None) -> Token[str | None]:
     """Set the test context identifier for the current async context.
 
     Args:
@@ -33,7 +33,7 @@ def set_test_context(value: str | None):
     return TEST_CONTEXT.set(value)
 
 
-def reset_test_context(token) -> None:
+def reset_test_context(token: Token[str | None]) -> None:
     """Reset the test context to its previous value using a token from set_test_context.
 
     Args:
@@ -42,13 +42,15 @@ def reset_test_context(token) -> None:
     TEST_CONTEXT.reset(token)
 
 
-def sync_test_context_from_provider_data():
-    """Sync test context from provider data when running in server test mode."""
-    if "OGX_TEST_INFERENCE_MODE" not in os.environ:
-        return None
+def sync_test_context_from_provider_data() -> Token[str | None] | None:
+    """Sync test context from provider data when running in test mode.
 
-    stack_config_type = os.environ.get("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
-    if stack_config_type != "server":
+    Shared by the server middleware (server mode, over real HTTP) and the in-process
+    library client (library_client mode, no HTTP): both parse the same
+    X-OGX-Provider-Data header into PROVIDER_DATA_VAR before calling this, so it derives
+    TEST_CONTEXT identically regardless of which transport carried the request.
+    """
+    if "OGX_TEST_INFERENCE_MODE" not in os.environ:
         return None
 
     try:

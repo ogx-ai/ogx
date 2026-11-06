@@ -46,8 +46,14 @@ describe("FileDetailPage", () => {
     id: "vs_123",
     name: "Test Vector Store",
     created_at: 1710000000,
-    status: "ready",
-    file_counts: { total: 5 },
+    status: "completed",
+    file_counts: {
+      total: 5,
+      completed: 5,
+      cancelled: 0,
+      failed: 0,
+      in_progress: 0,
+    },
     usage_bytes: 1024,
     metadata: {
       provider_id: "test_provider",
@@ -59,17 +65,20 @@ describe("FileDetailPage", () => {
     status: "completed",
     created_at: 1710001000,
     usage_bytes: 2048,
-    chunking_strategy: { type: "fixed_size" },
+    vector_store_id: "vs_123",
+    chunking_strategy: { static: {}, type: "static" },
   };
 
   const mockFileContent: FileContentResponse = {
-    content: [
-      { text: "First chunk of file content." },
+    data: [
+      { text: "First chunk of file content.", type: "text" },
       {
         text: "Second chunk with more detailed information about the content.",
+        type: "text",
       },
-      { text: "Third and final chunk of the file." },
+      { text: "Third and final chunk of the file.", type: "text" },
     ],
+    has_more: false,
   };
 
   beforeEach(() => {
@@ -204,7 +213,7 @@ describe("FileDetailPage", () => {
       expect(dateTexts.length).toBeGreaterThan(0);
       const strategyTexts = screen.getAllByText("Content Strategy:");
       expect(strategyTexts.length).toBeGreaterThan(0);
-      const fixedSizeTexts = screen.getAllByText("fixed_size");
+      const fixedSizeTexts = screen.getAllByText("static");
       expect(fixedSizeTexts.length).toBeGreaterThan(0);
     });
 
@@ -233,8 +242,8 @@ describe("FileDetailPage", () => {
         expect(screen.getByText("3")).toBeInTheDocument();
         expect(screen.getByText("Total Characters:")).toBeInTheDocument();
 
-        const totalChars = mockFileContent.content.reduce(
-          (total, item) => total + item.text.length,
+        const totalChars = mockFileContent.data.reduce(
+          (total: number, item) => total + item.text.length,
           0
         );
         expect(screen.getByText(totalChars.toString())).toBeInTheDocument();
@@ -248,7 +257,7 @@ describe("FileDetailPage", () => {
 
     test("handles empty content", async () => {
       mockClient.vectorStores.files.content.mockResolvedValue({
-        content: [],
+        data: [],
       });
 
       await act(async () => {
@@ -264,7 +273,7 @@ describe("FileDetailPage", () => {
 
     test("truncates long content preview", async () => {
       const longContent = {
-        content: [
+        data: [
           {
             text: "This is a very long piece of content that should be truncated after 200 characters to ensure the preview doesn't take up too much space in the UI and remains readable and manageable for users viewing the file details page.",
           },
@@ -371,7 +380,7 @@ describe("FileDetailPage", () => {
         const usageTexts = screen.getAllByText("2048");
         expect(usageTexts.length).toBeGreaterThan(0);
         expect(screen.getByText("Content Strategy")).toBeInTheDocument();
-        const fixedSizeTexts = screen.getAllByText("fixed_size");
+        const fixedSizeTexts = screen.getAllByText("static");
         expect(fixedSizeTexts.length).toBeGreaterThan(0);
 
         expect(screen.getByText("Store Name")).toBeInTheDocument();

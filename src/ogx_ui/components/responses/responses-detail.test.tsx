@@ -2,7 +2,11 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ResponseDetailView } from "./responses-detail";
-import { OpenAIResponse, InputItemListResponse } from "@/lib/types";
+import {
+  OpenAIResponse,
+  InputItemListResponse,
+  ResponseOutput,
+} from "@/lib/types";
 
 describe("ResponseDetailView", () => {
   const defaultProps = {
@@ -616,7 +620,7 @@ describe("ResponseDetailView", () => {
             type: "unknown_type",
             custom_field: "custom_value",
             data: { nested: "object" },
-          } as unknown,
+          } as unknown as ResponseOutput,
         ],
         input: [],
       };
@@ -666,7 +670,7 @@ describe("ResponseDetailView", () => {
             role: "assistant",
             call_id: "call_123",
             content: "sunny and warm",
-          } as unknown, // Using any to bypass the type restriction for this test
+          } as unknown as ResponseOutput, // Using any to bypass the type restriction for this test
         ],
         input: [],
       };
@@ -695,6 +699,7 @@ describe("ResponseDetailView", () => {
         output: [
           {
             type: "function_call",
+            id: "call_123",
             call_id: "call_123",
             status: "completed",
             name: "get_weather",
@@ -706,7 +711,7 @@ describe("ResponseDetailView", () => {
             status: "completed",
             call_id: "call_123",
             output: "sunny and warm",
-          } as unknown,
+          } as unknown as ResponseOutput,
         ],
         input: [],
       };

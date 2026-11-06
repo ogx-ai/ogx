@@ -5,7 +5,7 @@
 # the root directory of this source tree.
 
 """
-Temporary ordering helpers extracted from origin/main client-sdks/stainless/openapi.yml.
+Temporary ordering helpers extracted from origin/main client-sdks/spec/openapi.yml.
 
 These lists help the new generator match the previous ordering so that diffs
 remain readable while we debug schema content regressions. Remove once stable.

@@ -170,6 +170,28 @@ class TestAutodetect:
             await _autodetect_providers()
             assert captured[0] == "OLLAMA_URL"
 
+    async def test_autodetect_typesafe_candidate_config(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("TYPESAFE_API_KEY", "ts-test")
+        captured: list[tuple] = []
+
+        def side_effect(
+            provider_type: str,
+            base_url_env: object,
+            default_base_url: str,
+            required_api_key_env: object,
+            optional_api_key_env: object = None,
+            debug: bool = False,
+        ) -> tuple:
+            if provider_type == "remote::typesafe":
+                captured.append((base_url_env, default_base_url, required_api_key_env))
+                return (_ProbeStatus.OK, [], "https://api.typesafe.ai", "default", None)
+            return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
+
+        with patch("ogx.cli.stack.lets_go._probe_provider_availability", side_effect=side_effect):
+            parts = (await _autodetect_providers())[0].split(",")
+            assert "inference=remote::typesafe" in parts
+            assert captured == [("TYPESAFE_BASE_URL", "https://api.typesafe.ai", "TYPESAFE_API_KEY")]
+
     async def test_autodetect_result_order_matches_candidate_order(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
@@ -399,6 +421,38 @@ class TestClaudeCodeAliases:
         for expected in _CLAUDE_CODE_ALIASES:
             assert expected in alias_model_ids
 
+    @pytest.mark.parametrize(
+        "model_id",
+        ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5", "claude-fable-5", "claude-mythos-5"],
+    )
+    def test_current_generation_models_are_registered_for_anthropic(self, model_id):
+        """The claude CLI requests these unprefixed IDs, and an unregistered one fails to resolve."""
+        aliases = _build_claude_code_aliases("inference=remote::anthropic")
+
+        alias = next(a for a in aliases if a.model_id == model_id)
+        assert alias.provider_id == "anthropic"
+        assert alias.provider_model_id == model_id
+
+    def test_previous_generation_models_stay_registered_for_older_cli_versions(self):
+        assert {"claude-sonnet-4-6", "claude-opus-4-7"} <= set(_CLAUDE_CODE_ALIASES)
+
+    def test_alias_ids_are_unique(self):
+        assert len(_CLAUDE_CODE_ALIASES) == len(set(_CLAUDE_CODE_ALIASES))
+
+    def test_newest_model_of_each_tier_comes_first(self):
+        """`ogx connect claude` maps each tier to the first matching model, so newer ones must precede older."""
+        assert _CLAUDE_CODE_ALIASES.index("claude-sonnet-5") < _CLAUDE_CODE_ALIASES.index("claude-sonnet-4-6")
+        assert _CLAUDE_CODE_ALIASES.index("claude-opus-5") < _CLAUDE_CODE_ALIASES.index("claude-opus-4-7")
+
+    def test_connect_claude_picks_the_newest_model_per_tier(self):
+        from ogx.cli.connect.claude import _detect_tier_models
+
+        assert _detect_tier_models(list(_CLAUDE_CODE_ALIASES)) == {
+            "haiku": "claude-haiku-4-5",
+            "sonnet": "claude-sonnet-5",
+            "opus": "claude-opus-5",
+        }
+
     def test_aliases_have_unprefixed_metadata(self):
         spec = "inference=remote::anthropic"
         aliases = _build_claude_code_aliases(spec)
@@ -421,16 +475,16 @@ class TestAddFileSearchAndResponses:
         monkeypatch.delenv("BING_API_KEY", raising=False)
         monkeypatch.delenv("NIMBLE_API_KEY", raising=False)
 
+        run_config = StackConfig(
+            distro_name="test",
+            providers={
+                "tool_runtime": [],
+                "responses": [],
+            },
+        )
+
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(
-                StackConfig(
-                    distro_name="test",
-                    providers={
-                        "tool_runtime": [],
-                        "responses": [],
-                    },
-                )
-            )
+            _add_file_search_and_responses(run_config)
 
         web_search_providers = [
             p
@@ -442,6 +496,10 @@ class TestAddFileSearchAndResponses:
         assert "tavily-search" not in web_search_providers
         assert "bing-search" not in web_search_providers
         assert "nimble-search" not in web_search_providers
+
+        # A real provider was added, so the placeholder must not be
+        provider_types = [p.provider_type for p in run_config.providers["tool_runtime"]]
+        assert "inline::placeholder" not in provider_types
 
     def test_falls_back_to_tavily_when_only_tavily_key_set(self, monkeypatch: pytest.MonkeyPatch):
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
@@ -511,34 +569,38 @@ class TestAddFileSearchAndResponses:
         # All four have keys, all four should be added
         assert provider_ids_in_calls == {"brave-search", "tavily-search", "bing-search", "nimble-search"}
 
-    def test_no_web_search_when_no_key_set(self, monkeypatch: pytest.MonkeyPatch):
+    def test_web_search_placeholder_when_no_key_set(self, monkeypatch: pytest.MonkeyPatch):
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
         from ogx.core.datatypes import StackConfig
 
         # Clear env vars to ensure no keys are set
-        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY"):
+        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY", "EXA_API_KEY"):
             monkeypatch.delenv(var, raising=False)
 
-        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(
-                StackConfig(
-                    distro_name="test",
-                    providers={
-                        "tool_runtime": [],
-                        "responses": [],
-                    },
-                )
-            )
+        run_config = StackConfig(
+            distro_name="test",
+            providers={
+                "tool_runtime": [],
+                "responses": [],
+            },
+        )
 
-        # Should show disabled message, not provider names
-        has_disabled = any("web search disabled" in str(call) for call in mock_cprint.call_args_list)
-        assert has_disabled
+        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
+            _add_file_search_and_responses(run_config)
+
+        # Should show the built-in placeholder message, not provider names
+        has_placeholder = any("built-in placeholder" in str(call) for call in mock_cprint.call_args_list)
+        assert has_placeholder
+
+        # The placeholder provider should be registered so the web_search tool is hosted
+        provider_types = [p.provider_type for p in run_config.providers["tool_runtime"]]
+        assert "inline::placeholder" in provider_types
 
     def test_duplicate_providers_when_already_configured(self, monkeypatch: pytest.MonkeyPatch):
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
         from ogx.core.datatypes import Provider, StackConfig
 
-        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY"):
+        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY", "EXA_API_KEY"):
             monkeypatch.delenv(var, raising=False)
 
         initial_providers = [

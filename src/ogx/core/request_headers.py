@@ -7,6 +7,7 @@
 import contextvars
 import json
 import os
+from collections.abc import MutableMapping
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any, cast
 
@@ -112,6 +113,32 @@ def parse_request_provider_data(headers: dict[str, str]) -> dict[str, Any] | Non
             del parsed[key]
 
     return cast(dict[str, Any], parsed)
+
+
+def stamp_test_id_into_headers(headers: MutableMapping[str, str]) -> None:
+    """Stamp the active test's ID into `headers`'s provider-data value, in place.
+
+    Shared by real HTTP requests (api_recorder.py's _inject_test_id, used for server mode
+    and any other real-HTTP client) and the in-process library-client call paths
+    (library_client.py), so the parse/merge logic for the header can't drift between the
+    two -- only how each caller reaches the request's headers and its own mode gating (if
+    any) differ. Reuses parse_request_provider_data()'s handling of a missing, invalid-JSON,
+    or non-object existing header, since that's what a downstream
+    request_provider_data_context() call does with this same header anyway.
+
+    A no-op outside an active test context.
+    """
+    from ogx.core.testing_context import get_test_context  # deferred: that module imports this one
+
+    test_id = get_test_context()
+    if not test_id:
+        return
+
+    provider_data = parse_request_provider_data(dict(headers)) or {}
+    provider_data["__test_id"] = test_id
+
+    existing_key = next((key for key in ("X-OGX-Provider-Data", "x-ogx-provider-data") if key in headers), None)
+    headers[existing_key or "X-OGX-Provider-Data"] = json.dumps(provider_data)
 
 
 def request_provider_data_context(headers: dict[str, str], user: User | None = None) -> AbstractContextManager[None]:
