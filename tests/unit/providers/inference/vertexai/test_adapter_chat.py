@@ -633,6 +633,60 @@ class TestStreamChatCompletion:
         # Exactly 1 chunk — include_usage=False means no extra chunk
         assert len(chunks) == 1
 
+    @staticmethod
+    def _vertex_like_stream() -> list[Any]:
+        # Vertex AI attaches usage_metadata to every streamed chunk, but only the
+        # last one carries token counts (intermediate ones hold just traffic_type).
+        first = _make_fake_streaming_chunk("Hello")
+        first.candidates[0].finish_reason = None
+        first.usage_metadata = SimpleNamespace(traffic_type="ON_DEMAND")
+        last = _make_fake_streaming_chunk(" world")
+        last.usage_metadata = SimpleNamespace(
+            prompt_token_count=10, candidates_token_count=5, total_token_count=15, traffic_type="ON_DEMAND"
+        )
+        return [first, last]
+
+    async def _collect(self, adapter: VertexAIInferenceAdapter, stream_options: dict[str, Any] | None) -> list[Any]:
+        gemini_chunks = self._vertex_like_stream()
+
+        async def fake_stream(**kwargs):
+            for chunk in gemini_chunks:
+                yield chunk
+
+        fake_client = SimpleNamespace(
+            aio=SimpleNamespace(models=SimpleNamespace(generate_content_stream=AsyncMock(return_value=fake_stream())))
+        )
+        stream = await adapter._stream_chat_completion(
+            client=cast(Any, fake_client),
+            provider_model_id="gemini-2.0-flash",
+            contents=[],
+            config=cast(Any, SimpleNamespace()),
+            model="gemini-2.0-flash",
+            stream_options=stream_options,
+        )
+        return [chunk async for chunk in stream]
+
+    async def test_include_usage_reports_usage_only_on_final_chunk(self):
+        """Usage must appear exactly once so consumers that sum chunk usage do not double count."""
+        adapter = VertexAIInferenceAdapter(config=VertexAIConfig(project="p", location="l"))
+
+        chunks = await self._collect(adapter, {"include_usage": True})
+
+        assert [chunk.usage for chunk in chunks[:-1]] == [None, None]
+        final = chunks[-1]
+        assert final.choices == []
+        assert final.usage is not None
+        assert (final.usage.prompt_tokens, final.usage.completion_tokens, final.usage.total_tokens) == (10, 5, 15)
+
+    async def test_no_usage_on_chunks_without_include_usage(self):
+        """Without include_usage, every chunk carries a null usage field."""
+        adapter = VertexAIInferenceAdapter(config=VertexAIConfig(project="p", location="l"))
+
+        chunks = await self._collect(adapter, None)
+
+        assert len(chunks) == 2
+        assert all(chunk.usage is None for chunk in chunks)
+
 
 @pytest.fixture
 def make_adapter_with_mock_embed(monkeypatch):
