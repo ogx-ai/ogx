@@ -7,6 +7,14 @@ fallback_version = "1.5.1.dev0"
 
 [tool.uv]
 required-version = ">=0.7.0"
+# Windows is not a supported target. Restricting the resolved environments to
+# Linux and macOS keeps the lock from resolving win32-only markers -- notably
+# magika's win32-only `onnxruntime<=1.20.1` pin, which would otherwise cap
+# onnxruntime for every platform.
+environments = [
+    "sys_platform == 'linux'",
+    "sys_platform == 'darwin'",
+]
 constraint-dependencies = [
     "aiohttp>=3.14.3",                # CVE-2026-69244: parser DoS
     "anyio>=4.14.2",
@@ -54,7 +62,7 @@ dynamic = ["version"]
 authors = [{ name = "The OGX Contributors", email = "contributors@ogx.dev" }]
 description = "Open-source, OpenAI-compatible API server with pluggable providers for any model and any infrastructure"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13,<3.15"
 license = { "text" = "MIT" }
 classifiers = [
     "License :: OSI Approved :: MIT License",
@@ -276,6 +284,8 @@ ogx-api = [{ path = "src/ogx_api", editable = true }]
 
 [tool.ruff]
 line-length = 120
+# Lint against the supported floor, not the top of the requires-python range.
+target-version = "py313"
 exclude = [
     "./.git",
     "./docs/*",

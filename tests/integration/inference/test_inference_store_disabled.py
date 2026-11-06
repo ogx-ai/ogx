@@ -49,7 +49,7 @@ NonPersistingClient = tuple[OGXAsLibraryClient, Path]
 
 
 @pytest.fixture(scope="session")
-def non_persisting_client() -> Generator[NonPersistingClient, None, None]:
+def non_persisting_client() -> Generator[NonPersistingClient]:
     """Boot an in-process library client with chat completion persistence disabled.
 
     Booted once for the whole session because constructing the ci-tests stack is

@@ -9,7 +9,7 @@ import contextvars
 from collections.abc import AsyncGenerator
 
 
-def preserve_context_for_sse(event_gen: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:
+def preserve_context_for_sse(event_gen: AsyncGenerator[str]) -> AsyncGenerator[str]:
     """Preserve request context for SSE streaming.
 
     StreamingResponse runs in a different task, losing request contextvars.
@@ -17,7 +17,7 @@ def preserve_context_for_sse(event_gen: AsyncGenerator[str, None]) -> AsyncGener
     """
     context = contextvars.copy_context()
 
-    async def wrapper() -> AsyncGenerator[str, None]:
+    async def wrapper() -> AsyncGenerator[str]:
         try:
             while True:
                 try:
