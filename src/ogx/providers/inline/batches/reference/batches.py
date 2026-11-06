@@ -10,7 +10,6 @@ import itertools
 import json
 import time
 import uuid
-from io import BytesIO
 from typing import Any
 
 from openai.types.batch import BatchError, Errors
@@ -50,6 +49,7 @@ from ogx_api.batches.models import (
     ListBatchesRequest,
     RetrieveBatchRequest,
 )
+from ogx_api.common.upload_limits import PreReadUploadFile
 from ogx_api.files.models import (
     RetrieveFileContentRequest,
     RetrieveFileRequest,
@@ -62,33 +62,6 @@ from .config import ReferenceBatchesImplConfig
 TABLE_BATCHES = "batches"
 
 logger = get_logger(__name__)
-
-
-class AsyncBytesIO:
-    """
-    Async-compatible BytesIO wrapper to allow async file-like operations.
-
-    We use this when uploading files to the Files API, as it expects an
-    async file-like object.
-    """
-
-    def __init__(self, data: bytes):
-        self._buffer = BytesIO(data)
-
-    async def read(self, n=-1):
-        return self._buffer.read(n)
-
-    async def seek(self, pos, whence=0):
-        return self._buffer.seek(pos, whence)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._buffer.close()
-
-    def __getattr__(self, name):
-        return getattr(self._buffer, name)
 
 
 class BatchRequest(BaseModel):
@@ -770,10 +743,8 @@ class ReferenceBatchesImpl(Batches):
         """
         output_lines = [json.dumps(result) for result in results]
 
-        with AsyncBytesIO("\n".join(output_lines).encode("utf-8")) as file_buffer:
-            file_buffer.filename = f"{batch_id}_{file_type}.jsonl"
-            uploaded_file = await self.files_api.openai_upload_file(
-                request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.BATCH),
-                file=file_buffer,
-            )
-            return uploaded_file.id
+        uploaded_file = await self.files_api.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.BATCH),
+            file=PreReadUploadFile("\n".join(output_lines).encode("utf-8"), filename=f"{batch_id}_{file_type}.jsonl"),
+        )
+        return uploaded_file.id

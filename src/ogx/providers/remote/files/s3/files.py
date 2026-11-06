@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 import asyncio
+import io
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
@@ -21,6 +22,7 @@ from ogx.core.access_control.datatypes import Action
 from ogx.core.datatypes import AccessRule
 from ogx.core.id_generation import generate_object_id
 from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore, authorized_sqlstore
+from ogx.log import get_logger
 from ogx.providers.utils.files.sanitize import sanitize_content_disposition_filename
 from ogx_api import (
     ExpiresAfter,
@@ -43,6 +45,8 @@ from ogx_api.files.models import (
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
 
 from .config import S3FilesImplConfig
+
+logger = get_logger(name=__name__, category="files")
 
 # TODO: provider data for S3 credentials
 
@@ -231,7 +235,7 @@ class S3FilesImpl(Files):
 
         file_id = generate_object_id("file", lambda: f"file-{uuid.uuid4().hex}")
 
-        filename = sanitize_content_disposition_filename(getattr(file, "filename", None) or "uploaded_file")
+        filename = sanitize_content_disposition_filename(file.filename or "uploaded_file")
 
         created_at = self._now()
 
@@ -246,8 +250,20 @@ class S3FilesImpl(Files):
         if expires_after is not None:
             expires_at = created_at + expires_after.seconds
 
-        content = await file.read()
-        file_size = len(content)
+        file_size = file.file.seek(0, io.SEEK_END)
+        file.file.seek(0)
+
+        try:
+            # upload_fileobj streams in parts (multipart above 8 MiB), so memory stays bounded regardless of file size
+            await asyncio.to_thread(
+                self.client.upload_fileobj,
+                file.file,
+                Bucket=self._config.bucket_name,
+                Key=self._object_key(file_id),
+                # TODO: enable server-side encryption
+            )
+        except ClientError as e:
+            raise RuntimeError(f"Failed to upload file to S3: {e}") from e
 
         entry: dict[str, Any] = {
             "id": file_id,
@@ -258,20 +274,15 @@ class S3FilesImpl(Files):
             "expires_at": expires_at,
         }
 
-        await self.sql_store.insert("openai_files", entry)
-
         try:
-            await asyncio.to_thread(
-                self.client.put_object,
-                Bucket=self._config.bucket_name,
-                Key=self._object_key(file_id),
-                Body=content,
-                # TODO: enable server-side encryption
-            )
-        except ClientError as e:
-            await self.sql_store.delete("openai_files", where={"id": file_id})
-
-            raise RuntimeError(f"Failed to upload file to S3: {e}") from e
+            await self.sql_store.insert("openai_files", entry)
+        except Exception:
+            key = self._object_key(file_id)
+            try:
+                await asyncio.to_thread(self.client.delete_object, Bucket=self._config.bucket_name, Key=key)
+            except (BotoCoreError, ClientError) as e:
+                logger.warning("Failed to delete S3 object after its metadata insert failed", key=key, error=str(e))
+            raise
 
         return _make_file_object(**entry)
 
