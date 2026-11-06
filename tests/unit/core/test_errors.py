@@ -20,9 +20,11 @@ from ogx_api.common.errors import (
     ConversationNotFoundError,
     InternalServerError,
     InvalidParameterError,
+    ItemAlreadyInConversationError,
     ModelNotFoundError,
     ModelTypeError,
     OGXError,
+    OpenAIErrorResponse,
     ResourceNotFoundError,
     ResponseInputItemNotFoundError,
     ResponseNotFoundError,
@@ -30,6 +32,7 @@ from ogx_api.common.errors import (
     TokenValidationError,
     UnsupportedModelError,
 )
+from ogx_api.router_utils import try_translate_to_http_exception
 
 
 class TestClientListCommand:
@@ -461,3 +464,64 @@ class TestTranslateException:
             assert isinstance(result.detail, dict)
             assert "errors" in result.detail
             assert len(result.detail["errors"]) > 0
+
+    def test_item_already_in_conversation_error_plumbing(self):
+        exc = ItemAlreadyInConversationError()
+        result = translate_exception(exc)
+        assert result.status_code == httpx2.codes.BAD_REQUEST
+        assert getattr(result, "error_type", None) == "invalid_request_error"
+        assert getattr(result, "code", None) == "item_already_in_conversation"
+        assert getattr(result, "param", None) == "items"
+
+        resp = OpenAIErrorResponse.from_message(
+            result.detail,
+            type=getattr(result, "error_type", None),
+            code=getattr(result, "code", None),
+            param=getattr(result, "param", None),
+        ).to_dict()
+        assert resp == {
+            "error": {
+                "message": "Item already in conversation.",
+                "type": "invalid_request_error",
+                "code": "item_already_in_conversation",
+                "param": "items",
+            }
+        }
+
+    def test_ogx_error_envelope_omits_none_fields(self):
+        exc = OGXError("unadorned error")
+        result = translate_exception(exc)
+        resp = OpenAIErrorResponse.from_message(
+            result.detail,
+            type=getattr(result, "error_type", None),
+            code=getattr(result, "code", None),
+            param=getattr(result, "param", None),
+        ).to_dict()
+        assert resp == {"error": {"message": "unadorned error"}}
+
+    def test_try_translate_to_http_exception_carries_envelope_fields(self):
+        exc = ItemAlreadyInConversationError()
+        result = try_translate_to_http_exception(exc)
+        assert result is not None
+        assert result.status_code == httpx2.codes.BAD_REQUEST
+        assert getattr(result, "error_type", None) == "invalid_request_error"
+        assert getattr(result, "code", None) == "item_already_in_conversation"
+        assert getattr(result, "param", None) == "items"
+
+        translated = translate_exception(result)
+        assert translated is result
+        resp = OpenAIErrorResponse.from_message(
+            translated.detail,
+            type=getattr(translated, "error_type", None),
+            code=getattr(translated, "code", None),
+            param=getattr(translated, "param", None),
+        ).to_dict()
+        assert resp == {
+            "error": {
+                "message": "Item already in conversation.",
+                "type": "invalid_request_error",
+                "code": "item_already_in_conversation",
+                "param": "items",
+            }
+        }
+

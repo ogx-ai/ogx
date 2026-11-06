@@ -33,7 +33,15 @@ def translate_exception(exc: Exception) -> HTTPException:
         )
 
     if isinstance(exc, OGXError):
-        return HTTPException(status_code=exc.status_code, detail=str(exc))
+        status_code = getattr(exc, "status_code", httpx2.codes.INTERNAL_SERVER_ERROR)
+        http_exc = HTTPException(status_code=status_code, detail=str(exc))
+        http_exc.error_type = exc.error_type
+        http_exc.code = exc.code
+        http_exc.param = exc.param
+        return http_exc
+
+    if isinstance(exc, HTTPException):
+        return exc
 
     # Translate generic exceptions to HTTPException
     http_exc = translate_exception_to_http(exc)
