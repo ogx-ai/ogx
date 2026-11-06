@@ -636,6 +636,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         async def _iter() -> AsyncIterator[OpenAIChatCompletionChunk]:
             is_first_chunk = True
             last_chunk: Any = None
+            tool_call_counts: dict[int, int] = {}
             async for chunk in stream:
                 signatures: dict[str, str] = {}
                 openai_chunk = converters.convert_gemini_stream_chunk_to_openai(
@@ -644,6 +645,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                     completion_id=completion_id,
                     is_first_chunk=is_first_chunk,
                     signatures_out=signatures,
+                    tool_call_counts=tool_call_counts,
                 )
                 # Persist before yield: code after yield only runs when the
                 # consumer pulls the next item, and is skipped if the stream is
