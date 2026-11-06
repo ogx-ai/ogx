@@ -778,3 +778,50 @@ class TestFileBatchCleanup:
             where={"id": "batch_1"},
         )
         assert "batch_1" not in mixin.openai_file_batches
+
+
+class TestBeforeCursorPagination:
+    """A `before` cursor must return the page immediately preceding it, not the head of the list."""
+
+    async def test_list_vector_stores_before_returns_previous_page(self):
+        mixin = MockVectorStoreMixin(inference_api=AsyncMock(), files_api=AsyncMock())
+        for i in range(1, 7):
+            store_info = _make_full_store_info(f"vs_{i}", f"store {i}")
+            store_info["created_at"] = i
+            mixin.openai_vector_stores[f"vs_{i}"] = store_info
+
+        third_page = await mixin.openai_list_vector_stores(limit=2, order="asc", after="vs_4")
+        assert [store.id for store in third_page.data] == ["vs_5", "vs_6"]
+
+        previous_page = await mixin.openai_list_vector_stores(limit=2, order="asc", before=third_page.first_id)
+        assert [store.id for store in previous_page.data] == ["vs_3", "vs_4"]
+        assert previous_page.first_id == "vs_3"
+        assert previous_page.last_id == "vs_4"
+        assert previous_page.has_more is True
+
+        first_page = await mixin.openai_list_vector_stores(limit=2, order="asc", before=previous_page.first_id)
+        assert [store.id for store in first_page.data] == ["vs_1", "vs_2"]
+        assert first_page.has_more is False
+
+    async def test_list_files_in_vector_store_before_returns_previous_page(self):
+        mixin = MockVectorStoreMixin(inference_api=AsyncMock(), files_api=AsyncMock())
+        file_ids = [f"file_{i}" for i in range(1, 7)]
+        files = {
+            file_id: {
+                "id": file_id,
+                "usage_bytes": 0,
+                "created_at": i,
+                "vector_store_id": "vs_1",
+                "status": "completed",
+                "chunking_strategy": VectorStoreChunkingStrategyAuto().model_dump(),
+            }
+            for i, file_id in enumerate(file_ids, start=1)
+        }
+        mixin.openai_vector_stores["vs_1"] = {"id": "vs_1", "file_ids": file_ids}
+        mixin._load_openai_vector_store_file = AsyncMock(side_effect=lambda store_id, file_id: files[file_id])
+
+        previous_page = await mixin.openai_list_files_in_vector_store(
+            vector_store_id="vs_1", limit=2, order="desc", before="file_2"
+        )
+        assert [file.id for file in previous_page.data] == ["file_4", "file_3"]
+        assert previous_page.has_more is True
