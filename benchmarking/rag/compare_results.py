@@ -12,6 +12,7 @@ from pathlib import Path
 
 import click
 import pandas as pd
+from lib.answer_match import baseline_warning
 from tabulate import tabulate
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
@@ -19,14 +20,14 @@ RESULTS_DIR = Path(__file__).resolve().parent / "results"
 # Benchmark -> primary metric mapping
 PRIMARY_METRICS = {
     "beir": "ndcg_cut_10",
-    "multihop": "f1",
+    "multihop": "containment",
     "qrecc": "f1",
     "doc2dial": "f1",
 }
 
 SECONDARY_METRICS = {
     "beir": ["recall_10", "map_cut_10"],
-    "multihop": ["exact_match", "rouge_l", "ndcg_cut_10"],
+    "multihop": ["constant_baseline", "f1", "exact_match", "rouge_l", "ndcg_cut_10"],
     "qrecc": ["exact_match", "rouge_l"],
     "doc2dial": ["exact_match", "rouge_l"],
 }
@@ -117,10 +118,20 @@ def main(fmt: str, output: str | None):
 
     # Build comparison table
     table_rows = []
+    warnings = []
     for row in rows:
         benchmark = row["benchmark"]
         primary = PRIMARY_METRICS.get(benchmark, "f1")
         primary_val = row["metrics"].get(primary, "N/A")
+        score_str = f"{primary_val:.4f}" if isinstance(primary_val, float) else str(primary_val)
+
+        # Flag a multihop score that doesn't clear the constant-reply baseline directly on the
+        # Score value, not just in a separate warnings list: the pivot table below only ever
+        # carries the Score column through, so a warning that lives elsewhere never reaches it,
+        # and a flagged row becomes indistinguishable there from one that cleared the baseline.
+        if benchmark == "multihop" and (warning := baseline_warning(row["metrics"])):
+            score_str += " !"
+            warnings.append(f"{row['backend']}/{row['search_mode']}: {warning}")
 
         table_row = {
             "Benchmark": benchmark,
@@ -128,7 +139,7 @@ def main(fmt: str, output: str | None):
             "Backend": row["backend"],
             "Search Mode": row["search_mode"],
             "Primary Metric": primary,
-            "Score": f"{primary_val:.4f}" if isinstance(primary_val, float) else str(primary_val),
+            "Score": score_str,
         }
 
         # Add secondary metrics
@@ -148,10 +159,20 @@ def main(fmt: str, output: str | None):
         result = tabulate(df, headers="keys", tablefmt="github", showindex=False)
 
     if output:
-        Path(output).write_text(result)
+        output_path = Path(output)
+        output_path.write_text(result)
         click.echo(f"Results written to {output}")
+        # A separate file, not appended to `result`: csv/json must stay parseable by whatever
+        # reads --output, and free-text warnings after the structured content would break that.
+        if warnings:
+            warnings_path = output_path.with_name(output_path.name + ".warnings.txt")
+            warnings_path.write_text("\n".join(f"WARNING multihop {warning}" for warning in warnings) + "\n")
+            click.echo(f"Warnings written to {warnings_path}")
     else:
         click.echo(result)
+
+    for warning in warnings:
+        click.echo(f"WARNING multihop {warning}", err=True)
 
     # Print pivot comparison if we have multiple backends
     if len(df["Backend"].unique()) > 1:
@@ -163,6 +184,7 @@ def main(fmt: str, output: str | None):
             aggfunc="first",
         )
         click.echo(tabulate(pivot, headers="keys", tablefmt="github"))
+        click.echo("\n'!' marks a multihop score that does not beat its constant-reply baseline.")
 
 
 if __name__ == "__main__":
