@@ -809,15 +809,26 @@ class OpenAIVectorStoreMixin(ABC):
 
     async def shutdown(self) -> None:
         """Clean up mixin resources including background tasks."""
-        # Cancel any running file batch and background tasks gracefully
-        tasks_to_cancel = list(self._file_batch_tasks.values()) + list(self._background_tasks)
-        for task in tasks_to_cancel:
+        # Cancel any running file batch tasks gracefully
+        tasks_to_cancel = list(self._file_batch_tasks.items())
+        for _, task in tasks_to_cancel:
             if not task.done():
                 task.cancel()
                 try:
                     await task
                 except asyncio.CancelledError:
                     pass
+        # Finish in-flight cleanup runs before reporting shutdown complete.
+        for task in list(self._background_tasks):
+            try:
+                await task
+            except asyncio.CancelledError:
+                # A cleanup task that was itself cancelled is simply finished;
+                # our own cancellation (e.g. the stack's shutdown deadline)
+                # must propagate.
+                current = asyncio.current_task()
+                if current is not None and current.cancelling():
+                    raise
 
     @abstractmethod
     async def delete_chunks(self, request: DeleteChunksRequest) -> None:
