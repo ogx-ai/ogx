@@ -169,6 +169,7 @@ class OpenAIVectorStoreMixin(ABC):
         self.file_processor_api = file_processor_api
         self._last_file_batch_cleanup_time = 0
         self._file_batch_tasks: dict[str, asyncio.Task[None]] = {}
+        self._background_tasks: set[asyncio.Task[None]] = set()
         self._vector_store_locks: dict[str, asyncio.Lock] = {}
 
     def _get_vector_store_lock(self, vector_store_id: str) -> asyncio.Lock:
@@ -817,6 +818,17 @@ class OpenAIVectorStoreMixin(ABC):
                     await task
                 except asyncio.CancelledError:
                     pass
+        # Finish in-flight cleanup runs before reporting shutdown complete.
+        for task in list(self._background_tasks):
+            try:
+                await task
+            except asyncio.CancelledError:
+                # A cleanup task that was itself cancelled is simply finished;
+                # our own cancellation (e.g. the stack's shutdown deadline)
+                # must propagate.
+                current = asyncio.current_task()
+                if current is not None and current.cancelling():
+                    raise
 
     @abstractmethod
     async def delete_chunks(self, request: DeleteChunksRequest) -> None:
@@ -1723,7 +1735,9 @@ class OpenAIVectorStoreMixin(ABC):
             >= self.vector_stores_config.file_batch_params.cleanup_interval_seconds
         ):
             logger.info("Running throttled cleanup of expired file batches")
-            asyncio.create_task(self._cleanup_expired_file_batches())
+            cleanup_task = asyncio.create_task(self._cleanup_expired_file_batches())
+            self._background_tasks.add(cleanup_task)
+            cleanup_task.add_done_callback(self._background_tasks.discard)
             self._last_file_batch_cleanup_time = current_time
 
         return batch_object
