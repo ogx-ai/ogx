@@ -97,26 +97,19 @@ async def test_add_chunks_empty_list_is_noop(data_object, index_and_collection):
 # ---------------------------------------------------------------------------
 # delete() / delete_chunks() regression tests
 # See: https://github.com/ogx-ai/ogx/issues/6710
-#
-# "id" is the Weaviate object UUID, not a stored property -- the collection only has
-# chunk_id and chunk_content (see register_vector_store). delete(chunk_ids) used to filter
-# on "id", which matches nothing, so it silently deleted zero objects.
 # ---------------------------------------------------------------------------
 
 
-async def test_delete_with_chunk_ids_filters_by_chunk_id_property(filter_by_property, index_and_collection):
-    index, collection = index_and_collection
-
-    await index.delete(chunk_ids=["chunk-a", "chunk-b"])
-
-    filter_by_property.by_property.assert_called_once_with("chunk_id")
-    filter_by_property.by_property.return_value.contains_any.assert_called_once_with(["chunk-a", "chunk-b"])
-    collection.data.delete_many.assert_called_once_with(
-        where=filter_by_property.by_property.return_value.contains_any.return_value
-    )
+def _assert_filter_on_chunk_ids(filter_arg, chunk_ids: list[str]) -> None:
+    expected_uuids = [_expected_uuid(chunk_id) for chunk_id in chunk_ids]
+    if isinstance(filter_arg, MagicMock):
+        weaviate_module.Filter.by_id.return_value.contains_any.assert_called_with(expected_uuids)
+    else:
+        assert filter_arg.target == "_id"
+        assert filter_arg.value == expected_uuids
 
 
-async def test_delete_chunks_filters_by_chunk_id_property(filter_by_property, index_and_collection):
+async def test_delete_chunks_filters_on_chunk_id(index_and_collection):
     index, collection = index_and_collection
 
     await index.delete_chunks(
@@ -126,11 +119,19 @@ async def test_delete_chunks_filters_by_chunk_id_property(filter_by_property, in
         ]
     )
 
-    filter_by_property.by_property.assert_called_once_with("chunk_id")
-    filter_by_property.by_property.return_value.contains_any.assert_called_once_with(["chunk-a", "chunk-b"])
-    collection.data.delete_many.assert_called_once_with(
-        where=filter_by_property.by_property.return_value.contains_any.return_value
-    )
+    collection.data.delete_many.assert_called_once()
+    filter_arg = collection.data.delete_many.call_args.kwargs["where"]
+    _assert_filter_on_chunk_ids(filter_arg, ["chunk-a", "chunk-b"])
+
+
+async def test_delete_with_chunk_ids_filters_on_chunk_id(index_and_collection):
+    index, collection = index_and_collection
+
+    await index.delete(chunk_ids=["chunk-a", "chunk-b"])
+
+    collection.data.delete_many.assert_called_once()
+    filter_arg = collection.data.delete_many.call_args.kwargs["where"]
+    _assert_filter_on_chunk_ids(filter_arg, ["chunk-a", "chunk-b"])
 
 
 async def test_delete_without_chunk_ids_drops_the_collection(index_and_collection):
