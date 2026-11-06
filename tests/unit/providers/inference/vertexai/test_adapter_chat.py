@@ -326,6 +326,23 @@ class TestVertexAINetworkConfig:
         assert client is not None
         assert client._transport._pool._max_connections == 250
 
+    def test_build_http_options_proxy_transport_uses_tls_and_limits(self):
+        """Test that requests sent through the proxy keep the configured TLS settings and pool limits."""
+        result = _build_http_options(
+            NetworkConfig(
+                tls=TLSConfig(verify=False),
+                proxy=ProxyConfig(url="http://proxy.example.com:8080"),  # type: ignore[arg-type]  # Pydantic coerces str→HttpUrl
+                limits=LimitsConfig(max_connections=250),
+            )
+        )
+        assert result is not None
+        client = result.httpx_async_client
+        assert client is not None
+        upstream_url = client.base_url.copy_with(scheme="https", host="aiplatform.googleapis.com")
+        pool = client._transport_for_url(upstream_url)._pool  # type: ignore[union-attr]  # httpx.AsyncHTTPTransport has _pool
+        assert pool._ssl_context.verify_mode == ssl.CERT_NONE
+        assert pool._max_connections == 250
+
     def test_build_http_options_no_proxy_logs_warning(self, caplog):
         """Test that build http options no proxy logs warning."""
         with caplog.at_level(logging.WARNING):
