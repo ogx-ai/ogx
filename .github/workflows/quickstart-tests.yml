@@ -1,0 +1,75 @@
+name: Quickstart Smoke Test
+
+run-name: Run the docs quickstart against a fresh ogx install
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'pyproject.toml'
+      - 'src/ogx_api/pyproject.toml'
+      - 'src/ogx/cli/**'
+      - 'src/ogx/providers/remote/inference/ollama/**'
+      - 'docs/docs/getting_started/quickstart*'
+      - 'scripts/quickstart-smoke.sh'
+      - '.github/actions/setup-ollama/**'
+      - '.github/workflows/quickstart-tests.yml'
+  schedule:
+    # Nightly: the latest PyPI release against the quickstart on main, to catch
+    # docs that describe behavior the published release does not have yet.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Where to install ogx from'
+        type: choice
+        options:
+          - wheels
+          - pypi
+        default: wheels
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quickstart:
+    name: Quickstart (ollama, ${{ github.event_name == 'schedule' && 'pypi' || inputs.source || 'wheels' }})
+    if: github.event_name != 'schedule' || github.repository == 'ogx-ai/ogx'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OGX_SOURCE: ${{ github.event_name == 'schedule' && 'pypi' || inputs.source || 'wheels' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      - name: Build ogx and ogx-api wheels from this checkout
+        if: env.OGX_SOURCE == 'wheels'
+        run: |
+          uv build --wheel --out-dir dist
+          uv build --wheel --out-dir dist src/ogx_api
+          ls -la dist
+
+      - name: Start Ollama and pull the quickstart models
+        uses: ./.github/actions/setup-ollama
+        with:
+          setup: quickstart
+
+      - name: Run the quickstart
+        run: |
+          if [ "$OGX_SOURCE" = "wheels" ]; then
+            ./scripts/quickstart-smoke.sh --wheels dist
+          else
+            ./scripts/quickstart-smoke.sh
+          fi
