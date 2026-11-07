@@ -209,7 +209,7 @@ sudo apt-get update && sudo apt-get install -y \\
 
 ### Docker (Recommended)
 ```dockerfile
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 RUN apt-get update && apt-get install -y \\
     libmagic-dev \\

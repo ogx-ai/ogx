@@ -177,7 +177,7 @@ class BedrockSigV4Auth(httpx2.Auth):
             f"path={request.url.path}, service={self._service}, region={self._region}"
         )
 
-    def auth_flow(self, request: httpx2.Request) -> Generator[httpx2.Request, httpx2.Response, None]:
+    def auth_flow(self, request: httpx2.Request) -> Generator[httpx2.Request, httpx2.Response]:
         self._sign_request(request)
         yield request
 

@@ -13,7 +13,7 @@ _MISSING = object()
 
 def preserve_contexts_async_generator[T](
     gen: AsyncIterator[T], context_vars: list[ContextVar[Any]]
-) -> AsyncGenerator[T, None]:
+) -> AsyncGenerator[T]:
     """
     Wraps an async iterator to preserve context variables across iterations.
     This is needed because we start a new asyncio event loop for each streaming request,
@@ -22,7 +22,7 @@ def preserve_contexts_async_generator[T](
     # Capture initial context values
     initial_context_values = {context_var.name: context_var.get() for context_var in context_vars}
 
-    async def wrapper() -> AsyncGenerator[T, None]:
+    async def wrapper() -> AsyncGenerator[T]:
         while True:
             previous_values: dict[ContextVar[Any], object] = {}
             tokens: dict[ContextVar[Any], Token[Any]] = {}

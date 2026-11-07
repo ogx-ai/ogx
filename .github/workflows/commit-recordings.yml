@@ -269,10 +269,9 @@ jobs:
         if: steps.pr-info.outputs.skip != 'true'
         uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
-          # Pin to the project's required Python. Without this, uv falls back to the
-          # runner image's system python (3.14 on Ubuntu 26), where deps like
-          # onnxruntime have no wheel and `uv sync` fails.
-          python-version: "3.12"
+          # Pin to the project's required Python floor so the workflow doesn't
+          # silently track whatever python the runner image ships.
+          python-version: "3.13"
 
       - name: Sync dev dependencies
         if: steps.pr-info.outputs.skip != 'true'
