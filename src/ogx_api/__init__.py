@@ -113,6 +113,7 @@ from .common.errors import (
     ToolGroupNotFoundError,
     UnsupportedModelError,
     UntrustedProxyError,
+    VectorStoreFileNotFoundError,
     VectorStoreNotFoundError,
 )
 from .common.job_types import Job, JobStatus
@@ -1088,6 +1089,7 @@ __all__ = [
     "VectorStoreSearchResponse",
     "VectorStoreSearchResponsePage",
     "VectorStoreTable",
+    "VectorStoreFileNotFoundError",
     "VectorStoreNotFoundError",
     "VectorStoresProtocolPrivate",
     "VersionInfo",

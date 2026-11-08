@@ -155,6 +155,20 @@ class VectorStoreNotFoundError(ResourceNotFoundError):
         super().__init__(vector_store_name, resource_type="Vector Store", client_command="vector_dbs.list")
 
 
+class VectorStoreFileNotFoundError(ResourceNotFoundError):
+    """raised when OGX cannot find a referenced file in a vector store"""
+
+    def __init__(self, file_id: str, vector_store_id: str) -> None:
+        super().__init__(
+            file_id,
+            resource_type="Vector Store File",
+            client_command="vector_stores.files.list",
+            client_command_args=vector_store_id,
+            resource_name_plural="vector store files",
+            parent_resource=f"vector store '{vector_store_id}'",
+        )
+
+
 class ToolGroupNotFoundError(ResourceNotFoundError):
     """raised when OGX cannot find a referenced tool group"""
 
