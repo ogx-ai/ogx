@@ -90,6 +90,7 @@ class TestSupportsReasoning:
             "openai/gpt-oss-20b",
             "Qwen/Qwen3-0.6B",  # not in models.dev: name heuristic
             "qwen3:0.6b",
+            "qwen3.5:0.8b",
             "deepseek-r1:1.5b",
             "deepseek-ai/DeepSeek-R1",
             "o3-mini",
@@ -106,7 +107,6 @@ class TestSupportsReasoning:
         [
             "gpt-4o",
             "gpt-4o-mini",
-            "llama3.2:3b-instruct-fp16",
             "meta-llama/Llama-3.3-70B-Instruct",
             "Qwen3-Embedding-0.6B",
             "Qwen/Qwen3-Reranker-0.6B",

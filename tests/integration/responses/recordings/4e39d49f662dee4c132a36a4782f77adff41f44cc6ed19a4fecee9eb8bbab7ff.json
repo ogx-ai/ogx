@@ -1,0 +1,83 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_response_is_retrievable[openai_client-txt=openai/gpt-5-nano]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-5-nano",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello there!"
+        },
+        {
+          "role": "assistant",
+          "content": "Hi! How can I help?"
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-5-nano",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-4e39d49f662d",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Handoff Summary \u2014 CONTEXT CHECKPOINT COMPACTION\n\n1) Current progress\n- No task defined yet. Initial greeting only.\n- No outputs produced beyond acknowledging readiness to help.\n\n2) Key decisions made\n- None established yet. Next step is to clarify task objective, scope, and success criteria.\n\n3) Important context, constraints, or user preferences\n- User requests a concise, structured handoff to enable seamless continuation by another LLM.\n- No domain-specific task, data, or constraints provided at this time.\n- Priority: quickly gather task details and outline a plan to proceed.\n\n4) What remains to be done (next steps)\n- Step 1: Obtain task details from the user (objective, scope, audience, required outputs, format, timeline, privacy/compliance constraints).\n- Step 2: Define success criteria and deliverables (e.g., plan, checklist, draft content, code, etc.).\n- Step 3: Create a concrete execution plan with milestones and a rough timeline.\n- Step 4: Identify and collect any critical data, references, or examples needed to start.\n- Step 5: Provide a starter prompt and a minimal execution template for the next LLM.\n- Step 6: Begin task execution once requirements are provided; iterate as needed.\n\n5) Critical data, examples, or references needed to continue\n- User has not supplied task details or domain data.\n- You can reuse this handoff template and ask clarifying questions to fill gaps:\n  - Task objective (what outcome is desired?)\n  - Scope and boundaries (what is in/out of scope)\n  - Target audience and tone\n  - Required outputs and formats (text, JSON, code, report, etc.)\n  - Constraints (timeline, tools, data sources, privacy)\n  - Acceptance criteria and success metrics\n  - Any existing data sources or examples to model after\n\n6) Handoff instructions for the next LLM (starter guidance)\n- If task is not yet defined:\n  - Prompt user for: objective, scope, audience, outputs, format, timeline, constraints.\n  - Propose a default lightweight plan: requirements gathering \u2192 plan draft \u2192 deliverable outline \u2192 validation \u2192 handoff.\n- If task is provided:\n  - Proceed with: gather requirements, define success criteria, outline deliverables, identify needed data, draft execution plan, and start work with iterative reviews.\n\n7) Quick-start questions to pose to the user (to fill gaps fast)\n- What is the specific task or problem to solve?\n- What are the success criteria and expected deliverables?\n- Who is the intended audience, and what tone/format is preferred?\n- What are the deadlines and any tool or data constraints?\n- Are there examples or references that should guide the work?\n- Any privacy, security, or compliance considerations?\n\nOptional starter prompt for the next LLM (when task is defined)\n- \u201cUser has defined task: [insert objective]. Deliverables should include [list]. Constraints: [insert]. Provide a detailed plan with milestones, required data inputs, and acceptance criteria. If gaps exist, ask clarifying questions before proceeding.\u201d\n\nThis handoff keeps the next model aligned and ready to proceed once task details are provided.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-5-nano-2025-08-07",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": "default",
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 2007,
+          "prompt_tokens": 115,
+          "total_tokens": 2122,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 1344,
+            "rejected_prediction_tokens": 0,
+            "text_tokens": null
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

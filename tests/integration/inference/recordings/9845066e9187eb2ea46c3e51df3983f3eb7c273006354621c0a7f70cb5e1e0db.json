@@ -1,0 +1,77 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_inference_store[openai_client-txt=sglang/Qwen/Qwen3-0.6B-False]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:30000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello, world!"
+        }
+      ],
+      "max_tokens": 4096,
+      "stream": false,
+      "reasoning_effort": "low"
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "Qwen/Qwen3-0.6B",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-9845066e9187",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "\n\nHello, world! \ud83d\ude0a",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "\nOkay, the user said \"Hello, world!\" so I need to respond. Let me make sure the response is friendly and simple. Maybe start with a greeting and acknowledge their input. I should keep it short and straightforward. Let me check if there's any specific language they prefer, but since it's \"Hello, world!\" in English, I can just respond in English. Alright, that should do it.\n"
+            },
+            "matched_stop": 151645
+          }
+        ],
+        "created": 0,
+        "model": "Qwen/Qwen3-0.6B",
+        "object": "chat.completion",
+        "metadata": {
+          "weight_version": "default",
+          "weight_versions": [
+            {
+              "version": "default",
+              "start": 0,
+              "end": 94
+            }
+          ]
+        },
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 94,
+          "prompt_tokens": 12,
+          "total_tokens": 106,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "reasoning_tokens": 86
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

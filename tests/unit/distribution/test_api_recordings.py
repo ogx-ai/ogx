@@ -5,8 +5,11 @@
 # the root directory of this source tree.
 
 import json
+import logging  # allow-direct-logging
 import tempfile
+from collections import Counter
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import httpx2
@@ -14,10 +17,12 @@ import pytest
 from openai import AsyncOpenAI, NotFoundError
 
 from ogx.core.testing_context import reset_test_context, set_test_context
+from ogx.log import get_logger
 from ogx.testing.api_recorder import (
     APIRecordingMode,
     ResponseStorage,
     _is_ogx_test_server_model_list_url,
+    _recording_from_file,
     _should_intercept_httpx,
     api_recording,
     normalize_inference_request,
@@ -32,6 +37,8 @@ from ogx_api import (
     OpenAIEmbeddingsResponse,
     OpenAIEmbeddingUsage,
 )
+
+logger = get_logger(__name__, category="testing")
 
 
 @pytest.fixture
@@ -666,6 +673,74 @@ class TestInferenceRecording:
 
                 # Verify the response was returned
                 assert response.choices[0].message.content == "Hello! I'm doing well, thank you for asking."
+
+
+class TestModelListRecordingIntegrity:
+    """Committed model-list recordings must deserialize without pydantic warnings.
+
+    Replay reconstructs each recorded response via strict ``model_validate``
+    (``_recording_from_file`` -> ``_deserialize_response``). Providers whose
+    OpenAI-compat ``/v1/models`` endpoint omits fields the OpenAI SDK
+    requires (Vertex AI, Watsonx, and Azure OpenAI deployments omit
+    ``created`` and ``owned_by`` on model objects) produce recordings that
+    log one deserialization warning per model on every replay run.
+    """
+
+    def test_model_recordings_deserialize_without_pydantic_warnings(self, caplog):
+        """Every recorded Model object must pass the SDK's strict validation."""
+        from openai.types.model import Model
+        from pydantic import ValidationError
+
+        repo_root = Path(__file__).resolve().parents[3]
+        recording_paths = sorted((repo_root / "tests" / "integration").glob("**/recordings/models-*.json"))
+        assert recording_paths, "expected committed model-list recordings under tests/integration"
+
+        # Histogram of failing Model objects keyed by the validated fields that rejected them
+        # (e.g. "created", "owned_by", "created+owned_by").
+        histogram: Counter[str, int] = Counter()
+
+        def failure_signature(error: ValidationError) -> str:
+            locs = sorted({"/".join(map(str, e["loc"])) for e in error.errors() if e["loc"]})
+            return "+".join(locs) or "unknown"
+
+        with caplog.at_level(logging.WARNING, logger="ogx.testing.api_recorder"):
+            for path in recording_paths:
+                data = json.loads(path.read_text(encoding="utf-8"))
+
+                def visit(node: Any) -> None:
+                    if isinstance(node, dict):
+                        if node.get("__type__") == "openai.types.model.Model":
+                            try:
+                                Model.model_validate(node["__data__"])
+                            except ValidationError as error:
+                                histogram[failure_signature(error)] += 1
+                        for value in node.values():
+                            visit(value)
+                    elif isinstance(node, list):
+                        for value in node:
+                            visit(value)
+
+                visit(data)
+                _recording_from_file(path)
+
+        replay_warnings = [
+            record.getMessage()
+            for record in caplog.records
+            if record.levelno >= logging.WARNING and "openai.types.model.Model" in record.getMessage()
+        ]
+
+        logger.info(
+            "model-list recording validation warning histogram",
+            files=len(recording_paths),
+            histogram=dict(histogram),
+        )
+        assert not histogram, (
+            f"model-list recordings failed pydantic validation of Model objects: {dict(sorted(histogram.items()))}"
+        )
+        assert not replay_warnings, (
+            "replay deserialization logged "
+            f"{len(replay_warnings)} openai.types.model.Model warning(s), e.g.: {replay_warnings[0][:300]}"
+        )
 
 
 class TestExceptionRecordingReplay:

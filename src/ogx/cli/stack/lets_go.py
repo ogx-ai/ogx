@@ -342,14 +342,17 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
         added = True
 
     if not added:
+        run_config.providers["tool_runtime"].append(
+            Provider(provider_id="placeholder", provider_type="inline::placeholder")
+        )
         if all_env_vars:
             vars_str = ", ".join(dict.fromkeys(all_env_vars))
             cprint(
-                f"  ✗ web search disabled (no API key set — set {vars_str})",
+                f"  ✓ web search (built-in placeholder — returns a 'not available' notice; set {vars_str} for real search)",
                 color="yellow",
             )
         else:
-            cprint("  ✗ web search disabled", color="yellow")
+            cprint("  ✓ web search (built-in placeholder)", color="yellow")
 
     cprint("  ✓ inline::file-search (built-in)", color="green")
     cprint("  ✓ inline::builtin responses (built-in)", color="green")
@@ -591,6 +594,7 @@ async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[Qualifi
         # provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env
         ("remote::ollama", "OLLAMA_URL", "http://localhost:11434/v1", None, None),
         ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", None, "VLLM_API_TOKEN"),
+        ("remote::sglang", "SGLANG_URL", "http://localhost:30000/v1", None, "SGLANG_API_TOKEN"),
         ("remote::llama-cpp-server", "LLAMA_CPP_SERVER_URL", "http://localhost:8080/v1", None, None),
         ("remote::text-embeddings-inference", "TEI_URL", "http://localhost:8080/v1", None, None),
         ("remote::openai", "OPENAI_BASE_URL", "https://api.openai.com/v1", "OPENAI_API_KEY", None),

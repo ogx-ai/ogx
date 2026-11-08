@@ -1,0 +1,76 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_inference_store[client_with_models-txt=sglang/Qwen/Qwen3-0.6B-False]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:30000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello, world!"
+        }
+      ],
+      "max_tokens": 4096,
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "Qwen/Qwen3-0.6B",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-7f4ac7cdce96",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "\n\nHello, world! \ud83d\ude0a How are you today? If you're learning programming or anything else, feel free to ask!",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "\nOkay, the user just said \"Hello, world!\" So I need to respond to that. Let me start by acknowledging their message. I should make sure the response is friendly and maybe add a small note. Since they used \"Hello, world!\", maybe they're learning how to program or just testing. I should keep it simple and positive. Let me check for any typos or errors in the response. Alright, \"Hello, world!\" is correct. Maybe add a line about programming or something else to keep it engaging. Let me put that together.\n"
+            },
+            "matched_stop": 151645
+          }
+        ],
+        "created": 0,
+        "model": "Qwen/Qwen3-0.6B",
+        "object": "chat.completion",
+        "metadata": {
+          "weight_version": "default",
+          "weight_versions": [
+            {
+              "version": "default",
+              "start": 0,
+              "end": 142
+            }
+          ]
+        },
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 142,
+          "prompt_tokens": 12,
+          "total_tokens": 154,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "reasoning_tokens": 115
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -115,8 +115,12 @@ export function FileEditor({
           });
         }, 100);
 
-        // Perform upload
-        await client.files.create(uploadParams);
+        // Perform upload. The cast bridges ogx-client 1.5.0, which declares
+        // expires_after as a string, while this API accepts the ExpiresAfter
+        // object defined in client-sdks/spec/openapi.yml.
+        await client.files.create(
+          uploadParams as unknown as Parameters<typeof client.files.create>[0]
+        );
 
         // Complete progress
         clearInterval(progressInterval);
@@ -181,15 +185,12 @@ export function FileEditor({
               </Label>
               <Select
                 value={formData.purpose}
-                onValueChange={(
-                  value:
-                    | "fine-tune"
-                    | "assistants"
-                    | "user_data"
-                    | "batch"
-                    | "vision"
-                    | "evals"
-                ) => setFormData(prev => ({ ...prev, purpose: value }))}
+                onValueChange={value =>
+                  setFormData(prev => ({
+                    ...prev,
+                    purpose: value as typeof prev.purpose,
+                  }))
+                }
                 disabled={isUploading}
               >
                 <SelectTrigger>

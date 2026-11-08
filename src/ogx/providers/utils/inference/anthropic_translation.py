@@ -347,6 +347,8 @@ def openai_response_to_anthropic(
                     tool_input = json.loads(tc.function.arguments) if tc.function.arguments else {}
                 except json.JSONDecodeError:
                     tool_input = {}
+                if not isinstance(tool_input, dict):
+                    tool_input = {}
 
                 content.append(
                     AnthropicToolUseBlock(
@@ -520,6 +522,8 @@ async def _translate_openai_stream_events(
         yield ContentBlockStopEvent(index=block_idx)
         yield PingEvent()
 
+    # OpenAI's finish_reason does not report which stop string matched, so
+    # stop_sequence cannot be recovered through the translation path and stays None.
     yield MessageDeltaEvent(
         delta=_MessageDelta(stop_reason=stop_reason),
         usage=AnthropicUsage(
@@ -542,6 +546,9 @@ async def openai_stream_to_anthropic(
     """Translate OpenAI streaming chunks to Anthropic streaming events.
 
     With ``include_thinking``, reasoning deltas become ``thinking`` content blocks.
+
+    ``stop_sequence`` is always ``None`` on this path: OpenAI's ``finish_reason``
+    does not report which stop string matched, so it cannot be recovered.
 
     Always closes the upstream stream, including when the consumer abandons
     the translation mid-stream.
@@ -591,7 +598,10 @@ def parse_anthropic_sse_event(event_type: str, data: dict[str, Any]) -> Anthropi
         return ContentBlockStopEvent(index=data["index"])
     if event_type == "message_delta":
         return MessageDeltaEvent(
-            delta=_MessageDelta(stop_reason=data["delta"].get("stop_reason")),
+            delta=_MessageDelta(
+                stop_reason=data["delta"].get("stop_reason"),
+                stop_sequence=data["delta"].get("stop_sequence"),
+            ),
             usage=AnthropicUsage(**data.get("usage", {})),
         )
     if event_type == "message_stop":

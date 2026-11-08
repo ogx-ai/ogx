@@ -103,6 +103,17 @@ class TestReadCurrentPin:
         )
         assert _mod.read_current_pin(tmp_path, PROVIDERS["ollama"]).key == (0, 34, 2)
 
+    def test_sglang_docker_tag(self, tmp_path):
+        _write(
+            tmp_path,
+            ".github/actions/setup-sglang/action.yml",
+            """
+            run: |
+              docker run -d --name sglang -p 30000:30000 lmsysorg/sglang:v0.5.21-xeon
+            """,
+        )
+        assert _mod.read_current_pin(tmp_path, PROVIDERS["sglang"]).key == (0, 5, 21)
+
     def test_tei_docker_tag(self, tmp_path):
         _write(
             tmp_path,
@@ -241,6 +252,7 @@ class TestMain:
                 "vllm-project/vllm": _release("v99.0.0", "2026-09-22T05:20:54Z"),
                 "ollama/ollama": _release("v99.0.0", "2026-09-23T02:24:43Z"),
                 "ggml-org/llama.cpp": _release("v99.0.0", "2026-09-23T20:50:06Z"),
+                "sgl-project/sglang": _release("v99.0.0", "2026-10-01T08:00:00Z"),
                 "huggingface/text-embeddings-inference": _release("v99.0.0", "2026-09-15T09:28:03Z"),
             },
             llamacpp_pages=[[_release("b99999", "2026-09-23T19:03:52Z")]],
@@ -257,21 +269,22 @@ class TestMain:
             "Update vLLM test server pin to v99.0.0",
             "Update Ollama test server pin to v99.0.0",
             "Update llama.cpp test server pin to b99999 (v99.0.0)",
+            "Update SGLang test server pin to v99.0.0",
             "Update TEI test server pin to v99.0.0",
         ]
         summary = capsys.readouterr().out
-        for name in ("vLLM", "Ollama", "llama.cpp", "TEI"):
+        for name in ("vLLM", "Ollama", "llama.cpp", "SGLang", "TEI"):
             assert f"| {name} |" in summary
 
         assert self._run() == 0
-        assert len(api.created) == 4
+        assert len(api.created) == 5
         assert "exists" in capsys.readouterr().out
 
     def test_outdated_pins_warn_but_do_not_fail_the_run(self, api, capsys):
         """A newer upstream release must not fail CI; it only needs to warn us to plan the upgrade."""
         assert self._run() == 0
         out = capsys.readouterr().out
-        for name in ("vLLM", "Ollama", "llama.cpp", "TEI"):
+        for name in ("vLLM", "Ollama", "llama.cpp", "SGLang", "TEI"):
             assert f"::warning::{name} pin" in out
         assert "::error::" not in out
 
@@ -289,5 +302,5 @@ class TestMain:
     def test_provider_error_fails_the_run_but_still_reports_the_others(self, api, capsys):
         api.latest["ollama/ollama"] = _release("nightly", "2026-09-23T02:24:43Z")
         assert self._run() == 1
-        assert len(api.created) == 3
+        assert len(api.created) == 4
         assert "Failed to parse version" in capsys.readouterr().out

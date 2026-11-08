@@ -169,6 +169,7 @@ class OpenAIVectorStoreMixin(ABC):
         self.file_processor_api = file_processor_api
         self._last_file_batch_cleanup_time = 0
         self._file_batch_tasks: dict[str, asyncio.Task[None]] = {}
+        self._background_tasks: set[asyncio.Task[None]] = set()
         self._vector_store_locks: dict[str, asyncio.Lock] = {}
 
     def _get_vector_store_lock(self, vector_store_id: str) -> asyncio.Lock:
@@ -817,6 +818,17 @@ class OpenAIVectorStoreMixin(ABC):
                     await task
                 except asyncio.CancelledError:
                     pass
+        # Finish in-flight cleanup runs before reporting shutdown complete.
+        for task in list(self._background_tasks):
+            try:
+                await task
+            except asyncio.CancelledError:
+                # A cleanup task that was itself cancelled is simply finished;
+                # our own cancellation (e.g. the stack's shutdown deadline)
+                # must propagate.
+                current = asyncio.current_task()
+                if current is not None and current.cancelling():
+                    raise
 
     @abstractmethod
     async def delete_chunks(self, request: DeleteChunksRequest) -> None:
@@ -998,15 +1010,18 @@ class OpenAIVectorStoreMixin(ABC):
             if after_index >= 0:
                 all_stores = all_stores[after_index + 1 :]
 
+        before_found = False
         if before:
             before_index = next(
                 (i for i, store in enumerate(all_stores) if store["id"] == before),
                 len(all_stores),
             )
+            before_found = before_index < len(all_stores)
             all_stores = all_stores[:before_index]
 
-        # Apply limit
-        limited_stores = all_stores[:limit]
+        # Apply limit. A `before` cursor asks for the page immediately preceding it,
+        # so keep the items closest to the cursor rather than the head of the list.
+        limited_stores = all_stores[-limit:] if before_found else all_stores[:limit]
         # Convert to VectorStoreObject instances
         data = [VectorStoreObject(**store) for store in limited_stores]
 
@@ -1532,15 +1547,18 @@ class OpenAIVectorStoreMixin(ABC):
             if after_index >= 0:
                 file_objects = file_objects[after_index + 1 :]
 
+        before_found = False
         if before:
             before_index = next(
                 (i for i, file in enumerate(file_objects) if file.id == before),
                 len(file_objects),
             )
+            before_found = before_index < len(file_objects)
             file_objects = file_objects[:before_index]
 
-        # Apply limit
-        limited_files = file_objects[:limit]
+        # Apply limit. A `before` cursor asks for the page immediately preceding it,
+        # so keep the items closest to the cursor rather than the head of the list.
+        limited_files = file_objects[-limit:] if before_found else file_objects[:limit]
 
         # Determine pagination info
         has_more = len(file_objects) > limit
@@ -1723,7 +1741,9 @@ class OpenAIVectorStoreMixin(ABC):
             >= self.vector_stores_config.file_batch_params.cleanup_interval_seconds
         ):
             logger.info("Running throttled cleanup of expired file batches")
-            asyncio.create_task(self._cleanup_expired_file_batches())
+            cleanup_task = asyncio.create_task(self._cleanup_expired_file_batches())
+            self._background_tasks.add(cleanup_task)
+            cleanup_task.add_done_callback(self._background_tasks.discard)
             self._last_file_batch_cleanup_time = current_time
 
         return batch_object
@@ -1912,15 +1932,18 @@ class OpenAIVectorStoreMixin(ABC):
             if after_index >= 0:
                 file_objects = file_objects[after_index + 1 :]
 
+        before_found = False
         if before:
             before_index = next(
                 (i for i, file in enumerate(file_objects) if file.id == before),
                 len(file_objects),
             )
+            before_found = before_index < len(file_objects)
             file_objects = file_objects[:before_index]
 
-        # Apply limit
-        limited_files = file_objects[:limit]
+        # Apply limit. A `before` cursor asks for the page immediately preceding it,
+        # so keep the items closest to the cursor rather than the head of the list.
+        limited_files = file_objects[-limit:] if before_found else file_objects[:limit]
 
         # Determine pagination info
         has_more = len(file_objects) > limit

@@ -500,8 +500,7 @@ function ChatPlaygroundContent() {
           if (chunkObj.type === "response.content_part.done") {
             const part = chunkObj.part as Record<string, unknown>;
             const partAnnotations = part?.annotations as
-              | Array<Record<string, unknown>>
-              | undefined;
+              Array<Record<string, unknown>> | undefined;
             if (partAnnotations) {
               for (const ann of partAnnotations) {
                 if (ann.type === "file_citation") {
@@ -528,8 +527,7 @@ function ChatPlaygroundContent() {
               >) {
                 const docId = result.file_id as string;
                 const attrs = result.attributes as
-                  | Record<string, unknown>
-                  | undefined;
+                  Record<string, unknown> | undefined;
                 const realFileId = attrs?.file_id as string | undefined;
                 if (docId && realFileId) {
                   fileIdMap[docId] = realFileId;

@@ -102,12 +102,7 @@ export function validateFileForUpload(file: File): FileValidationResult {
 export function validateUploadParams(
   files: File[],
   purpose:
-    | "fine-tune"
-    | "assistants"
-    | "user_data"
-    | "batch"
-    | "vision"
-    | "evals",
+    "fine-tune" | "assistants" | "user_data" | "batch" | "vision" | "evals",
   expiresAfter?: number
 ): FileValidationResult {
   const errors: FileValidationError[] = [];

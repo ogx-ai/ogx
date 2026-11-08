@@ -492,7 +492,7 @@ class TestChatCompletionOpenAICompat:
                 response_format=OpenAIResponseFormatJSONSchema(
                     json_schema=OpenAIJSONSchema(
                         name="test",
-                        schema={"type": "object", "properties": {"a": {"type": "string"}}},
+                        schema_={"type": "object", "properties": {"a": {"type": "string"}}},
                     ),
                 ),
             )

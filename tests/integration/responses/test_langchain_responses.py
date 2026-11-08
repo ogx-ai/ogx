@@ -5,10 +5,17 @@
 # the root directory of this source tree.
 
 
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 
-from .helpers import extract_text_content
+from .helpers import extract_text_content, skip_if_text_model_prefix
+
+
+@pytest.fixture(autouse=True)
+def _skip_langchain_for_bedrock(request):
+    """Skip langchain tests for Bedrock — no recordings available yet."""
+    skip_if_text_model_prefix(request, "bedrock/", "Bedrock GPT-OSS langchain test recordings not available yet")
 
 
 def test_langchain_basic(responses_client, langchain_chat):

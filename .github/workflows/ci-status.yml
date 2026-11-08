@@ -99,12 +99,27 @@ jobs:
                 continue;
               }
 
-              const pending = relevant.filter(cr => !terminalStatuses.has(cr.status));
-              const completed = relevant.filter(cr => terminalStatuses.has(cr.status));
-              const replayChecks = relevant.filter(cr => cr.name.startsWith(replayCheckPrefix));
-              const recordChecks = relevant.filter(cr => cr.name.startsWith(recordCheckPrefix));
+              // A check name can appear more than once for one SHA when a
+              // workflow is re-triggered and its concurrency group cancels the
+              // in-flight run after its check run was already created. Keep
+              // only the newest run per name so a superseded run (e.g. the
+              // stale cancelled one) cannot block the gate; the latest
+              // cancelled run of a check still blocks.
+              const latestByName = new Map();
+              for (const cr of relevant) {
+                const existing = latestByName.get(cr.name);
+                if (!existing || cr.id > existing.id) {
+                  latestByName.set(cr.name, cr);
+                }
+              }
+              const checks = [...latestByName.values()];
 
-              core.info(`Checks: ${completed.length} completed, ${pending.length} pending out of ${relevant.length} total`);
+              const pending = checks.filter(cr => !terminalStatuses.has(cr.status));
+              const completed = checks.filter(cr => terminalStatuses.has(cr.status));
+              const replayChecks = checks.filter(cr => cr.name.startsWith(replayCheckPrefix));
+              const recordChecks = checks.filter(cr => cr.name.startsWith(recordCheckPrefix));
+
+              core.info(`Checks: ${completed.length} completed, ${pending.length} pending out of ${checks.length} total`);
               core.info(`Replay checks: ${replayChecks.length}; record checks: ${recordChecks.length}`);
 
               for (const cr of completed) {

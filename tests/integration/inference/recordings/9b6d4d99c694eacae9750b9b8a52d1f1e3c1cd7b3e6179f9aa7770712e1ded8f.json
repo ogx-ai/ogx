@@ -1,0 +1,40 @@
+{
+  "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_structured_state[judge=llama-cpp-server/laya]",
+  "request": {
+    "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_structured_state[judge=llama-cpp-server/laya]",
+    "url": "http://localhost:8080/v1/systemone",
+    "method": "POST",
+    "payload": {
+      "state": {
+        "message": "I was charged twice. Please help.",
+        "channel": "phone",
+        "customer_tier": "premium"
+      },
+      "model": "laya",
+      "questions": {
+        "billing": {
+          "type": "noul",
+          "instructions": "Is this about billing?"
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "laya",
+      "answers": {
+        "billing": {
+          "type": "noul",
+          "noul": 0.9190133295994658
+        }
+      },
+      "usage": {
+        "input_tokens": 58,
+        "output_tokens": 0
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -62,6 +62,7 @@ def _get_config_for_provider(provider_spec: ProviderSpec) -> dict[str, Any]:
 ENABLED_INFERENCE_PROVIDERS = [
     "ollama",
     "vllm",
+    "sglang",
     "fireworks",
     "together",
     "gemini",
@@ -80,6 +81,7 @@ ENABLED_INFERENCE_PROVIDERS = [
 INFERENCE_PROVIDER_IDS = {
     "ollama": "${env.OLLAMA_URL:+ollama}",
     "vllm": "${env.VLLM_URL:+vllm}",
+    "sglang": "${env.SGLANG_URL:+sglang}",
     "cerebras": "${env.CEREBRAS_API_KEY:+cerebras}",
     "nvidia": "${env.NVIDIA_API_KEY:+nvidia}",
     "vertexai": "${env.VERTEX_AI_PROJECT:+vertexai}",

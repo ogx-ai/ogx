@@ -273,10 +273,10 @@ def _parse_tool_call_arguments(arguments: str | dict[str, Any]) -> dict[str, Any
     if not isinstance(arguments, str):
         return arguments if isinstance(arguments, dict) else {}
     try:
-        parsed: dict[str, Any] = json.loads(arguments)
+        parsed = json.loads(arguments)
     except (json.JSONDecodeError, TypeError):
         return {}
-    return parsed
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def collect_tool_call_ids(messages: list[Any]) -> list[str]:
@@ -753,29 +753,10 @@ def convert_gemini_stream_chunk_to_openai(
     completion_id: str,
     is_first_chunk: bool,
     signatures_out: MutableMapping[str, str] | None = None,
-    tool_call_counts: MutableMapping[int, int] | None = None,
 ) -> OpenAIChatCompletionChunk:
-    """Map a Gemini streaming chunk to ``OpenAIChatCompletionChunk``.
-
-    Gemini can stream function calls in separate chunks, so per-chunk positions
-    are not unique tool-call indices. ``tool_call_counts`` maps a choice index to
-    the number of tool calls already emitted for it earlier in the stream. When
-    provided, tool-call indices in this chunk continue from that count and the
-    mapping is updated in place.
-    """
+    """Map a Gemini streaming chunk to ``OpenAIChatCompletionChunk``."""
     created = int(time.time())
     role: Literal["assistant"] | None = "assistant" if is_first_chunk else None
-
-    candidates = _process_candidates(chunk, signatures_out)
-    if tool_call_counts is not None:
-        for cd in candidates:
-            if not cd.tool_calls:
-                continue
-            offset = tool_call_counts.get(cd.index, 0)
-            for position, tool_call in enumerate(cd.tool_calls):
-                if isinstance(tool_call, OpenAIChatCompletionToolCall):
-                    tool_call.index = offset + position
-            tool_call_counts[cd.index] = offset + len(cd.tool_calls)
 
     choices: list[OpenAIChunkChoice] = [
         OpenAIChunkChoice(
@@ -789,7 +770,7 @@ def convert_gemini_stream_chunk_to_openai(
             index=cd.index,
             logprobs=cd.logprobs,
         )
-        for cd in candidates
+        for cd in _process_candidates(chunk, signatures_out)
     ]
 
     if not choices:

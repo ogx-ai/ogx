@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_stop_sequences[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_stop_sequences[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Count: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10"
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false,
+      "stop_sequences": [
+        ","
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-afc88afe57ca90a7",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay",
+          "signature": "c82e53875fa34d7c848d90d96e4072eb"
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "stop_sequence",
+      "stop_sequence": ",",
+      "usage": {
+        "input_tokens": 40,
+        "output_tokens": 4
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

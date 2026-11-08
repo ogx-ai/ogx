@@ -4,12 +4,14 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx2
 import pytest
-from pydantic import SecretStr
+from pydantic import HttpUrl, SecretStr, ValidationError
 
+from ogx.core.stack import replace_env_vars
 from ogx.providers.remote.tool_runtime.brave_search.brave_search import BraveSearchToolRuntimeImpl
 from ogx.providers.remote.tool_runtime.brave_search.config import BraveSearchToolConfig
 
@@ -279,3 +281,38 @@ class TestProviderDataApiKeyOverride:
                 await impl.invoke_tool("web_search", {"query": "test query"})
                 headers = mock_get.call_args.kwargs["headers"]
                 assert "X-Subscription-Token" not in headers
+
+
+class TestBaseUrl:
+    async def test_default_base_url(self, brave_search, mock_brave_response):
+        """Requests go to the public Brave endpoint when no base URL is configured."""
+        with patch.object(brave_search, "get_request_provider_data", return_value=None):
+            with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+                await brave_search.invoke_tool("web_search", {"query": "test query"})
+                assert mock_get.call_args.kwargs["url"] == "https://api.search.brave.com/res/v1/web/search"
+
+    @pytest.mark.parametrize("base_url", ["http://brave-proxy:8080/brave", "http://brave-proxy:8080/brave/"])
+    async def test_custom_base_url(self, base_url, mock_brave_response):
+        """A configured base URL, with or without a trailing slash, keeps its path prefix."""
+        impl = BraveSearchToolRuntimeImpl(BraveSearchToolConfig(base_url=base_url))
+        with patch.object(impl, "get_request_provider_data", return_value=None):
+            with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+                await impl.invoke_tool("web_search", {"query": "test query"})
+                assert mock_get.call_args.kwargs["url"] == "http://brave-proxy:8080/brave/res/v1/web/search"
+
+    @patch.dict(os.environ, {"BRAVE_SEARCH_BASE_URL": "http://brave-proxy:8080"})
+    def test_sample_run_config_reads_base_url_from_environment(self):
+        config_data = replace_env_vars(BraveSearchToolConfig.sample_run_config(__distro_dir__=""))
+        assert BraveSearchToolConfig.model_validate(config_data).base_url == HttpUrl("http://brave-proxy:8080")
+
+    def test_sample_run_config_defaults_to_public_endpoint(self):
+        with patch.dict(os.environ):
+            os.environ.pop("BRAVE_SEARCH_BASE_URL", None)
+            config_data = replace_env_vars(BraveSearchToolConfig.sample_run_config(__distro_dir__=""))
+        assert BraveSearchToolConfig.model_validate(config_data).base_url == HttpUrl("https://api.search.brave.com")
+
+    @pytest.mark.parametrize("base_url", ["", "not a url", "brave-proxy:8080"])
+    def test_invalid_base_url_fails_at_config_load(self, base_url):
+        """A bad BRAVE_SEARCH_BASE_URL is rejected up front, not as an opaque error at request time."""
+        with pytest.raises(ValidationError):
+            BraveSearchToolConfig(base_url=base_url)

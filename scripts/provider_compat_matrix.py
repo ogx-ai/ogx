@@ -97,10 +97,14 @@ class ProviderResults:
 # ---------------------------------------------------------------------------
 
 # Self-hosted providers where the endpoint is not meaningful (localhost / user-managed)
-_SELF_HOSTED_PROVIDERS = {"vllm", "ollama", "tgi", "llama-cpp-server", "text-embeddings-inference"}
+_SELF_HOSTED_PROVIDERS = {"vllm", "ollama", "tgi", "llama-cpp-server", "text-embeddings-inference", "sglang"}
 
 _PROVIDER_RE = re.compile(r"txt=([a-zA-Z_-]+)/")
 _VIS_PROVIDER_RE = re.compile(r"vis=([a-zA-Z_-]+)/")
+
+# Model-list recordings (see store_recording) are infrastructure traffic recorded
+# under the ambient test's test_id, not evidence of a feature result.
+_MODEL_LIST_RE = re.compile(r"^models-[0-9a-f]{64}-[0-9a-f]{8}\.json$")
 
 
 def _extract_provider_from_test_id(test_id: str) -> str | None:
@@ -135,6 +139,8 @@ def scan_recordings(recordings_dir: Path) -> dict[str, ProviderResults]:
         return provider_map
 
     for rec_file in sorted(recordings_dir.glob("*.json")):
+        if _MODEL_LIST_RE.match(rec_file.name):
+            continue
         try:
             data = json.loads(rec_file.read_text())
         except (json.JSONDecodeError, OSError):

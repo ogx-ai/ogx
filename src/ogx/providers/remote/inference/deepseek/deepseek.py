@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 from collections.abc import AsyncIterator
+from typing import Any
 
 from ogx.providers.utils.inference.anthropic_mixin import AnthropicMixin
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
@@ -19,6 +20,16 @@ from ogx_api import (
 )
 
 from .config import DeepSeekImplConfig
+
+
+def _drop_custom_tool_types(body: dict[str, Any]) -> dict[str, Any]:
+    """DeepSeek's /v1/messages rejects the optional ``type: "custom"`` tool marker
+    with a 422 (unknown variant), so strip it before sending."""
+    tools = body.get("tools")
+    if not tools:
+        return body
+    body["tools"] = [{k: v for k, v in tool.items() if not (k == "type" and v == "custom")} for tool in tools]
+    return body
 
 
 class DeepSeekInferenceAdapter(AnthropicMixin, OpenAIMixin):
@@ -53,6 +64,9 @@ class DeepSeekInferenceAdapter(AnthropicMixin, OpenAIMixin):
     def _anthropic_count_tokens_url(self) -> str | None:
         """DeepSeek has no native /v1/messages/count_tokens endpoint."""
         return None
+
+    def _prepare_passthrough_body(self, body: dict[str, Any]) -> dict[str, Any]:
+        return _drop_custom_tool_types(body)
 
     async def openai_chat_completion(
         self,
