@@ -93,6 +93,71 @@ async def test_namespace_tool_flattened_to_function_tools_for_backend(openai_res
     assert all(tool["type"] == "function" for tool in params.tools)
 
 
+def test_function_tool_model_dump_leaks_type_discriminator():
+    """Positive side of https://github.com/ogx-ai/ogx/issues/5678: the leak mechanism.
+
+    OpenAIResponseInputToolFunction carries a `type: "function"` discriminator
+    at the tool level, and model_dump() emits it. Used as-is as the inner
+    FunctionDefinition, it would place `type` where the Chat Completions
+    schema forbids it, so the Responses-to-Chat conversion must map fields
+    explicitly instead of dumping.
+    """
+    input_tool = OpenAIResponseInputToolFunction(
+        name="get_weather",
+        description="Get current temperature for a given location.",
+        parameters={"type": "object", "properties": {"location": {"type": "string"}}},
+    )
+    dumped = input_tool.model_dump(exclude_none=True)
+    assert dumped["type"] == "function"
+    assert "type" in dumped  # not a valid FunctionDefinition as-is
+
+
+async def test_function_tool_backend_request_omits_type_discriminator(openai_responses_impl, mock_inference_api):
+    """Negative side of https://github.com/ogx-ai/ogx/issues/5678.
+
+    Despite the model_dump leak above, the tools sent to the backend must carry
+    the `type` discriminator on the wrapper only, never inside the function
+    dict, for both top-level and namespaced function tools.
+    """
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is the weather in Paris?",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            stream=False,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    name="get_weather",
+                    description="Get current temperature for a given location.",
+                    parameters={"type": "object", "properties": {"location": {"type": "string"}}},
+                ),
+                OpenAIResponseInputToolNamespace(
+                    name="codex_worktrees",
+                    description="Tools in the codex_worktrees namespace.",
+                    tools=[
+                        OpenAIResponseInputToolFunction(
+                            name="create_worktree",
+                            description="Create a managed Git worktree.",
+                            parameters={"type": "object", "properties": {"ref": {"type": "string"}}},
+                        ),
+                    ],
+                ),
+            ],
+        )
+    )
+
+    params = mock_inference_api.openai_chat_completion.call_args[0][0]
+    assert params.tools is not None
+    assert [tool["function"]["name"] for tool in params.tools] == [
+        "get_weather",
+        "codex_worktrees__create_worktree",
+    ]
+    for tool in params.tools:
+        assert tool["type"] == "function"
+        assert "type" not in tool["function"], "type discriminator leaked into function dict"
+
+
 async def test_namespace_tool_call_surfaces_as_function_call(openai_responses_impl, mock_inference_api):
     """A model call to a namespaced function is matched by bare name and surfaced to the client."""
     input_text = "Create a worktree"

@@ -7,7 +7,7 @@
 # Security measures:
 # 1. Runs with read-only permissions (no write access to repo or secrets exposure)
 # 2. Only ollama variants run automatically on pull_request (no secrets needed)
-# 3. API key providers (gpt, azure, bedrock) and the k8s auth lane only run via
+# 3. API key providers (gpt, azure) and the k8s auth lane only run via
 #    manual workflow_dispatch
 # 4. Fork PRs with API key providers are blocked (prevents secret theft)
 # 5. Recordings uploaded as artifacts; companion workflow handles commits
@@ -274,10 +274,6 @@ jobs:
           - setup: gpt
             suite: reasoning
           - setup: azure
-            suite: responses
-          - setup: bedrock
-            suite: bedrock
-          - setup: bedrock
             suite: responses
           - setup: gemini
             suite: interactions
