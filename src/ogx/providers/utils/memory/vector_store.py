@@ -186,7 +186,7 @@ def make_overlapped_chunks(
         toks = tokens[i : i + window_len]
         chunk = encoding.decode(toks)
         chunk_window = f"{i}-{i + len(toks)}"
-        chunk_id = generate_chunk_id(chunk, text, chunk_window)
+        chunk_id = generate_chunk_id(document_id, chunk, chunk_window)
         chunk_metadata = metadata.copy()
         chunk_metadata["chunk_id"] = chunk_id
         chunk_metadata["document_id"] = document_id

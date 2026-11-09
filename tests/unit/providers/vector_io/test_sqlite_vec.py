@@ -15,7 +15,8 @@ from ogx.providers.inline.vector_io.sqlite_vec.sqlite_vec import (
     SQLiteVecVectorIOAdapter,
     _create_sqlite_connection,
 )
-from ogx_api import Chunk, ChunkMetadata, EmbeddedChunk, QueryChunksResponse
+from ogx.providers.utils.memory.vector_store import make_overlapped_chunks
+from ogx_api import Chunk, ChunkForDeletion, ChunkMetadata, EmbeddedChunk, QueryChunksResponse
 
 # This test is a unit test for the SQLiteVecVectorIOAdapter class. This should only contain
 # tests which are specific to this class. More general (API-level) tests should be placed in
@@ -810,3 +811,38 @@ def test_create_sqlite_connection_sets_wal_pragmas(tmp_path):
 
     cur.close()
     connection.close()
+
+
+async def test_identical_files_keep_separate_chunks(sqlite_vec_index, embedding_dimension):
+    """Two documents with the same text must not share chunk ids, or deleting one deletes both."""
+    text = "The quick brown fox jumps over the lazy dog. " * 20
+    chunks_by_doc = {
+        doc_id: make_overlapped_chunks(doc_id, text, 32, 8, {"document_id": doc_id}) for doc_id in ("file-a", "file-b")
+    }
+    rng = np.random.default_rng(0)
+    embedded_chunks = [
+        EmbeddedChunk(
+            content=chunk.content,
+            chunk_id=chunk.chunk_id,
+            metadata=chunk.metadata,
+            chunk_metadata=chunk.chunk_metadata,
+            embedding=rng.random(embedding_dimension).astype(np.float32).tolist(),
+            embedding_model="test-embedding-model",
+            embedding_dimension=embedding_dimension,
+        )
+        for chunks in chunks_by_doc.values()
+        for chunk in chunks
+    ]
+    await sqlite_vec_index.add_chunks(embedded_chunks)
+
+    total = len(embedded_chunks)
+    response = await sqlite_vec_index.query_keyword(query_string="fox", k=total * 2, score_threshold=0.0)
+    assert len(response.chunks) == total
+
+    await sqlite_vec_index.delete_chunks(
+        [ChunkForDeletion(chunk_id=chunk.chunk_id, document_id="file-a") for chunk in chunks_by_doc["file-a"]]
+    )
+
+    response = await sqlite_vec_index.query_keyword(query_string="fox", k=total * 2, score_threshold=0.0)
+    assert len(response.chunks) == len(chunks_by_doc["file-b"])
+    assert {chunk.metadata["document_id"] for chunk in response.chunks} == {"file-b"}
