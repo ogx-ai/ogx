@@ -16,7 +16,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Download llama.cpp b11960 (CPU x64) and models
+    - name: Download llama.cpp b12110 (CPU x64) and models
       shell: bash
       run: |
         set -euo pipefail
@@ -37,21 +37,21 @@ runs:
         # tee "$dest" | sha256sum`) to fold that read into the write; a possible
         # future optimization, skipped for now since the read is a page-cache hit.
 
-        # Pinned sha256: GitHub release asset digest (b11960) and HuggingFace LFS oid
+        # Pinned sha256: GitHub release asset digest (b12110) and HuggingFace LFS oid
         # (= content sha256) for the models.
-        LLAMA_TARBALL_SHA=31cc3a6bc638ac6c48dc4b1b74888f1eaadf3d14227c1e5f67daf9a49541d97a
+        LLAMA_TARBALL_SHA=368227edcc229be5f9bed16a2223d79b5e41d0ac2e19bcf5825e82291c060e55
         LAYA_SHA=c06528c5746d3bb8baa72a27938be95abbfd0b226f8471e8a9e365ed0bb066d2
 
-        # 1. llama.cpp CPU binary, pinned to build b11960 (v0.8.0, which serves the
+        # 1. llama.cpp CPU binary, pinned to build b12110 (v0.8.0, which serves the
         #    SystemOne protocol). bXXXX builds are published as GitHub prereleases;
         #    pinning to one build keeps CI reproducible. Verify the tarball hash
         #    BEFORE extracting so we never unpack unauthenticated bytes.
         TARBALL="$WORKDIR/llama.tar.gz"
         [ -f "$TARBALL" ] || curl -fsSL --retry 3 -o "$TARBALL" \
-          "https://github.com/ggml-org/llama.cpp/releases/download/b11960/llama-b11960-bin-ubuntu-x64.tar.gz"
+          "https://github.com/ggml-org/llama.cpp/releases/download/b12110/llama-b12110-bin-ubuntu-x64.tar.gz"
         verify "$TARBALL" "$LLAMA_TARBALL_SHA"
-        [ -x "$WORKDIR/llama-b11960/llama-server" ] || tar xzf "$TARBALL" -C "$WORKDIR"
-        "$WORKDIR/llama-b11960/llama-server" --version
+        [ -x "$WORKDIR/llama-b12110/llama-server" ] || tar xzf "$TARBALL" -C "$WORKDIR"
+        "$WORKDIR/llama-b12110/llama-server" --version
 
         # 2. Q8_0 weights. Download if missing, but always re-verify the on-disk file
         #    (catches a corrupt cached copy).
@@ -107,7 +107,7 @@ runs:
 
         # setsid + nohup fully detach the server from this step's process group so it
         # keeps running after the step's shell exits (unlike a plain `&`).
-        setsid nohup "$WORKDIR/llama-b11960/llama-server" \
+        setsid nohup "$WORKDIR/llama-b12110/llama-server" \
           --models-preset "$WORKDIR/preset.ini" \
           --host 127.0.0.1 \
           --port "$PORT" \
@@ -130,7 +130,7 @@ runs:
 
         # setsid + nohup fully detach the router from this step's process group so it
         # keeps running after the step's shell exits (unlike a plain `&`).
-        setsid nohup "$WORKDIR/llama-b11960/llama-server" \
+        setsid nohup "$WORKDIR/llama-b12110/llama-server" \
           --models-preset "$WORKDIR/preset.ini" \
           --host 127.0.0.1 \
           --port "$PORT" \
