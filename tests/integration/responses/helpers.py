@@ -20,7 +20,6 @@ __all__ = [
     "skip_if_text_model_prefix",
     "upload_file",
     "wait_for_file_attachment",
-    "setup_mcp_tools",
     "extract_text_content",
     "langchain_chat",
 ]
@@ -106,19 +105,6 @@ def wait_for_file_attachment(compat_client, vector_store_id, file_id):
     assert file_attach_response.status == "completed", f"Expected file to be attached, got {file_attach_response}"
     assert not file_attach_response.last_error
     return file_attach_response
-
-
-def setup_mcp_tools(tools, mcp_server_info):
-    """Replace placeholder MCP server URLs with actual server info."""
-    # Create a deep copy to avoid modifying the original test case
-    import copy
-
-    tools_copy = copy.deepcopy(tools)
-
-    for tool in tools_copy:
-        if tool["type"] == "mcp" and tool["server_url"] == "<FILLED_BY_TEST_RUNNER>":
-            tool["server_url"] = mcp_server_info["server_url"]
-    return tools_copy
 
 
 def extract_text_content(content: str | list[str] | list[dict]):
