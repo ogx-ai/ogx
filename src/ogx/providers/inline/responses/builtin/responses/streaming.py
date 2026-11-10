@@ -17,7 +17,7 @@ from opentelemetry import trace
 from ogx.log import get_logger
 from ogx.providers.utils.inference.openai_compat import convert_tooldef_to_openai_tool
 from ogx.providers.utils.inference.prompt_adapter import interleaved_content_as_str
-from ogx.providers.utils.tools.mcp import list_mcp_tools
+from ogx.providers.utils.tools.mcp import list_mcp_tools, validate_mcp_endpoint
 from ogx_api import (
     AllowedToolsFilter,
     ApprovalFilter,
@@ -359,6 +359,9 @@ class StreamingResponseOrchestrator:
             if mcp_server.server_label not in self.server_label_to_tools:
                 self.server_label_to_tools[mcp_server.server_label] = []
             self.server_label_to_tools[mcp_server.server_label].append(tool_name)
+            # Note: endpoints are only trusted when they were actually resolved from a
+            # connector (_process_mcp_tool / _process_tools). A server_url supplied
+            # alongside a connector_id is still caller-controlled and stays untrusted.
         # Track final messages after all tool executions
         self.final_messages: list[OpenAIMessageParam] = []
         # mapping for annotations
@@ -1867,9 +1870,12 @@ class StreamingResponseOrchestrator:
         self, mcp_tool: OpenAIResponseInputToolMCP, output_messages: list[OpenAIResponseOutput]
     ) -> AsyncIterator[OpenAIResponseObjectStream]:
         """Process an MCP tool configuration and emit appropriate streaming events."""
+        # Caller-supplied server_url is untrusted (SSRF). Connector-resolved URLs are admin-configured.
+        caller_supplied_url = bool(mcp_tool.server_url)
         # Resolve connector_id to server_url if provided
         if self.connectors_api is not None:
             mcp_tool = await resolve_mcp_connector_id(mcp_tool, self.connectors_api)
+        endpoint_pins: dict[str, str] | None = None
 
         # Emit mcp_list_tools.in_progress
         self.sequence_number += 1
@@ -1899,6 +1905,14 @@ class StreamingResponseOrchestrator:
                     f"Failed to list MCP tools for server '{mcp_tool.server_label}': server_url is not set"
                 )
 
+            if caller_supplied_url:
+                # Validates the endpoint and returns pins routing the connection
+                # to the validated address, so a DNS-rebinding swap cannot
+                # redirect it (resolution happens right before connecting).
+                endpoint_pins = validate_mcp_endpoint(mcp_tool.server_url)
+            else:
+                self.tool_executor.trusted_mcp_endpoints.add(mcp_tool.server_url)
+
             attributes = {
                 "server_label": mcp_tool.server_label,
                 "server_url": mcp_tool.server_url,
@@ -1913,6 +1927,7 @@ class StreamingResponseOrchestrator:
                     headers=mcp_tool.headers,
                     authorization=mcp_tool.authorization,
                     session_manager=session_manager,
+                    endpoint_pins=endpoint_pins,
                 )
 
             # Create the MCP list tools message
@@ -2006,6 +2021,24 @@ class StreamingResponseOrchestrator:
     async def _process_tools(
         self, output_messages: list[OpenAIResponseOutput]
     ) -> AsyncIterator[OpenAIResponseObjectStream]:
+        # mcp_tool_to_server entries reused from a previous response may carry a
+        # connector_id without a resolved server_url: connector resolution happens
+        # in _process_mcp_tool, which is skipped when the previous listing is
+        # reused. Resolve them here so tool invocations (e.g. resumed approval
+        # calls) on this request can reach the server.
+        if self.connectors_api is not None:
+            resolved_url_by_connector: dict[str, str | None] = {}
+            for tool_name, mcp_tool in self.mcp_tool_to_server.items():
+                if mcp_tool.connector_id and not mcp_tool.server_url:
+                    if mcp_tool.connector_id not in resolved_url_by_connector:
+                        resolved_url_by_connector[mcp_tool.connector_id] = (
+                            await resolve_mcp_connector_id(mcp_tool, self.connectors_api)
+                        ).server_url
+                    server_url = resolved_url_by_connector[mcp_tool.connector_id]
+                    if server_url:
+                        self.mcp_tool_to_server[tool_name] = mcp_tool.model_copy(update={"server_url": server_url})
+                        # Connector-resolved endpoints are admin-configured
+                        self.tool_executor.trusted_mcp_endpoints.add(server_url)
         # Handle all mcp tool lists from previous response that are still valid:
         # tool_context can be None when no tools are provided in the response request
         if self.ctx.tool_context:
@@ -2267,6 +2300,12 @@ async def resolve_mcp_connector_id(
         The mcp_tool with server_url populated (may be same instance if already set)
     """
     if mcp_tool.connector_id and not mcp_tool.server_url:
-        connector = await connectors_api.get_connector(GetConnectorRequest(connector_id=mcp_tool.connector_id))
+        # get_connector pings the MCP server to read its name/version, so the
+        # tool's authorization must travel with the lookup or authenticated
+        # connectors fail with 401 before the request is processed.
+        connector = await connectors_api.get_connector(
+            GetConnectorRequest(connector_id=mcp_tool.connector_id),
+            authorization=mcp_tool.authorization,
+        )
         return mcp_tool.model_copy(update={"server_url": connector.url})
     return mcp_tool
