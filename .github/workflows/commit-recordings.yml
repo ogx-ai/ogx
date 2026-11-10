@@ -126,6 +126,14 @@ jobs:
               }
             }
 
+            // Artifacts-only mode: the dispatch explicitly requested no commit.
+            // The recordings stay in the record run's artifacts for inspection.
+            if (commitMode === 'none') {
+              console.log('commit_mode=none: skipping commit, recordings remain as artifacts only');
+              core.setOutput('skip', 'true');
+              return;
+            }
+
             // Branch mode: a dispatch on a branch (e.g. main) with no PR.
             // Open a fresh PR with the recordings instead of pushing to an existing PR branch.
             if (commitMode === 'branch') {
