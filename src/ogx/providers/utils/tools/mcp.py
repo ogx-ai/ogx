@@ -372,6 +372,14 @@ class MCPSessionManager:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Exit the async context manager and cleanup all sessions.
 
+        Sessions are closed in the reverse order of their creation. Each session
+        holds anyio cancel scopes (the task groups of the transport client and of
+        the ClientSession), and anyio only allows leaving cancel scopes in the
+        reverse order of entering them. Closing the oldest session first while a
+        newer one is still open fails with "Attempted to exit a cancel scope that
+        isn't the current task's current cancel scope", and leaves the task with
+        cancel scopes it never leaves, which breaks the task later on.
+
         Note: We catch BaseException (not just Exception) because:
         1. CancelledError is a BaseException and can occur during cleanup
         2. anyio cancel scope errors can occur if cleanup runs in a different
@@ -380,7 +388,7 @@ class MCPSessionManager:
         """
         errors = []
         session_count = len(self._sessions)
-        for key, (session, client_ctx, _) in list(self._sessions.items()):
+        for key, (session, client_ctx, _) in reversed(list(self._sessions.items())):
             try:
                 await session.__aexit__(None, None, None)
             except BaseException as e:
