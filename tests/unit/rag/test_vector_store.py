@@ -58,11 +58,11 @@ class TestChunk:
     def test_chunk(self):
         chunk = Chunk(
             content="Example chunk content",
-            chunk_id=generate_chunk_id("test-doc", "Example chunk content"),
+            chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Example chunk content"),
             metadata={"key": "value"},
             chunk_metadata=ChunkMetadata(
                 document_id="test-doc",
-                chunk_id=generate_chunk_id("test-doc", "Example chunk content"),
+                chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Example chunk content"),
                 created_timestamp=1234567890,
                 updated_timestamp=1234567890,
                 content_token_count=3,
@@ -75,11 +75,11 @@ class TestChunk:
     def test_embedded_chunk(self):
         chunk = Chunk(
             content="Example chunk content",
-            chunk_id=generate_chunk_id("test-doc", "Example chunk content"),
+            chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Example chunk content"),
             metadata={"key": "value"},
             chunk_metadata=ChunkMetadata(
                 document_id="test-doc",
-                chunk_id=generate_chunk_id("test-doc", "Example chunk content"),
+                chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Example chunk content"),
                 created_timestamp=1234567890,
                 updated_timestamp=1234567890,
                 content_token_count=3,
@@ -195,7 +195,9 @@ class TestVectorStore:
         assert len(chunks_a) == len(chunks_b) > 1
         assert {c.chunk_id for c in chunks_a}.isdisjoint({c.chunk_id for c in chunks_b})
         for chunk in chunks_a:
-            assert chunk.chunk_id == generate_chunk_id("doc-a", chunk.content, chunk.chunk_metadata.chunk_window)
+            assert chunk.chunk_id == generate_chunk_id(
+                document_id="doc-a", chunk_text=chunk.content, chunk_window=chunk.chunk_metadata.chunk_window
+            )
             assert chunk.metadata["chunk_id"] == chunk.chunk_id
             assert chunk.chunk_metadata.chunk_id == chunk.chunk_id
 
@@ -265,11 +267,11 @@ class TestVectorStoreWithIndex:
 
         chunk = Chunk(
             content="Test 1",
-            chunk_id=generate_chunk_id("test-doc", "Test 1"),
+            chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Test 1"),
             metadata={},
             chunk_metadata=ChunkMetadata(
                 document_id="test-doc",
-                chunk_id=generate_chunk_id("test-doc", "Test 1"),
+                chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Test 1"),
                 created_timestamp=1234567890,
                 updated_timestamp=1234567890,
                 content_token_count=2,
@@ -315,11 +317,11 @@ class TestVectorStoreWithIndex:
         chunks = [
             Chunk(
                 content="Test 1",
-                chunk_id=generate_chunk_id("test-doc", "Test 1"),
+                chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Test 1"),
                 metadata={},
                 chunk_metadata=ChunkMetadata(
                     document_id="test-doc",
-                    chunk_id=generate_chunk_id("test-doc", "Test 1"),
+                    chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Test 1"),
                     created_timestamp=1234567890,
                     updated_timestamp=1234567890,
                     content_token_count=2,
@@ -327,11 +329,11 @@ class TestVectorStoreWithIndex:
             ),
             Chunk(
                 content="Test 2",
-                chunk_id=generate_chunk_id("test-doc", "Test 2"),
+                chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Test 2"),
                 metadata={},
                 chunk_metadata=ChunkMetadata(
                     document_id="test-doc",
-                    chunk_id=generate_chunk_id("test-doc", "Test 2"),
+                    chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Test 2"),
                     created_timestamp=1234567890,
                     updated_timestamp=1234567890,
                     content_token_count=2,
@@ -397,7 +399,7 @@ class TestNeuralRerank:
         chunks = []
         scores = []
         for content, score, doc_id in chunks_data:
-            chunk_id = generate_chunk_id(doc_id, content)
+            chunk_id = generate_chunk_id(document_id=doc_id, chunk_text=content)
             chunks.append(
                 EmbeddedChunk(
                     content=content,

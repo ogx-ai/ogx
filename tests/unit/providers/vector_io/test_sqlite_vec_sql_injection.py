@@ -68,7 +68,7 @@ async def sqlite_vec_index(embedding_dimension, tmp_path_factory):
 
 async def test_sqlite_vec_normal_filter_works(sqlite_vec_index):
     """End-to-end: valid filter works against the real SQLite backend."""
-    chunk_id = generate_chunk_id("doc-1", "content-1")
+    chunk_id = generate_chunk_id(document_id="doc-1", chunk_text="content-1")
     await sqlite_vec_index.add_chunks(
         [
             EmbeddedChunk(

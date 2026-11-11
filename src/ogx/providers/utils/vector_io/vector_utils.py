@@ -12,10 +12,13 @@ from typing import Any
 from ogx_api import EmbeddedChunk
 
 
-def generate_chunk_id(document_id: str, chunk_text: str, chunk_window: str | None = None) -> str:
+def generate_chunk_id(*, document_id: str, chunk_text: str, chunk_window: str | None = None) -> str:
     """
     Generate a unique chunk ID using a hash of the document ID and chunk text.
     Then use the first 32 characters of the hash to create a UUID.
+
+    Arguments are keyword-only so a caller can never swap ``document_id`` and
+    ``chunk_text`` (ids would silently hash the wrong values).
     """
     hash_input = f"{document_id}:{chunk_text}".encode()
     if chunk_window:

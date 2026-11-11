@@ -702,8 +702,8 @@ async def test_query_chunks_hybrid_tie_breaking(
     from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 
     # Create two chunks with the same content and embedding
-    chunk1_id = generate_chunk_id("docA", "identical")
-    chunk2_id = generate_chunk_id("docB", "identical")
+    chunk1_id = generate_chunk_id(document_id="docA", chunk_text="identical")
+    chunk2_id = generate_chunk_id(document_id="docB", chunk_text="identical")
 
     chunk1 = Chunk(
         content="identical",

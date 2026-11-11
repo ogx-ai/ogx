@@ -101,7 +101,7 @@ def filter_test_chunks(embedding_dimension):
     for data in chunks_data:
         content = data["content"]
         doc_id = data["document_id"]
-        chunk_id = generate_chunk_id(doc_id, content)
+        chunk_id = generate_chunk_id(document_id=doc_id, chunk_text=content)
         embedding = np.random.random(int(embedding_dimension)).tolist()
 
         metadata = {
