@@ -58,11 +58,11 @@ class TestChunk:
     def test_chunk(self):
         chunk = Chunk(
             content="Example chunk content",
-            chunk_id=generate_chunk_id("test-doc", "Example chunk content"),
+            chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Example chunk content"),
             metadata={"key": "value"},
             chunk_metadata=ChunkMetadata(
                 document_id="test-doc",
-                chunk_id=generate_chunk_id("test-doc", "Example chunk content"),
+                chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Example chunk content"),
                 created_timestamp=1234567890,
                 updated_timestamp=1234567890,
                 content_token_count=3,
@@ -75,11 +75,11 @@ class TestChunk:
     def test_embedded_chunk(self):
         chunk = Chunk(
             content="Example chunk content",
-            chunk_id=generate_chunk_id("test-doc", "Example chunk content"),
+            chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Example chunk content"),
             metadata={"key": "value"},
             chunk_metadata=ChunkMetadata(
                 document_id="test-doc",
-                chunk_id=generate_chunk_id("test-doc", "Example chunk content"),
+                chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Example chunk content"),
                 created_timestamp=1234567890,
                 updated_timestamp=1234567890,
                 content_token_count=3,
@@ -185,6 +185,32 @@ class TestVectorStore:
             assert chunk.metadata["metadata_token_count"] == len_metadata_tokens
             assert chunk.chunk_metadata.chunk_tokenizer == expected_tokenizer_name
 
+    def test_make_overlapped_chunks_ids_include_document_id(self):
+        text = "The quick brown fox jumps over the lazy dog. " * 20
+        metadata = {"source": "test"}
+
+        chunks_a = make_overlapped_chunks("doc-a", text, 16, 4, metadata)
+        chunks_b = make_overlapped_chunks("doc-b", text, 16, 4, metadata)
+
+        assert len(chunks_a) == len(chunks_b) > 1
+        assert {c.chunk_id for c in chunks_a}.isdisjoint({c.chunk_id for c in chunks_b})
+        for chunk in chunks_a:
+            assert chunk.chunk_id == generate_chunk_id(
+                document_id="doc-a", chunk_text=chunk.content, chunk_window=chunk.chunk_metadata.chunk_window
+            )
+            assert chunk.metadata["chunk_id"] == chunk.chunk_id
+            assert chunk.chunk_metadata.chunk_id == chunk.chunk_id
+
+    def test_make_overlapped_chunks_ids_are_stable_for_same_document(self):
+        text = "The quick brown fox jumps over the lazy dog. " * 20
+        metadata = {"source": "test"}
+
+        first = make_overlapped_chunks("doc-a", text, 16, 4, metadata)
+        second = make_overlapped_chunks("doc-a", text, 16, 4, metadata)
+
+        assert [c.chunk_id for c in first] == [c.chunk_id for c in second]
+        assert len({c.chunk_id for c in first}) == len(first)
+
     @pytest.mark.parametrize(
         "token_count, window_len, overlap_len, expected_windows",
         [
@@ -241,11 +267,11 @@ class TestVectorStoreWithIndex:
 
         chunk = Chunk(
             content="Test 1",
-            chunk_id=generate_chunk_id("test-doc", "Test 1"),
+            chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Test 1"),
             metadata={},
             chunk_metadata=ChunkMetadata(
                 document_id="test-doc",
-                chunk_id=generate_chunk_id("test-doc", "Test 1"),
+                chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Test 1"),
                 created_timestamp=1234567890,
                 updated_timestamp=1234567890,
                 content_token_count=2,
@@ -291,11 +317,11 @@ class TestVectorStoreWithIndex:
         chunks = [
             Chunk(
                 content="Test 1",
-                chunk_id=generate_chunk_id("test-doc", "Test 1"),
+                chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Test 1"),
                 metadata={},
                 chunk_metadata=ChunkMetadata(
                     document_id="test-doc",
-                    chunk_id=generate_chunk_id("test-doc", "Test 1"),
+                    chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Test 1"),
                     created_timestamp=1234567890,
                     updated_timestamp=1234567890,
                     content_token_count=2,
@@ -303,11 +329,11 @@ class TestVectorStoreWithIndex:
             ),
             Chunk(
                 content="Test 2",
-                chunk_id=generate_chunk_id("test-doc", "Test 2"),
+                chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Test 2"),
                 metadata={},
                 chunk_metadata=ChunkMetadata(
                     document_id="test-doc",
-                    chunk_id=generate_chunk_id("test-doc", "Test 2"),
+                    chunk_id=generate_chunk_id(document_id="test-doc", chunk_text="Test 2"),
                     created_timestamp=1234567890,
                     updated_timestamp=1234567890,
                     content_token_count=2,
@@ -373,7 +399,7 @@ class TestNeuralRerank:
         chunks = []
         scores = []
         for content, score, doc_id in chunks_data:
-            chunk_id = generate_chunk_id(doc_id, content)
+            chunk_id = generate_chunk_id(document_id=doc_id, chunk_text=content)
             chunks.append(
                 EmbeddedChunk(
                     content=content,
