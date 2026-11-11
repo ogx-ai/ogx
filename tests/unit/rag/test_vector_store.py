@@ -154,7 +154,7 @@ class TestVectorStore:
     @pytest.mark.parametrize(
         "window_len, overlap_len, expected_chunks",
         [
-            (5, 2, 4),  # Create 4 chunks with window of 5 and overlap of 2
+            (5, 2, 3),  # Create 3 chunks with window of 5 and overlap of 2
             (4, 1, 4),  # Create 4 chunks with window of 4 and overlap of 1
         ],
     )
@@ -184,6 +184,27 @@ class TestVectorStore:
             assert chunk.metadata["token_count"] > 0
             assert chunk.metadata["metadata_token_count"] == len_metadata_tokens
             assert chunk.chunk_metadata.chunk_tokenizer == expected_tokenizer_name
+
+    @pytest.mark.parametrize(
+        "token_count, window_len, overlap_len, expected_windows",
+        [
+            (20, 8, 4, ["0-8", "4-12", "8-16", "12-20"]),
+            (9, 8, 4, ["0-8", "4-9"]),
+            (8, 8, 4, ["0-8"]),
+            (6, 8, 4, ["0-6"]),
+            (500, 800, 400, ["0-500"]),
+            (1000, 800, 400, ["0-800", "400-1000"]),
+            (1500, 800, 400, ["0-800", "400-1200", "800-1500"]),
+            (10, 5, 0, ["0-5", "5-10"]),
+        ],
+    )
+    def test_make_overlapped_chunks_stops_at_end_of_text(self, token_count, window_len, overlap_len, expected_windows):
+        text = " ".join(["hello"] * token_count)
+        assert len(get_encoding("cl100k_base").encode(text)) == token_count
+
+        chunks = make_overlapped_chunks("test_doc", text, window_len, overlap_len, {})
+
+        assert [c.chunk_metadata.chunk_window for c in chunks] == expected_windows
 
     def test_raise_overlapped_chunks_metadata_serialization_error(self):
         document_id = "test_doc_ex"
