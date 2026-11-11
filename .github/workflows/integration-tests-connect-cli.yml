@@ -1,0 +1,148 @@
+name: Connect CLI - Agent Smoke Tests
+
+run-name: Drive the agent CLIs (Claude Code, Codex, OpenCode) through ogx connect (mock provider backend)
+
+# Deliberately not a required status check, and should stay out of branch protection: it tracks
+# upstream client releases we don't control, not our own code, so it must never gate a merge. See
+# the non-blocking note below.
+on:
+  pull_request:
+    branches:
+      - main
+      - 'release-[0-9]+.[0-9]+.x'
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'src/ogx/cli/connect/**'
+      - 'tests/integration/connect_cli/**'
+      - 'uv.lock'
+      - 'pyproject.toml'
+      - '.github/workflows/integration-tests-connect-cli.yml'
+      - '.github/actions/setup-test-environment/action.yml'
+      - '.github/actions/run-and-record-tests/action.yml'
+      - 'scripts/integration-tests.sh'
+      - 'scripts/mock_backend.py'
+      - 'tests/integration/suites.py'
+      - 'tests/integration/fixtures/common.py'
+  merge_group:
+    branches:
+      - main
+      - 'release-[0-9]+.[0-9]+.x'
+  workflow_dispatch:
+    inputs:
+      claude-code-version:
+        description: 'Exact Claude Code CLI version, such as 2.1.274, overriding latest. Use it to bisect a failure.'
+        type: string
+        default: ''
+      codex-cli-version:
+        description: 'Exact @openai/codex version, such as 0.136.0, overriding latest. Use it to bisect a failure.'
+        type: string
+        default: ''
+      opencode-version:
+        description: 'Exact @opencode/cli version, such as 2.2.5, overriding latest. Use it to bisect a failure.'
+        type: string
+        default: ''
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  connect-cli-smoke:
+    name: Agent CLI smokes via ogx connect (mock provider backend)
+    runs-on: ubuntu-latest
+    # The mock backend answers instantly; the time is dominated by environment
+    # setup, the three CLI installs, and the client sessions' own timeouts.
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Live mode (not replay) so the real client traffic reaches a server. The
+      # mock setup stands up scripts/mock_backend.py (a deterministic in-repo
+      # mock provider backend) behind a plain default `ogx go` instead of
+      # downloading and generating with a real Ollama model; the tests assert
+      # its sentinel in the reply. No HuggingFace assets are needed because
+      # the mock serves the embedding model.
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-environment
+        with:
+          python-version: '3.12'
+          client-version: 'latest'
+          setup: 'mock'
+          suite: 'connect-cli'
+          inference-mode: 'live'
+          enable-hf-cache: 'false'
+
+      # The suite root is a dedicated directory holding exactly these three
+      # smokes, so no --pattern is needed; tests for a CLI that is not
+      # installed self-skip. Nothing below is pinned ahead of time, so exact
+      # overrides (for bisecting a failure) are passed straight through.
+      - name: Install Claude Code CLI
+        env:
+          CLI_VERSION: ${{ inputs.claude-code-version || 'latest' }}
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash -s -- "${CLI_VERSION}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install Codex CLI
+        env:
+          CLI_VERSION: ${{ inputs.codex-cli-version || 'latest' }}
+        run: |
+          npm install -g "@openai/codex@${CLI_VERSION}"
+          codex --version
+
+      - name: Install OpenCode CLI
+        env:
+          CLI_VERSION: ${{ inputs.opencode-version || 'latest' }}
+        run: |
+          npm install -g "@opencode/cli@${CLI_VERSION}"
+          opencode --version
+
+      # Nothing above is pinned ahead of time, so this is where we find out what actually got
+      # installed: the log, an annotation on the run page, and the job summary. When an exact
+      # version was requested to bisect a failure, fail loudly if a different one landed.
+      - name: Record client versions
+        env:
+          CLI_VERSION_OVERRIDE: ${{ inputs.claude-code-version }}
+          CODEX_VERSION_OVERRIDE: ${{ inputs.codex-cli-version }}
+          OPENCODE_VERSION_OVERRIDE: ${{ inputs.opencode-version }}
+        run: |
+          claude_version=$("$HOME/.local/bin/claude" --version | awk '{print $1}')
+          if [ -n "${CLI_VERSION_OVERRIDE}" ] && [ "$claude_version" != "${CLI_VERSION_OVERRIDE}" ]; then
+            echo "::error::Failed to install Claude Code CLI ${CLI_VERSION_OVERRIDE}: found ${claude_version}"
+            exit 1
+          fi
+          codex_version=$(codex --version | awk '{print $NF}')
+          if [ -n "${CODEX_VERSION_OVERRIDE}" ] && [ "$codex_version" != "${CODEX_VERSION_OVERRIDE}" ]; then
+            echo "::error::Failed to install Codex CLI ${CODEX_VERSION_OVERRIDE}: found ${codex_version}"
+            exit 1
+          fi
+          opencode_version=$(opencode --version | awk '{print $NF}')
+          if [ -n "${OPENCODE_VERSION_OVERRIDE}" ] && [ "$opencode_version" != "${OPENCODE_VERSION_OVERRIDE}" ]; then
+            echo "::error::Failed to install OpenCode ${OPENCODE_VERSION_OVERRIDE}: found ${opencode_version}"
+            exit 1
+          fi
+          echo "::notice title=Client versions under test::Claude Code CLI ${claude_version}, Codex CLI ${codex_version}, OpenCode ${opencode_version}"
+          {
+            echo "### Client versions under test"
+            echo ""
+            echo "| Client | Version |"
+            echo "| --- | --- |"
+            echo "| Claude Code CLI | ${claude_version} |"
+            echo "| Codex CLI | ${codex_version} |"
+            echo "| OpenCode | ${opencode_version} |"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Run connect CLI smoke tests
+        uses: ./.github/actions/run-and-record-tests
+        with:
+          # The script starts a default `ogx go` on 8321 for the mock setup;
+          # the http:// config makes the test client connect to it.
+          stack-config: 'http://localhost:8321'
+          setup: 'mock'
+          suite: 'connect-cli'
+          inference-mode: 'live'

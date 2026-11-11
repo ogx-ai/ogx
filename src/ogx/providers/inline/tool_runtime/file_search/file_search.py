@@ -5,31 +5,20 @@
 # the root directory of this source tree.
 
 import asyncio
-import base64
-import io
-import mimetypes
 from typing import Any
 
-import httpx2
-from fastapi import UploadFile
 from pydantic import TypeAdapter
 
 from ogx.log import get_logger
-from ogx.providers.utils.common.data_url import parse_data_url
-from ogx.providers.utils.common.url_validation import validate_url_not_private
 from ogx.providers.utils.inference.prompt_adapter import interleaved_content_as_str
 from ogx_api import (
     URL,
-    Files,
     Inference,
     InterleavedContent,
     InterleavedContentItem,
     ListToolDefsResponse,
-    OpenAIAttachFileRequest,
-    OpenAIFileUploadPurpose,
     QueryChunksRequest,
     QueryChunksResponse,
-    RAGDocument,
     RAGQueryConfig,
     RAGQueryResult,
     TextContentItem,
@@ -38,10 +27,7 @@ from ogx_api import (
     ToolGroupsProtocolPrivate,
     ToolInvocationResult,
     ToolRuntime,
-    UploadFileRequest,
     VectorIO,
-    VectorStoreChunkingStrategyStatic,
-    VectorStoreChunkingStrategyStaticConfig,
 )
 
 from .config import FileSearchToolRuntimeConfig
@@ -50,67 +36,18 @@ from .context_retriever import generate_rag_query
 log = get_logger(name=__name__, category="tool_runtime")
 
 
-async def raw_data_from_doc(doc: RAGDocument) -> tuple[bytes, str]:
-    """Get raw binary data and mime type from a RAGDocument for file upload."""
-    if isinstance(doc.content, URL):
-        uri = doc.content.uri
-        if uri.startswith("file://"):
-            raise ValueError("file:// URIs are not supported. Please use the Files API (/v1/files) to upload files.")
-        if uri.startswith("data:"):
-            parts = parse_data_url(uri)
-            mime_type = parts["mimetype"]
-            data = parts["data"]
-
-            if parts["is_base64"]:
-                file_data = base64.b64decode(data)
-            else:
-                file_data = data.encode("utf-8")
-
-            return file_data, mime_type
-        else:
-            validate_url_not_private(uri)
-            async with httpx2.AsyncClient(timeout=httpx2.Timeout(30.0, connect=10.0)) as client:
-                r = await client.get(uri)
-                r.raise_for_status()
-                mime_type = r.headers.get("content-type", "application/octet-stream")
-                return r.content, mime_type
-    else:
-        if isinstance(doc.content, str):
-            content_str = doc.content
-        else:
-            content_str = interleaved_content_as_str(doc.content)
-
-        if content_str.startswith("file://"):
-            raise ValueError("file:// URIs are not supported. Please use the Files API (/v1/files) to upload files.")
-        if content_str.startswith("data:"):
-            parts = parse_data_url(content_str)
-            mime_type = parts["mimetype"]
-            data = parts["data"]
-
-            if parts["is_base64"]:
-                file_data = base64.b64decode(data)
-            else:
-                file_data = data.encode("utf-8")
-
-            return file_data, mime_type
-        else:
-            return content_str.encode("utf-8"), "text/plain"
-
-
 class FileSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime):
-    """Tool runtime implementation for document ingestion and semantic file search."""
+    """Tool runtime implementation for semantic file search."""
 
     def __init__(
         self,
         config: FileSearchToolRuntimeConfig,
         vector_io_api: VectorIO,
         inference_api: Inference,
-        files_api: Files,
     ):
         self.config = config
         self.vector_io_api = vector_io_api
         self.inference_api = inference_api
-        self.files_api = files_api
 
     async def initialize(self):
         pass
@@ -123,69 +60,6 @@ class FileSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime):
 
     async def unregister_toolgroup(self, toolgroup_id: str) -> None:
         return
-
-    async def insert(
-        self,
-        documents: list[RAGDocument],
-        vector_store_id: str,
-        chunk_size_in_tokens: int | None = None,
-    ) -> None:
-        if chunk_size_in_tokens is None:
-            chunk_size_in_tokens = self.config.vector_stores_config.file_ingestion_params.default_chunk_size_tokens
-        if not documents:
-            return
-
-        for doc in documents:
-            try:
-                try:
-                    file_data, mime_type = await raw_data_from_doc(doc)
-                except Exception as e:
-                    log.error(f"Failed to extract content from document {doc.document_id}: {e}")
-                    continue
-
-                file_extension = mimetypes.guess_extension(mime_type) or ".txt"
-                filename = doc.metadata.get("filename", f"{doc.document_id}{file_extension}")
-
-                file_obj = io.BytesIO(file_data)
-                file_obj.name = filename
-
-                upload_file = UploadFile(file=file_obj, filename=filename)
-
-                try:
-                    created_file = await self.files_api.openai_upload_file(
-                        request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.ASSISTANTS),
-                        file=upload_file,
-                    )
-                except Exception as e:
-                    log.error(f"Failed to upload file for document {doc.document_id}: {e}")
-                    continue
-
-                overlap_tokens = self.config.vector_stores_config.file_ingestion_params.default_chunk_overlap_tokens
-                chunking_strategy = VectorStoreChunkingStrategyStatic(
-                    static=VectorStoreChunkingStrategyStaticConfig(
-                        max_chunk_size_tokens=chunk_size_in_tokens,
-                        chunk_overlap_tokens=overlap_tokens,
-                    )
-                )
-
-                try:
-                    await self.vector_io_api.openai_attach_file_to_vector_store(
-                        vector_store_id=vector_store_id,
-                        request=OpenAIAttachFileRequest(
-                            file_id=created_file.id,
-                            attributes=doc.metadata,
-                            chunking_strategy=chunking_strategy,
-                        ),
-                    )
-                except Exception as e:
-                    log.error(
-                        f"Failed to attach file {created_file.id} to vector store {vector_store_id} for document {doc.document_id}: {e}"
-                    )
-                    continue
-
-            except Exception as e:
-                log.error(f"Unexpected error processing document {doc.document_id}: {e}")
-                continue
 
     async def query(
         self,
@@ -316,10 +190,6 @@ class FileSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime):
         # encountering fatals.
         return ListToolDefsResponse(
             data=[
-                ToolDef(
-                    name="insert_into_memory",
-                    description="Insert documents into memory",
-                ),
                 ToolDef(
                     name="file_search",
                     description="Search files for relevant information",

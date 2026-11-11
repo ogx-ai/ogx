@@ -459,6 +459,35 @@ async def test_openai_chat_completion_non_streaming_without_store(
     assert mock_provider.openai_chat_completion.call_args.args[0].model == "test-llm-model"
 
 
+async def test_openai_chat_completion_tool_choice_none_clears_tools_and_parallel_tool_calls(
+    mock_llm_routing_table: tuple[MagicMock, MagicMock],
+) -> None:
+    """tool_choice='none' clears tools (some providers call tools anyway).
+
+    parallel_tool_calls must be cleared along with the tools: it is invalid
+    without tools and OpenAI rejects such requests.
+    """
+    routing_table, mock_provider = mock_llm_routing_table
+    router = InferenceRouter(routing_table=routing_table)
+
+    mock_provider.openai_chat_completion = AsyncMock(return_value=_make_chat_completion())
+
+    params = OpenAIChatCompletionRequestWithExtraBody(
+        model="test_provider/test-llm-model",
+        messages=[{"role": "user", "content": "Say hello"}],
+        tools=[{"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object"}}}],
+        tool_choice="none",
+        parallel_tool_calls=True,
+    )
+
+    await router.openai_chat_completion(params)
+
+    forwarded = mock_provider.openai_chat_completion.call_args.args[0]
+    assert forwarded.tool_choice is None
+    assert forwarded.tools is None
+    assert forwarded.parallel_tool_calls is None
+
+
 async def test_openai_chat_completion_streaming_without_store(
     mock_llm_routing_table: tuple[MagicMock, MagicMock],
 ) -> None:

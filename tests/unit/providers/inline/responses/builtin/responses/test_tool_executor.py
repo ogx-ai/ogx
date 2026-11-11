@@ -5,7 +5,7 @@
 # the root directory of this source tree.
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -19,6 +19,8 @@ from ogx.providers.inline.responses.builtin.responses.tool_executor import (
 from ogx_api import (
     OpenAIChatCompletionContentPartImageParam,
     OpenAIChatCompletionContentPartTextParam,
+    OpenAIChatCompletionToolCall,
+    OpenAIChatCompletionToolCallFunction,
     OpenAIImageURL,
     OpenAIResponseInputToolMCP,
     TextContentItem,
@@ -77,11 +79,6 @@ class TestUntrustedToolOutputDelimiting:
 
         assert _UNTRUSTED_TOOL_OUTPUT_HEADER in input_message.content
         assert malicious_doc in input_message.content
-
-    async def test_knowledge_search_string_content_is_delimited(self, tool_executor):
-        input_message = await _build_input_message(tool_executor, "knowledge_search", "some indexed text")
-
-        assert _UNTRUSTED_TOOL_OUTPUT_HEADER in input_message.content
 
     async def test_web_search_list_content_text_parts_are_delimited(self, tool_executor):
         content = [TextContentItem(text="attacker-controlled snippet")]
@@ -238,3 +235,163 @@ class TestEmptyToolResultNotReportedAsFailure:
         )
 
         assert input_message.content == "Tool execution failed"
+
+
+class TestMalformedToolCallArguments:
+    """Regression tests for #6819: a malformed tool-call arguments string crashed
+    execute_tool_call (JSONDecodeError/AttributeError escaping with no try/except)
+    instead of being reported back to the model as a retriable tool error, the same
+    way every other tool execution failure already is.
+    """
+
+    async def test_unparsable_json_never_reaches_the_tool_runtime(self, tool_executor):
+        tool_call = OpenAIChatCompletionToolCall(
+            id="call_1",
+            function=OpenAIChatCompletionToolCallFunction(name="web_search", arguments='{"query": "weather in Bos'),
+        )
+
+        results = [
+            r
+            async for r in tool_executor.execute_tool_call(
+                tool_call, ctx=None, sequence_number=0, output_index=0, item_id="item_1"
+            )
+        ]
+
+        tool_executor.tool_runtime_api.invoke_tool.assert_not_called()
+        final = next(r for r in results if r.final_input_message is not None)
+        assert "Failed to parse tool call arguments as a JSON object" in final.final_input_message.content
+        assert final.final_output_message.status == "failed"
+
+    async def test_non_object_json_never_reaches_the_tool_runtime(self, tool_executor):
+        """Valid JSON that isn't an object (e.g. a bare list) must be caught the same
+        way -- it would otherwise crash a downstream tool_kwargs.get(...) call instead.
+        """
+        tool_call = OpenAIChatCompletionToolCall(
+            id="call_1",
+            function=OpenAIChatCompletionToolCallFunction(name="web_search", arguments="[1, 2, 3]"),
+        )
+
+        results = [
+            r
+            async for r in tool_executor.execute_tool_call(
+                tool_call, ctx=None, sequence_number=0, output_index=0, item_id="item_1"
+            )
+        ]
+
+        tool_executor.tool_runtime_api.invoke_tool.assert_not_called()
+        final = next(r for r in results if r.final_input_message is not None)
+        assert "Failed to parse tool call arguments as a JSON object" in final.final_input_message.content
+        assert "list" in final.final_input_message.content
+
+    async def test_malformed_arguments_for_an_mcp_tool_never_reach_invoke_mcp_tool(self, tool_executor, monkeypatch):
+        """The issue explicitly calls out MCP tool calls as affected; confirm the fix
+        covers that path too, not just the tool_runtime_api.invoke_tool path.
+        """
+        invoke_mcp_tool = AsyncMock()
+        monkeypatch.setattr("ogx.providers.utils.tools.mcp.invoke_mcp_tool", invoke_mcp_tool)
+
+        tool_call = OpenAIChatCompletionToolCall(
+            id="call_1",
+            function=OpenAIChatCompletionToolCallFunction(name="my_mcp_tool", arguments="{not valid json"),
+        )
+        mcp_tool_to_server = {
+            "my_mcp_tool": OpenAIResponseInputToolMCP(server_label="label", server_url="https://example.com/mcp")
+        }
+
+        results = [
+            r
+            async for r in tool_executor.execute_tool_call(
+                tool_call,
+                ctx=None,
+                sequence_number=0,
+                output_index=0,
+                item_id="item_1",
+                mcp_tool_to_server=mcp_tool_to_server,
+            )
+        ]
+
+        invoke_mcp_tool.assert_not_called()
+        final = next(r for r in results if r.final_input_message is not None)
+        assert "Failed to parse tool call arguments as a JSON object" in final.final_input_message.content
+
+
+class TestMcpEndpointSsrfValidation:
+    """MCP invocation re-validates caller-supplied server_url values and pins the
+    connection to a pre-resolved public address; admin-configured (trusted)
+    endpoints are exempt."""
+
+    async def _execute_mcp_tool(self, tool_executor, mcp_tool):
+        return await tool_executor._execute_tool(
+            function_name="get_boiling_point",
+            tool_kwargs={"liquid_name": "myawesomeliquid"},
+            ctx=None,
+            mcp_tool_to_server={"get_boiling_point": mcp_tool},
+        )
+
+    async def test_private_server_url_is_rejected_before_invoke(self, tool_executor, monkeypatch):
+        invoke_mcp_tool = AsyncMock()
+        monkeypatch.setattr("ogx.providers.utils.tools.mcp.invoke_mcp_tool", invoke_mcp_tool)
+
+        mcp_tool = OpenAIResponseInputToolMCP(server_label="internal", server_url="http://127.0.0.1:5199/sse")
+        error_exc, result = await self._execute_mcp_tool(tool_executor, mcp_tool)
+
+        assert isinstance(error_exc, ValueError)
+        assert "private IP addresses are not allowed" in str(error_exc)
+        assert result is None
+        invoke_mcp_tool.assert_not_called()
+
+    async def test_trusted_endpoint_bypasses_validation_and_pinning(self, tool_executor, monkeypatch):
+        invoke_mcp_tool = AsyncMock(return_value=ToolInvocationResult(status="completed", content="ok"))
+        validate_mcp_endpoint = MagicMock()
+        monkeypatch.setattr("ogx.providers.utils.tools.mcp.invoke_mcp_tool", invoke_mcp_tool)
+        monkeypatch.setattr("ogx.providers.utils.tools.mcp.validate_mcp_endpoint", validate_mcp_endpoint)
+        tool_executor.trusted_mcp_endpoints.add("http://127.0.0.1:5199/sse")
+
+        mcp_tool = OpenAIResponseInputToolMCP(server_label="admin", server_url="http://127.0.0.1:5199/sse")
+        error_exc, result = await self._execute_mcp_tool(tool_executor, mcp_tool)
+
+        assert error_exc is None
+        assert result is not None
+        validate_mcp_endpoint.assert_not_called()
+        assert invoke_mcp_tool.call_args.kwargs["endpoint_pins"] is None
+
+    async def test_public_server_url_is_pinned_before_invoke(self, tool_executor, monkeypatch):
+        invoke_mcp_tool = AsyncMock(return_value=ToolInvocationResult(status="completed", content="ok"))
+        validate_mcp_endpoint = MagicMock(return_value={"mcp.example.com": "93.184.216.34"})
+        monkeypatch.setattr("ogx.providers.utils.tools.mcp.invoke_mcp_tool", invoke_mcp_tool)
+        monkeypatch.setattr("ogx.providers.utils.tools.mcp.validate_mcp_endpoint", validate_mcp_endpoint)
+
+        mcp_tool = OpenAIResponseInputToolMCP(server_label="mcp", server_url="http://mcp.example.com/sse")
+        error_exc, _ = await self._execute_mcp_tool(tool_executor, mcp_tool)
+
+        assert error_exc is None
+        validate_mcp_endpoint.assert_called_once_with("http://mcp.example.com/sse")
+        assert invoke_mcp_tool.call_args.kwargs["endpoint_pins"] == {"mcp.example.com": "93.184.216.34"}
+
+    async def test_authorization_is_forwarded_to_invoke(self, tool_executor, monkeypatch):
+        invoke_mcp_tool = AsyncMock(return_value=ToolInvocationResult(status="completed", content="ok"))
+        monkeypatch.setattr("ogx.providers.utils.tools.mcp.invoke_mcp_tool", invoke_mcp_tool)
+        monkeypatch.setattr(
+            "ogx.providers.utils.tools.mcp.validate_mcp_endpoint",
+            MagicMock(return_value={"mcp.example.com": "8.8.8.8"}),
+        )
+
+        mcp_tool = OpenAIResponseInputToolMCP(
+            server_label="mcp", server_url="http://mcp.example.com/sse", authorization="secret-token"
+        )
+        error_exc, _ = await self._execute_mcp_tool(tool_executor, mcp_tool)
+
+        assert error_exc is None
+        assert invoke_mcp_tool.call_args.kwargs["authorization"] == "secret-token"
+
+    async def test_missing_server_url_is_reported_as_error(self, tool_executor, monkeypatch):
+        invoke_mcp_tool = AsyncMock()
+        monkeypatch.setattr("ogx.providers.utils.tools.mcp.invoke_mcp_tool", invoke_mcp_tool)
+
+        mcp_tool = OpenAIResponseInputToolMCP(server_label="mcp", connector_id="some-connector")
+        error_exc, result = await self._execute_mcp_tool(tool_executor, mcp_tool)
+
+        assert isinstance(error_exc, ValueError)
+        assert "server_url is not set" in str(error_exc)
+        assert result is None
+        invoke_mcp_tool.assert_not_called()

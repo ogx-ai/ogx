@@ -265,6 +265,95 @@ class TestOpenAIVectorStoreMixin:
         assert result.usage_bytes == 0
         assert mixin.openai_vector_stores[vector_store_id]["usage_bytes"] == 0
 
+    def _make_attach_mixin(self, mock_inference_api, mock_files_api, mock_kvstore, num_chunks):
+        mock_file_processor_api = AsyncMock()
+        mock_file_processor_api.process_file.return_value = MagicMock(
+            chunks=[
+                Chunk(content=f"chunk {i}", chunk_id=f"c{i}", chunk_metadata=ChunkMetadata()) for i in range(num_chunks)
+            ],
+            metadata={},
+        )
+        mock_inference_api.openai_embeddings.side_effect = _fake_embeddings
+        mixin = MockVectorStoreMixin(
+            inference_api=mock_inference_api,
+            files_api=mock_files_api,
+            kvstore=mock_kvstore,
+            file_processor_api=mock_file_processor_api,
+        )
+        mixin.insert_chunks = AsyncMock()
+        store_info = _make_store_info()
+        store_info["metadata"] = {"embedding_model": "ollama/nomic-embed-text", "embedding_dimension": "1"}
+        mixin.openai_vector_stores["test_vector_store"] = store_info
+        return mixin
+
+    async def _attach(self, mixin):
+        return await mixin.openai_attach_file_to_vector_store(
+            vector_store_id="test_vector_store",
+            request=OpenAIAttachFileRequest(
+                file_id="test_file_id", chunking_strategy=VectorStoreChunkingStrategyAuto()
+            ),
+        )
+
+    async def test_attach_embeds_large_file_in_batches(self, mock_inference_api, mock_files_api, mock_kvstore):
+        """A file with more chunks than one embeddings request accepts (2048) is embedded in
+        batches, in order, and every chunk is inserted with its own embedding."""
+        num_chunks = 2049
+        mixin = self._make_attach_mixin(mock_inference_api, mock_files_api, mock_kvstore, num_chunks)
+
+        result = await self._attach(mixin)
+
+        assert result.status == "completed", result.last_error
+        batch_size = mixin.vector_stores_config.file_ingestion_params.embedding_batch_size
+        calls = mock_inference_api.openai_embeddings.await_args_list
+        assert len(calls) == (num_chunks + batch_size - 1) // batch_size
+        assert all(len(call.args[0].input) <= batch_size for call in calls)
+        assert [text for call in calls for text in call.args[0].input] == [f"chunk {i}" for i in range(num_chunks)]
+        inserted = mixin.insert_chunks.await_args.args[0].chunks
+        assert [c.chunk_id for c in inserted] == [f"c{i}" for i in range(num_chunks)]
+        assert [c.embedding for c in inserted] == [[float(i)] for i in range(num_chunks)]
+
+    async def test_attach_uses_configured_embedding_batch_size(self, mock_inference_api, mock_files_api, mock_kvstore):
+        mixin = self._make_attach_mixin(mock_inference_api, mock_files_api, mock_kvstore, num_chunks=5)
+        mixin.vector_stores_config.file_ingestion_params.embedding_batch_size = 2
+
+        result = await self._attach(mixin)
+
+        assert result.status == "completed", result.last_error
+        calls = mock_inference_api.openai_embeddings.await_args_list
+        assert [call.args[0].input for call in calls] == [["chunk 0", "chunk 1"], ["chunk 2", "chunk 3"], ["chunk 4"]]
+        assert len(mixin.insert_chunks.await_args.args[0].chunks) == 5
+
+    async def test_attach_small_file_makes_one_embeddings_call(self, mock_inference_api, mock_files_api, mock_kvstore):
+        mixin = self._make_attach_mixin(mock_inference_api, mock_files_api, mock_kvstore, num_chunks=3)
+
+        result = await self._attach(mixin)
+
+        assert result.status == "completed", result.last_error
+        mock_inference_api.openai_embeddings.assert_awaited_once()
+        assert mock_inference_api.openai_embeddings.await_args.args[0].input == ["chunk 0", "chunk 1", "chunk 2"]
+
+    async def test_attach_failed_batch_inserts_nothing(self, mock_inference_api, mock_files_api, mock_kvstore):
+        """If any batch fails, no chunk is inserted, so the file is not left half indexed."""
+        mixin = self._make_attach_mixin(mock_inference_api, mock_files_api, mock_kvstore, num_chunks=5)
+        mixin.vector_stores_config.file_ingestion_params.embedding_batch_size = 2
+        mock_inference_api.openai_embeddings.side_effect = [
+            _fake_embeddings(MagicMock(input=["chunk 0", "chunk 1"])),
+            RuntimeError("Failed to embed batch"),
+        ]
+
+        result = await self._attach(mixin)
+
+        assert result.status == "failed"
+        assert result.last_error.code == "server_error"
+        assert result.usage_bytes == 0
+        assert mock_inference_api.openai_embeddings.await_count == 2
+        mixin.insert_chunks.assert_not_awaited()
+
+
+def _fake_embeddings(params):
+    """Embed "chunk <i>" as [i] so tests can check each chunk got its own embedding."""
+    return MagicMock(data=[MagicMock(embedding=[float(text.removeprefix("chunk "))]) for text in params.input])
+
 
 class TestKVStoreToSQLMigration:
     """Tests for automatic KVStore-to-SQL migration during initialization."""
@@ -778,3 +867,50 @@ class TestFileBatchCleanup:
             where={"id": "batch_1"},
         )
         assert "batch_1" not in mixin.openai_file_batches
+
+
+class TestBeforeCursorPagination:
+    """A `before` cursor must return the page immediately preceding it, not the head of the list."""
+
+    async def test_list_vector_stores_before_returns_previous_page(self):
+        mixin = MockVectorStoreMixin(inference_api=AsyncMock(), files_api=AsyncMock())
+        for i in range(1, 7):
+            store_info = _make_full_store_info(f"vs_{i}", f"store {i}")
+            store_info["created_at"] = i
+            mixin.openai_vector_stores[f"vs_{i}"] = store_info
+
+        third_page = await mixin.openai_list_vector_stores(limit=2, order="asc", after="vs_4")
+        assert [store.id for store in third_page.data] == ["vs_5", "vs_6"]
+
+        previous_page = await mixin.openai_list_vector_stores(limit=2, order="asc", before=third_page.first_id)
+        assert [store.id for store in previous_page.data] == ["vs_3", "vs_4"]
+        assert previous_page.first_id == "vs_3"
+        assert previous_page.last_id == "vs_4"
+        assert previous_page.has_more is True
+
+        first_page = await mixin.openai_list_vector_stores(limit=2, order="asc", before=previous_page.first_id)
+        assert [store.id for store in first_page.data] == ["vs_1", "vs_2"]
+        assert first_page.has_more is False
+
+    async def test_list_files_in_vector_store_before_returns_previous_page(self):
+        mixin = MockVectorStoreMixin(inference_api=AsyncMock(), files_api=AsyncMock())
+        file_ids = [f"file_{i}" for i in range(1, 7)]
+        files = {
+            file_id: {
+                "id": file_id,
+                "usage_bytes": 0,
+                "created_at": i,
+                "vector_store_id": "vs_1",
+                "status": "completed",
+                "chunking_strategy": VectorStoreChunkingStrategyAuto().model_dump(),
+            }
+            for i, file_id in enumerate(file_ids, start=1)
+        }
+        mixin.openai_vector_stores["vs_1"] = {"id": "vs_1", "file_ids": file_ids}
+        mixin._load_openai_vector_store_file = AsyncMock(side_effect=lambda store_id, file_id: files[file_id])
+
+        previous_page = await mixin.openai_list_files_in_vector_store(
+            vector_store_id="vs_1", limit=2, order="desc", before="file_2"
+        )
+        assert [file.id for file in previous_page.data] == ["file_4", "file_3"]
+        assert previous_page.has_more is True

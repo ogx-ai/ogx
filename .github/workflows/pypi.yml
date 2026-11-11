@@ -167,7 +167,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout local repo
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
@@ -261,7 +261,7 @@ jobs:
       # === LOCAL PACKAGE STEPS ===
       - name: Checkout local repo
         if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk')
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0  # for setuptools-scm
 
@@ -302,7 +302,7 @@ jobs:
       # === EXTERNAL PACKAGE STEPS ===
       - name: Checkout external repo
         if: steps.should-build.outputs.skip != 'true' && matrix.type == 'external'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ matrix.repo }}
           ref: ${{ steps.client-ref.outputs.ref }}
@@ -516,7 +516,7 @@ jobs:
         # Test 3.13 only on push to main, releases, and scheduled runs
         python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.12"]') || fromJSON('["3.12", "3.13"]') }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
         uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
@@ -775,7 +775,7 @@ jobs:
 
       - name: Upload to PyPI
         if: steps.should-publish.outputs.skip != 'true' && matrix.registry == 'pypi' && steps.check-artifacts.outputs.has_artifacts == 'true'
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           repository-url: ${{ steps.pypi-target.outputs.url }}
           verbose: true
@@ -888,11 +888,11 @@ jobs:
           df -h
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up QEMU for multi-arch builds
         if: contains(matrix.platforms, 'arm64')
-        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
@@ -1040,7 +1040,7 @@ jobs:
           - distro: postgres-demo
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Determine image tag
         id: tag
@@ -1067,7 +1067,7 @@ jobs:
           trivy-config: 'trivy.yaml'
 
       - name: Upload Trivy image scan results to GitHub Security
-        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v3
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v3
         if: always()
         with:
           sarif_file: 'trivy-image-${{ matrix.distro }}.sarif'

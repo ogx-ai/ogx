@@ -30,6 +30,7 @@ vector_stores:
   file_ingestion_params:
     default_chunk_size_tokens: 512
     default_chunk_overlap_tokens: 128
+    embedding_batch_size: 256
 
   # Chunk retrieval and ranking during search
   chunk_retrieval_params:
@@ -72,11 +73,13 @@ The `file_ingestion_params` configuration controls how files are processed durin
 |-----------|------|---------|-------------|
 | `default_chunk_size_tokens` | `int` | `512` | Default token count for file/document chunks when not explicitly specified |
 | `default_chunk_overlap_tokens` | `int` | `128` | Number of tokens to overlap between chunks (original default: 512 // 4) |
+| `embedding_batch_size` | `int` | `256` | Maximum chunks sent in one embeddings request when a file is attached. Larger files are embedded in several sequential requests, and chunks are inserted only after all of them succeed. Must be between 1 and 2048 |
 
 ```yaml
 file_ingestion_params:
   default_chunk_size_tokens: 512    # Smaller chunks for precision
   default_chunk_overlap_tokens: 128  # Fixed token overlap for context continuity
+  embedding_batch_size: 256          # Chunks per embeddings request
 ```
 
 **Use Cases:**
@@ -84,6 +87,7 @@ file_ingestion_params:
 - **Larger chunks (800-1200)**: Better for context-heavy applications
 - **Higher overlap (200-300 tokens)**: Reduces context loss at chunk boundaries
 - **Lower overlap (50-100 tokens)**: More efficient storage, faster processing
+- **Smaller `embedding_batch_size`**: Keeps each embeddings request short, for slow embedding servers or proxies with request timeouts
 
 ### Chunk Retrieval Parameters
 

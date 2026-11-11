@@ -4,8 +4,9 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
+import pytest
 from openai.types.chat.chat_completion_chunk import (
     ChatCompletionChunk,
     Choice,
@@ -26,11 +27,13 @@ from ogx_api.openai_responses import (
     OpenAIResponseInputToolFileSearch,
     OpenAIResponseInputToolFunction,
     OpenAIResponseInputToolMCP,
+    OpenAIResponseInputToolNamespace,
     OpenAIResponseInputToolWebSearch,
     OpenAIResponseMessage,
     OpenAIResponseObjectStreamResponseContentPartDone,
     OpenAIResponseObjectStreamResponseOutputItemDone,
     OpenAIResponseObjectStreamResponseOutputTextDelta,
+    OpenAIResponseReasoning,
     WebSearchToolTypes,
 )
 from ogx_api.responses.models import CreateResponseRequest
@@ -41,6 +44,542 @@ from ogx_api.vector_io import (
     VectorStoreSearchResponsePage,
 )
 from tests.unit.providers.responses.builtin.test_openai_responses_helpers import fake_stream
+
+
+async def test_namespace_tool_flattened_to_function_tools_for_backend(openai_responses_impl, mock_inference_api):
+    """Namespaced tools are accepted and flattened to function tools for the backend."""
+    input_text = "Create a worktree"
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=False,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    name="get_weather",
+                    description="Get current temperature for a given location.",
+                    parameters={"type": "object", "properties": {"location": {"type": "string"}}},
+                ),
+                OpenAIResponseInputToolNamespace(
+                    name="codex_worktrees",
+                    description="Tools in the codex_worktrees namespace.",
+                    tools=[
+                        OpenAIResponseInputToolFunction(
+                            name="create_worktree",
+                            description="Create a managed Git worktree.",
+                            parameters={"type": "object", "properties": {"ref": {"type": "string"}}},
+                        ),
+                        OpenAIResponseInputToolFunction(
+                            name="list_worktrees",
+                            parameters={"type": "object", "properties": {}},
+                        ),
+                    ],
+                ),
+            ],
+        )
+    )
+
+    assert mock_inference_api.openai_chat_completion.call_count == 1
+    params = mock_inference_api.openai_chat_completion.call_args[0][0]
+    assert params.tools is not None
+    names = [tool["function"]["name"] for tool in params.tools]
+    # Namespaced functions are qualified at the chat layer so same-named
+    # tools from different namespaces stay distinguishable.
+    assert names == ["get_weather", "codex_worktrees__create_worktree", "codex_worktrees__list_worktrees"]
+    assert all(tool["type"] == "function" for tool in params.tools)
+
+
+def test_function_tool_model_dump_leaks_type_discriminator():
+    """Positive side of https://github.com/ogx-ai/ogx/issues/5678: the leak mechanism.
+
+    OpenAIResponseInputToolFunction carries a `type: "function"` discriminator
+    at the tool level, and model_dump() emits it. Used as-is as the inner
+    FunctionDefinition, it would place `type` where the Chat Completions
+    schema forbids it, so the Responses-to-Chat conversion must map fields
+    explicitly instead of dumping.
+    """
+    input_tool = OpenAIResponseInputToolFunction(
+        name="get_weather",
+        description="Get current temperature for a given location.",
+        parameters={"type": "object", "properties": {"location": {"type": "string"}}},
+    )
+    dumped = input_tool.model_dump(exclude_none=True)
+    assert dumped["type"] == "function"
+    assert "type" in dumped  # not a valid FunctionDefinition as-is
+
+
+async def test_function_tool_backend_request_omits_type_discriminator(openai_responses_impl, mock_inference_api):
+    """Negative side of https://github.com/ogx-ai/ogx/issues/5678.
+
+    Despite the model_dump leak above, the tools sent to the backend must carry
+    the `type` discriminator on the wrapper only, never inside the function
+    dict, for both top-level and namespaced function tools.
+    """
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is the weather in Paris?",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            stream=False,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    name="get_weather",
+                    description="Get current temperature for a given location.",
+                    parameters={"type": "object", "properties": {"location": {"type": "string"}}},
+                ),
+                OpenAIResponseInputToolNamespace(
+                    name="codex_worktrees",
+                    description="Tools in the codex_worktrees namespace.",
+                    tools=[
+                        OpenAIResponseInputToolFunction(
+                            name="create_worktree",
+                            description="Create a managed Git worktree.",
+                            parameters={"type": "object", "properties": {"ref": {"type": "string"}}},
+                        ),
+                    ],
+                ),
+            ],
+        )
+    )
+
+    params = mock_inference_api.openai_chat_completion.call_args[0][0]
+    assert params.tools is not None
+    assert [tool["function"]["name"] for tool in params.tools] == [
+        "get_weather",
+        "codex_worktrees__create_worktree",
+    ]
+    for tool in params.tools:
+        assert tool["type"] == "function"
+        assert "type" not in tool["function"], "type discriminator leaked into function dict"
+
+
+async def test_namespace_tool_call_surfaces_as_function_call(openai_responses_impl, mock_inference_api):
+    """A model call to a namespaced function is matched by bare name and surfaced to the client."""
+    input_text = "Create a worktree"
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+
+    async def fake_stream_toolcall():
+        yield ChatCompletionChunk(
+            id="123",
+            choices=[
+                Choice(
+                    index=0,
+                    delta=ChoiceDelta(
+                        tool_calls=[
+                            ChoiceDeltaToolCall(
+                                index=0,
+                                id="tc_123",
+                                # The chat layer sees the qualified name.
+                                function=ChoiceDeltaToolCallFunction(
+                                    name="codex_worktrees__create_worktree", arguments="{}"
+                                ),
+                                type=None,
+                            )
+                        ]
+                    ),
+                ),
+            ],
+            created=1,
+            model=model,
+            object="chat.completion.chunk",
+        )
+
+    mock_inference_api.openai_chat_completion.return_value = fake_stream_toolcall()
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=True,
+            tools=[
+                OpenAIResponseInputToolNamespace(
+                    name="codex_worktrees",
+                    description="Worktree tools.",
+                    tools=[
+                        OpenAIResponseInputToolFunction(
+                            name="create_worktree",
+                            parameters={"type": "object", "properties": {}},
+                        ),
+                    ],
+                ),
+            ],
+        )
+    )
+
+    chunks = [chunk async for chunk in result]
+    completed_chunk = chunks[-1]
+    assert completed_chunk.type == "response.completed"
+    assert len(completed_chunk.response.output) == 1
+    call = completed_chunk.response.output[0]
+    assert call.type == "function_call"
+    assert call.name == "create_worktree"
+    # The namespace is echoed so clients (codex) can route the call to the handler that owns the group.
+    assert call.namespace == "codex_worktrees"
+
+
+def test_merge_namespace_tool_description():
+    from ogx.providers.inline.responses.builtin.responses.utils import merge_namespace_tool_description
+
+    # Both present: namespace context first, member description intact.
+    assert merge_namespace_tool_description("Worktree tools.", "Create a worktree.") == (
+        "Worktree tools. Create a worktree."
+    )
+    # Member without a description: just the namespace context.
+    assert merge_namespace_tool_description("Worktree tools.", None) == "Worktree tools."
+    assert merge_namespace_tool_description("Worktree tools.", "") == "Worktree tools."
+    # No length limit: chat function descriptions are unbounded, so the merge
+    # preserves both parts in full.
+    long_ns = "x" * 5000
+    assert merge_namespace_tool_description(long_ns, "Do it.") == f"{long_ns} Do it."
+    assert merge_namespace_tool_description(long_ns, None) == long_ns
+
+
+def test_split_qualified_tool_name():
+    from ogx.providers.inline.responses.builtin.responses.utils import split_qualified_tool_name
+
+    ns = lambda n, members: OpenAIResponseInputToolNamespace(  # noqa: E731
+        name=n,
+        description="d",
+        tools=[OpenAIResponseInputToolFunction(name=m, parameters={"type": "object"}) for m in members],
+    )
+
+    # Qualified match returns the exact member, even when the namespace name
+    # itself contains the delimiter.
+    tools = [ns("a__b", ["x"])]
+    assert split_qualified_tool_name("a__b__x", tools) == ("x", "a__b")
+    # Two namespaces whose qualified forms collide are still exact per member.
+    tools = [ns("a", ["b__x"]), ns("a__b", ["x"])]
+    assert split_qualified_tool_name("a__b__x", tools) == ("b__x", "a")
+    # Bare-name fallback: labeled when unambiguous.
+    tools = [ns("solo", ["x"])]
+    assert split_qualified_tool_name("x", tools) == ("x", "solo")
+    # Bare name shared with a top-level function: no label.
+    tools = [OpenAIResponseInputToolFunction(name="x", parameters={"type": "object"}), ns("solo", ["x"])]
+    assert split_qualified_tool_name("x", tools) == ("x", None)
+    # Bare name in two namespaces: no label.
+    tools = [ns("one", ["x"]), ns("two", ["x"])]
+    assert split_qualified_tool_name("x", tools) == ("x", None)
+    # Unknown names pass through unchanged.
+    assert split_qualified_tool_name("bogus", tools) == ("bogus", None)
+    assert split_qualified_tool_name("one__bogus", tools) == ("one__bogus", None)
+
+
+async def test_hallucinated_call_with_only_namespaced_tools_surfaces_to_client(
+    openai_responses_impl, mock_inference_api
+):
+    """Namespaced tools count as client-side, so unrecognized names are surfaced, not looped."""
+    input_text = "Do a thing that does not exist"
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+
+    async def fake_stream_bogus():
+        yield ChatCompletionChunk(
+            id="123",
+            choices=[
+                Choice(
+                    index=0,
+                    delta=ChoiceDelta(
+                        tool_calls=[
+                            ChoiceDeltaToolCall(
+                                index=0,
+                                id="tc_123",
+                                function=ChoiceDeltaToolCallFunction(name="totally_bogus", arguments="{}"),
+                                type=None,
+                            )
+                        ]
+                    ),
+                ),
+            ],
+            created=1,
+            model=model,
+            object="chat.completion.chunk",
+        )
+
+    mock_inference_api.openai_chat_completion.return_value = fake_stream_bogus()
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=True,
+            tools=[
+                OpenAIResponseInputToolNamespace(
+                    name="solo",
+                    description="Only group.",
+                    tools=[
+                        OpenAIResponseInputToolFunction(
+                            name="real_tool",
+                            parameters={"type": "object", "properties": {}},
+                        ),
+                    ],
+                ),
+            ],
+        )
+    )
+
+    chunks = [chunk async for chunk in result]
+    completed_chunk = chunks[-1]
+    assert completed_chunk.type == "response.completed"
+    assert completed_chunk.response.status == "completed"
+    call = completed_chunk.response.output[0]
+    assert call.type == "function_call"
+    assert call.name == "totally_bogus"
+    assert call.namespace is None
+    # No retry loop: a single inference call.
+    assert mock_inference_api.openai_chat_completion.call_count == 1
+
+
+async def test_tool_choice_prefers_top_level_function_over_namespaced(openai_responses_impl, mock_inference_api):
+    input_text = "Pick one"
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=False,
+            tools=[
+                OpenAIResponseInputToolFunction(name="x", parameters={"type": "object", "properties": {}}),
+                OpenAIResponseInputToolNamespace(
+                    name="ns",
+                    description="Group.",
+                    tools=[
+                        OpenAIResponseInputToolFunction(name="x", parameters={"type": "object", "properties": {}}),
+                    ],
+                ),
+            ],
+            tool_choice={"type": "function", "name": "x"},
+        )
+    )
+
+    params = mock_inference_api.openai_chat_completion.call_args[0][0]
+    assert params.tool_choice == {"type": "function", "function": {"name": "x"}}
+
+
+async def test_qualified_name_collision_rejected(openai_responses_impl, mock_inference_api):
+    """A top-level function named like a qualified namespaced tool is a 400."""
+    from ogx_api import InvalidParameterError
+
+    with pytest.raises(InvalidParameterError):
+        await openai_responses_impl.create_openai_response(
+            CreateResponseRequest(
+                input="x",
+                model="meta-llama/Llama-3.1-8B-Instruct",
+                stream=False,
+                tools=[
+                    OpenAIResponseInputToolFunction(name="ns__x", parameters={"type": "object", "properties": {}}),
+                    OpenAIResponseInputToolNamespace(
+                        name="ns",
+                        description="Group.",
+                        tools=[
+                            OpenAIResponseInputToolFunction(name="x", parameters={"type": "object", "properties": {}}),
+                        ],
+                    ),
+                ],
+            )
+        )
+
+
+async def test_duplicate_member_names_in_one_namespace_allowed(openai_responses_impl, mock_inference_api):
+    """Same member name twice in a namespace is allowed (OpenAI overload pattern)."""
+    input_text = "Call the amount variant"
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+
+    async def fake_stream_toolcall():
+        yield ChatCompletionChunk(
+            id="123",
+            choices=[
+                Choice(
+                    index=0,
+                    delta=ChoiceDelta(
+                        tool_calls=[
+                            ChoiceDeltaToolCall(
+                                index=0,
+                                id="tc_123",
+                                function=ChoiceDeltaToolCallFunction(
+                                    name="alpha__dup_overload", arguments='{"amount":5}'
+                                ),
+                                type=None,
+                            )
+                        ]
+                    ),
+                ),
+            ],
+            created=1,
+            model=model,
+            object="chat.completion.chunk",
+        )
+
+    mock_inference_api.openai_chat_completion.return_value = fake_stream_toolcall()
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=True,
+            reasoning=OpenAIResponseReasoning(effort="none"),
+            tools=[
+                OpenAIResponseInputToolNamespace(
+                    name="alpha",
+                    description="Probe namespace",
+                    tools=[
+                        OpenAIResponseInputToolFunction(
+                            name="dup_overload",
+                            description="No-arg variant",
+                            parameters={"type": "object", "properties": {}},
+                        ),
+                        OpenAIResponseInputToolFunction(
+                            name="dup_overload",
+                            description="Amount variant",
+                            parameters={
+                                "type": "object",
+                                "properties": {"amount": {"type": "integer"}},
+                                "required": ["amount"],
+                            },
+                        ),
+                    ],
+                ),
+            ],
+        )
+    )
+
+    chunks = [chunk async for chunk in result]
+
+    # Both overloads reach the chat layer under the same qualified name,
+    # distinguished by their schemas.
+    params = mock_inference_api.openai_chat_completion.call_args[0][0]
+    qualified = [t for t in params.tools if t["function"]["name"] == "alpha__dup_overload"]
+    assert len(qualified) == 2
+
+    call = chunks[-1].response.output[0]
+    assert call.type == "function_call"
+    assert call.name == "dup_overload"
+    assert call.namespace == "alpha"
+    assert call.arguments == '{"amount":5}'
+
+
+async def test_namespace_description_merged_into_chat_tools(openai_responses_impl, mock_inference_api):
+    input_text = "Create a worktree"
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=False,
+            tools=[
+                OpenAIResponseInputToolNamespace(
+                    name="codex_worktrees",
+                    description="Worktree tools.",
+                    tools=[
+                        OpenAIResponseInputToolFunction(
+                            name="create_worktree",
+                            description="Create a managed worktree.",
+                            parameters={"type": "object", "properties": {}},
+                        ),
+                        OpenAIResponseInputToolFunction(
+                            name="list_worktrees",
+                            parameters={"type": "object", "properties": {}},
+                        ),
+                    ],
+                ),
+            ],
+        )
+    )
+
+    params = mock_inference_api.openai_chat_completion.call_args[0][0]
+    by_name = {tool["function"]["name"]: tool["function"] for tool in params.tools}
+    assert by_name["codex_worktrees__create_worktree"]["description"] == ("Worktree tools. Create a managed worktree.")
+    assert by_name["codex_worktrees__list_worktrees"]["description"] == "Worktree tools."
+
+
+async def test_namespaced_tool_call_identity_survives_name_collisions(openai_responses_impl, mock_inference_api):
+    """Qualified chat-layer names let the exact tool be identified on collisions."""
+    input_text = "Do the thing"
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+
+    def dup_namespace(name: str, description: str) -> OpenAIResponseInputToolNamespace:
+        return OpenAIResponseInputToolNamespace(
+            name=name,
+            description=description,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    name="dup_func",
+                    parameters={"type": "object", "properties": {}},
+                ),
+            ],
+        )
+
+    # Same bare name in two namespaces, plus a top-level function with the
+    # same bare name: the qualified chat-layer name identifies the exact tool.
+    tools = [
+        OpenAIResponseInputToolFunction(
+            name="dup_func",
+            description="Top-level variant.",
+            parameters={"type": "object", "properties": {}},
+        ),
+        dup_namespace("alpha", "First group."),
+        dup_namespace("beta", "Second group."),
+    ]
+
+    cases = [
+        # (chat-layer name the model calls, expected (name, namespace))
+        ("dup_func", ("dup_func", None)),
+        ("alpha__dup_func", ("dup_func", "alpha")),
+        ("beta__dup_func", ("dup_func", "beta")),
+    ]
+
+    for called_name, (expected_name, expected_namespace) in cases:
+
+        async def fake_stream_toolcall(called_name=called_name):
+            yield ChatCompletionChunk(
+                id="123",
+                choices=[
+                    Choice(
+                        index=0,
+                        delta=ChoiceDelta(
+                            tool_calls=[
+                                ChoiceDeltaToolCall(
+                                    index=0,
+                                    id="tc_123",
+                                    function=ChoiceDeltaToolCallFunction(name=called_name, arguments="{}"),
+                                    type=None,
+                                )
+                            ]
+                        ),
+                    ),
+                ],
+                created=1,
+                model=model,
+                object="chat.completion.chunk",
+            )
+
+        mock_inference_api.openai_chat_completion.return_value = fake_stream_toolcall()
+
+        result = await openai_responses_impl.create_openai_response(
+            CreateResponseRequest(
+                input=input_text,
+                model=model,
+                stream=True,
+                tools=tools,
+            )
+        )
+
+        chunks = [chunk async for chunk in result]
+        completed_chunk = chunks[-1]
+        assert completed_chunk.type == "response.completed"
+        call = completed_chunk.response.output[0]
+        assert call.type == "function_call"
+        assert call.name == expected_name
+        assert call.namespace == expected_namespace
 
 
 async def test_create_openai_response_with_string_input_with_tools(openai_responses_impl, mock_inference_api):
@@ -104,7 +643,7 @@ async def test_create_openai_response_with_string_input_with_tools(openai_respon
         assert "Dublin" in second_params.messages[-1].content
         assert second_params.temperature == 0.1
 
-        openai_responses_impl.tool_groups_api.get_tool.assert_called_once_with("web_search")
+        openai_responses_impl.tool_groups_api.get_tool.assert_called_with("web_search")
         openai_responses_impl.tool_runtime_api.invoke_tool.assert_called_once_with(
             tool_name="web_search",
             kwargs={"query": "What is the capital of Ireland?"},
@@ -351,7 +890,7 @@ async def test_reuse_mcp_tool_list(
             store=True,
             tools=[
                 OpenAIResponseInputToolFunction(name="fake", parameters=None),
-                OpenAIResponseInputToolMCP(server_label="alabel", server_url="aurl"),
+                OpenAIResponseInputToolMCP(server_label="alabel", server_url="http://8.8.8.8/mcp"),
             ],
         )
     )
@@ -369,7 +908,7 @@ async def test_reuse_mcp_tool_list(
             model="meta-llama/Llama-3.1-8B-Instruct",
             store=True,
             tools=[
-                OpenAIResponseInputToolMCP(server_label="alabel", server_url="aurl"),
+                OpenAIResponseInputToolMCP(server_label="alabel", server_url="http://8.8.8.8/mcp"),
             ],
         )
     )
@@ -422,13 +961,21 @@ async def test_mcp_tool_connector_id_resolved_to_server_url(
         )
     )
 
-    # Verify the connector_id was resolved via the connectors API
-    mock_connectors_api.get_connector.assert_called_once_with(GetConnectorRequest(connector_id="my-mcp-connector"))
+    # Verify the connector_id was resolved via the connectors API. The tool's
+    # authorization (None here) must be forwarded: get_connector pings the MCP
+    # server to read its name/version, so authenticated connectors 401 otherwise.
+    mock_connectors_api.get_connector.assert_called_once_with(
+        GetConnectorRequest(connector_id="my-mcp-connector"),
+        authorization=None,
+    )
 
     # Verify list_mcp_tools was called with the resolved URL
     mock_list_mcp_tools.assert_called_once()
     call_kwargs = mock_list_mcp_tools.call_args.kwargs
     assert call_kwargs["endpoint"] == "http://resolved-mcp-server:8080/mcp"
+
+    # Connector-resolved endpoints are admin-configured: no SSRF validation, no pinning
+    assert call_kwargs["endpoint_pins"] is None
 
     # Verify the response contains the resolved tools
     listings = [obj for obj in result.output if obj.type == "mcp_list_tools"]
@@ -436,6 +983,206 @@ async def test_mcp_tool_connector_id_resolved_to_server_url(
     assert listings[0].server_label == "my-label"
     assert len(listings[0].tools) == 1
     assert listings[0].tools[0].name == "resolved_tool"
+
+
+async def test_resolve_mcp_connector_id_forwards_tool_authorization():
+    from ogx.providers.inline.responses.builtin.responses.streaming import resolve_mcp_connector_id
+    from ogx_api import Connector, ConnectorType
+
+    connectors_api = AsyncMock()
+    connectors_api.get_connector.return_value = Connector(
+        connector_id="admin-connector",
+        connector_type=ConnectorType.MCP,
+        url="http://10.0.0.5:8080/mcp",
+        server_label="Admin MCP Server",
+    )
+    tool = OpenAIResponseInputToolMCP(server_label="mcp", connector_id="admin-connector", authorization="secret")
+    resolved = await resolve_mcp_connector_id(tool, connectors_api)
+
+    connectors_api.get_connector.assert_awaited_once_with(
+        GetConnectorRequest(connector_id="admin-connector"),
+        authorization="secret",
+    )
+    assert resolved.server_url == "http://10.0.0.5:8080/mcp"
+    assert resolved.authorization == "secret"
+
+    # A tool that already has a server_url (and no connector_id) is untouched
+    plain = OpenAIResponseInputToolMCP(server_label="mcp", server_url="http://mcp.example.com/sse")
+    assert await resolve_mcp_connector_id(plain, connectors_api) is plain
+    assert connectors_api.get_connector.await_count == 1
+
+
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
+async def test_mcp_tool_caller_supplied_private_url_rejected_before_connection(
+    mock_list_mcp_tools, openai_responses_impl, mock_responses_store, mock_inference_api
+):
+    """SSRF guard: a caller-supplied server_url that resolves to a private address is
+    rejected (ValueError -> 400) before any connection is opened to the MCP server,
+    and before the model is called."""
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    with pytest.raises(ValueError, match="private IP addresses are not allowed"):
+        await openai_responses_impl.create_openai_response(
+            CreateResponseRequest(
+                input="What is the boiling point of myawesomeliquid in Celsius?",
+                model="meta-llama/Llama-3.1-8B-Instruct",
+                store=False,
+                tools=[
+                    OpenAIResponseInputToolMCP(server_label="internal", server_url="http://127.0.0.1:5199/sse"),
+                ],
+            )
+        )
+
+    mock_list_mcp_tools.assert_not_called()
+    mock_inference_api.openai_chat_completion.assert_not_called()
+
+
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.validate_mcp_endpoint")
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
+async def test_mcp_tool_public_url_is_pinned_before_list(
+    mock_list_mcp_tools, mock_validate, openai_responses_impl, mock_responses_store, mock_inference_api
+):
+    """Caller-supplied public endpoints are re-resolved right before connecting and the
+    connection is pinned to the validated IP (narrows the DNS-rebinding TOCTOU window)."""
+    mock_validate.return_value = {"mcp.example.com": "93.184.216.34"}
+    mock_list_mcp_tools.return_value = ListToolDefsResponse(
+        data=[ToolDef(name="test_tool", description="a test tool", input_schema={}, output_schema={})]
+    )
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is 2+2?",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            store=False,
+            tools=[
+                OpenAIResponseInputToolMCP(server_label="mcp", server_url="http://mcp.example.com/sse"),
+            ],
+        )
+    )
+
+    mock_validate.assert_called_once_with("http://mcp.example.com/sse")
+    list_kwargs = mock_list_mcp_tools.call_args.kwargs
+    assert list_kwargs["endpoint"] == "http://mcp.example.com/sse"
+    assert list_kwargs["endpoint_pins"] == {"mcp.example.com": "93.184.216.34"}
+    assert any(obj.type == "mcp_list_tools" for obj in result.output)
+
+
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.validate_mcp_endpoint")
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
+async def test_mcp_tool_connector_resolved_private_url_is_trusted(
+    mock_list_mcp_tools,
+    mock_validate,
+    openai_responses_impl,
+    mock_responses_store,
+    mock_inference_api,
+    mock_connectors_api,
+):
+    """Admin-configured connectors may point at private endpoints: they bypass SSRF
+    validation and IP pinning entirely (the supported way to reach internal MCP servers)."""
+    from ogx_api import Connector, ConnectorType
+
+    mock_connector = Connector(
+        connector_id="admin-connector",
+        connector_type=ConnectorType.MCP,
+        url="http://127.0.0.1:5199/sse",
+        server_label="Admin MCP Server",
+    )
+    mock_connectors_api.get_connector.return_value = mock_connector
+    mock_list_mcp_tools.return_value = ListToolDefsResponse(
+        data=[ToolDef(name="test_tool", description="a test tool", input_schema={}, output_schema={})]
+    )
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is 2+2?",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            store=False,
+            tools=[
+                OpenAIResponseInputToolMCP(server_label="mcp", connector_id="admin-connector"),
+            ],
+        )
+    )
+
+    mock_validate.assert_not_called()
+    list_kwargs = mock_list_mcp_tools.call_args.kwargs
+    assert list_kwargs["endpoint"] == "http://127.0.0.1:5199/sse"
+    assert list_kwargs["endpoint_pins"] is None
+    assert any(obj.type == "mcp_list_tools" for obj in result.output)
+
+
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.validate_mcp_endpoint")
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
+async def test_mcp_tool_with_connector_id_and_caller_url_treats_url_as_untrusted(
+    mock_list_mcp_tools,
+    mock_validate,
+    openai_responses_impl,
+    mock_responses_store,
+    mock_inference_api,
+    mock_connectors_api,
+):
+    """A tool carrying both a connector_id and a caller-supplied server_url is
+    treated as caller-supplied: the connector is never consulted and the URL is
+    validated (and pinned), so a connector_id cannot smuggle trust for a
+    caller-chosen endpoint."""
+    mock_validate.return_value = {"mcp.example.com": "93.184.216.34"}
+    mock_list_mcp_tools.return_value = ListToolDefsResponse(
+        data=[ToolDef(name="test_tool", description="a test tool", input_schema={}, output_schema={})]
+    )
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is 2+2?",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            store=False,
+            tools=[
+                OpenAIResponseInputToolMCP(
+                    server_label="mcp",
+                    connector_id="admin-connector",
+                    server_url="http://mcp.example.com/sse",
+                ),
+            ],
+        )
+    )
+
+    mock_connectors_api.get_connector.assert_not_awaited()
+    mock_validate.assert_called_once_with("http://mcp.example.com/sse")
+    list_kwargs = mock_list_mcp_tools.call_args.kwargs
+    assert list_kwargs["endpoint"] == "http://mcp.example.com/sse"
+    assert list_kwargs["endpoint_pins"] == {"mcp.example.com": "93.184.216.34"}
+    assert any(obj.type == "mcp_list_tools" for obj in result.output)
+
+
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
+async def test_mcp_tool_with_connector_id_and_private_caller_url_is_rejected(
+    mock_list_mcp_tools, openai_responses_impl, mock_responses_store, mock_inference_api, mock_connectors_api
+):
+    """The private-URL variant of the same case: if the connector_id were
+    (incorrectly) trusted, this would connect to the private address instead of
+    raising."""
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    with pytest.raises(ValueError, match="private IP addresses are not allowed"):
+        await openai_responses_impl.create_openai_response(
+            CreateResponseRequest(
+                input="What is 2+2?",
+                model="meta-llama/Llama-3.1-8B-Instruct",
+                store=False,
+                tools=[
+                    OpenAIResponseInputToolMCP(
+                        server_label="mcp",
+                        connector_id="admin-connector",
+                        server_url="http://127.0.0.1:5199/sse",
+                    ),
+                ],
+            )
+        )
+
+    mock_connectors_api.get_connector.assert_not_awaited()
+    mock_list_mcp_tools.assert_not_called()
+    mock_inference_api.openai_chat_completion.assert_not_called()
 
 
 async def test_file_search_uses_default_search_mode_from_config(mock_vector_io_api):

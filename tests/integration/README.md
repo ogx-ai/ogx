@@ -60,9 +60,11 @@ if no model is specified.
   - `base`: collects most tests (excludes responses)
   - `responses`: collects tests under `tests/integration/responses` (needs strong tool-calling models)
   - `vision`: collects only `tests/integration/inference/test_vision_inference.py`
+  - `auth`: kubernetes-auth access-control tests. Its `auth` setup is `matrix_excluded`, so this suite only ever runs under the dedicated auth workflow (which stands up the k8s auth provider) and never in the standard CI matrix
+  - `connect-cli`: drives the real agent CLIs (Claude Code, Codex, OpenCode) through `ogx connect <agent>` against the mock setup. The tests self-skip unless the CLIs are installed, so they only actually run under the dedicated connect-cli workflow
 - `--setup`: global configuration that can be used with any suite. Setups prefill model/env defaults; explicit CLI flags always win.
   - Available setups:
-    - `ollama`: Local Ollama provider with lightweight models (sets OLLAMA_URL, uses llama3.2:3b-instruct-fp16)
+    - `ollama`: Local Ollama provider with lightweight models (sets OLLAMA_URL, uses qwen3.5:0.8b)
     - `vllm`: vLLM provider running natively on the host (sets VLLM_URL, uses Qwen/Qwen3-0.6B)
     - `gpt`: OpenAI GPT models for high-quality responses (uses gpt-4o)
     - `claude`: Anthropic Claude models for high-quality responses (uses claude-3-5-sonnet)
@@ -97,7 +99,7 @@ Run all inference tests by auto-starting a server with the `starter` config:
 OLLAMA_URL=http://localhost:11434 \
   pytest -s -v tests/integration/inference \
    --stack-config=server:starter \
-   --text-model=ollama/llama3.2:3b-instruct-fp16 \
+   --text-model=ollama/qwen3.5:0.8b \
    --embedding-model=nomic-embed-text-v1.5
 ```
 
@@ -107,7 +109,7 @@ Run tests with auto-server startup on a custom port:
 OLLAMA_URL=http://localhost:11434 \
   pytest -s -v tests/integration/inference/ \
    --stack-config=server:starter:8322 \
-   --text-model=ollama/llama3.2:3b-instruct-fp16 \
+   --text-model=ollama/qwen3.5:0.8b \
    --embedding-model=nomic-embed-text-v1.5
 ```
 
@@ -176,6 +178,42 @@ pytest tests/integration/ --inference-mode=live
 By default, the recording directory is `tests/integration/recordings`. You can override this by setting the `OGX_TEST_RECORDING_DIR` environment variable.
 
 ## Managing Recordings
+
+### SGLang Recordings
+
+SGLang uses Qwen3-0.6B for the `sglang` setup and
+`togethercomputer/Tev1-0.8B-experimental` for `sglang-systemone`. Live recording
+uses the AMX backend of the pinned SGLang CPU image. An AVX-512-only
+runner can pass import but hit an illegal instruction in Qwen3 Q/K norm; Tev1
+also needs the AMX gated RMSNorm path. Automatic PR recording skips unsupported
+runners and
+reports the skip in the job summary; manually dispatched recording fails with a
+message to re-run that job. No recordings are produced in either case. Re-run the
+job to request another runner. Replay uses the saved responses and does not
+require AMX or a running SGLang server.
+
+### vLLM SystemOne Recordings
+
+The `vllm` setup uses Qwen/Qwen3-0.6B, and `vllm-systemone` uses
+`togethercomputer/Tev1-0.8B-experimental`, served natively (no container) by
+the pinned vLLM 0.32.0 CPU wheel against vLLM's structured decisions API
+(`/v1/systemone`). Both checkpoints are pinned to immutable HuggingFace
+commits, and every file is sha256-verified before use. Replay uses the saved
+responses and does not require a running vLLM server.
+
+### Model-List Recordings
+
+`models-*.json` files record provider model-list responses
+(`models-{request_hash}-{model_set_digest}.json`). Replay unions the bodies of
+every digest for a request hash, so stale model catalogs accumulate one digest
+per recording. `scripts/cleanup_recordings.py` prunes them:
+
+- files whose filename hash no longer matches the current hash function are
+  unreachable by any replay lookup, and
+- model-set digests that add no model referenced by the test suites (recording
+  requests + CI stack-config registrations) are redundant, with the
+  guarantee that the kept files per (directory, request hash) still cover
+  every referenced model and that each group keeps at least one file.
 
 ### Viewing Recordings
 

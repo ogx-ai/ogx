@@ -154,7 +154,7 @@ class TestVectorStore:
     @pytest.mark.parametrize(
         "window_len, overlap_len, expected_chunks",
         [
-            (5, 2, 4),  # Create 4 chunks with window of 5 and overlap of 2
+            (5, 2, 3),  # Create 3 chunks with window of 5 and overlap of 2
             (4, 1, 4),  # Create 4 chunks with window of 4 and overlap of 1
         ],
     )
@@ -184,6 +184,27 @@ class TestVectorStore:
             assert chunk.metadata["token_count"] > 0
             assert chunk.metadata["metadata_token_count"] == len_metadata_tokens
             assert chunk.chunk_metadata.chunk_tokenizer == expected_tokenizer_name
+
+    @pytest.mark.parametrize(
+        "token_count, window_len, overlap_len, expected_windows",
+        [
+            (20, 8, 4, ["0-8", "4-12", "8-16", "12-20"]),
+            (9, 8, 4, ["0-8", "4-9"]),
+            (8, 8, 4, ["0-8"]),
+            (6, 8, 4, ["0-6"]),
+            (500, 800, 400, ["0-500"]),
+            (1000, 800, 400, ["0-800", "400-1000"]),
+            (1500, 800, 400, ["0-800", "400-1200", "800-1500"]),
+            (10, 5, 0, ["0-5", "5-10"]),
+        ],
+    )
+    def test_make_overlapped_chunks_stops_at_end_of_text(self, token_count, window_len, overlap_len, expected_windows):
+        text = " ".join(["hello"] * token_count)
+        assert len(get_encoding("cl100k_base").encode(text)) == token_count
+
+        chunks = make_overlapped_chunks("test_doc", text, window_len, overlap_len, {})
+
+        assert [c.chunk_metadata.chunk_window for c in chunks] == expected_windows
 
     def test_raise_overlapped_chunks_metadata_serialization_error(self):
         document_id = "test_doc_ex"
@@ -544,3 +565,41 @@ class TestNeuralRerank:
         # Verify max_num_results was passed to rerank
         rerank_request = store.inference_api.rerank.call_args.args[0]
         assert rerank_request.max_num_results == 2
+
+
+class TestQueryChunksEmbeddingDimensions:
+    """The query must be embedded at the store's dimension; a mismatch (e.g. a
+    provider default of 1536 against a 768-dim index) breaks the search."""
+
+    @pytest.mark.parametrize("explicit_dimensions", [None, 768])
+    async def test_query_embedding_uses_store_dimension(self, explicit_dimensions):
+        mock_vector_store = MagicMock()
+        mock_vector_store.embedding_model = "test-embedding-model"
+        mock_vector_store.embedding_dimension = 768
+        mock_index = AsyncMock()
+        mock_inference_api = AsyncMock()
+        mock_embedding_response = MagicMock()
+        mock_embedding_data = MagicMock()
+        mock_embedding_data.embedding = [0.1, 0.2, 0.3]
+        mock_embedding_response.data = [mock_embedding_data]
+        mock_inference_api.openai_embeddings.return_value = mock_embedding_response
+        mock_index.query_vector.return_value = QueryChunksResponse(chunks=[], scores=[])
+
+        store = VectorStoreWithIndex(
+            vector_store=mock_vector_store,
+            index=mock_index,
+            inference_api=mock_inference_api,
+            vector_stores_config=VectorStoresConfig(),
+        )
+
+        params = {} if explicit_dimensions is None else {"embedding_dimensions": explicit_dimensions}
+        request = QueryChunksRequest(
+            vector_store_id="test-store",
+            query="test query",
+            params=params,
+        )
+
+        await store.query_chunks(request)
+
+        embeddings_request = mock_inference_api.openai_embeddings.call_args.args[0]
+        assert embeddings_request.dimensions == (explicit_dimensions if explicit_dimensions is not None else 768)

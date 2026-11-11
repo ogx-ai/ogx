@@ -29,7 +29,7 @@ inference/
   together/                 # Together AI
   typesafe/                 # TypeSafe SystemOne (judgment) models
   vertexai/                 # Google Vertex AI
-  vllm/                     # vLLM inference server
+  vllm/                     # vLLM inference server (serves llm, embedding, and SystemOne decision models)
   watsonx/                  # IBM WatsonX
   __init__.py
 ```
