@@ -12,14 +12,14 @@ You can install the dependencies by running:
 
 ```bash
 cd ogx
-uv venv --python 3.12
+uv venv --python 3.13
 uv sync --group dev
 uv pip install -e .
 source .venv/bin/activate
 ```
 
-**Note:** If you are making changes to OGX, it is essential that you use Python 3.12 as shown above.
-OGX can work with Python 3.13 but the pre-commit hooks used to validate code changes only work with Python 3.12.
+**Note:** If you are making changes to OGX, use Python 3.13 or 3.14 as shown above; those are the versions
+the pre-commit hooks used to validate code changes are tested against in CI.
 If you don't specify a Python version, `uv` will automatically select a Python version according to the `requires-python`
 section of the `pyproject.toml`, which is fine for running OGX but not for committing changes.
 For more info, see the [uv docs around Python versions](https://docs.astral.sh/uv/concepts/python-versions/).

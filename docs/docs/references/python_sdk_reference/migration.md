@@ -653,7 +653,7 @@ The optional `aiohttp` backend is no longer available in >= 1.1.4.
 
 | Dependency | <= 1.1.3 | >= 1.1.4 |
 |-----------|----------|----------|
-| Python | >= 3.9 | **>= 3.12** |
+| Python | >= 3.9 | **>= 3.13** |
 | `httpx` | >= 0.23.0, < 1 | >= 0.28.1 |
 | `pydantic` | >= 1.9.0, < 3 | **>= 2** |
 | `anyio` | >= 3.5.0, < 5 | Not required |
@@ -663,7 +663,7 @@ The optional `aiohttp` backend is no longer available in >= 1.1.4.
 | `typing-extensions` | >= 4.14, < 5 | >= 4.7.1 |
 | `python-dateutil` | Not required | >= 2.8.2 |
 
-If you are on Python 3.9--3.11, you must upgrade to 3.12+. If you are on
+If you are on Python 3.9--3.12, you must upgrade to 3.13+. If you are on
 Pydantic v1, you must upgrade to v2. Both versions use **httpx** as the HTTP
 client.
 
@@ -673,7 +673,7 @@ client.
 
 **Everyone:**
 
-- [ ] Upgrade Python to 3.12+ and Pydantic to 2.x (if not already)
+- [ ] Upgrade Python to 3.13+ and Pydantic to 2.x (if not already)
 - [ ] Upgrade `ogx_client` to >= 1.1.4 in `pip install` / `pyproject.toml`
 - [ ] Replace `from ogx_client.types` -> `from ogx_client.models` in all imports
 - [ ] Update type names per the [mapping tables](#2-type-and-model-name-changes)

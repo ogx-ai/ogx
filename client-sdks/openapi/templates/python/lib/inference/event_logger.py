@@ -29,15 +29,11 @@ class InferenceStreamLogEventPrinter:
     def __init__(self):
         self.is_thinking = False
 
-    def yield_printable_events(
-        self, chunk: ChatCompletionChunk
-    ) -> Generator[InferenceStreamPrintableEvent, None, None]:
+    def yield_printable_events(self, chunk: ChatCompletionChunk) -> Generator[InferenceStreamPrintableEvent]:
         if hasattr(chunk, "choices") and len(chunk.choices) > 0:
             yield from self._handle_chat_completion_chunk(chunk)
 
-    def _handle_chat_completion_chunk(
-        self, chunk: ChatCompletionChunk
-    ) -> Generator[InferenceStreamPrintableEvent, None, None]:
+    def _handle_chat_completion_chunk(self, chunk: ChatCompletionChunk) -> Generator[InferenceStreamPrintableEvent]:
         choice = chunk.choices[0]
         delta = choice.delta
         if delta:

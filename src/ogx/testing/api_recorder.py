@@ -1949,7 +1949,7 @@ def unpatch_inference_clients():
 
 
 @contextmanager
-def api_recording(mode: str, storage_dir: str | Path | None = None) -> Generator[None, None, None]:
+def api_recording(mode: str, storage_dir: str | Path | None = None) -> Generator[None]:
     """Context manager for API recording/replaying (inference and tools)."""
     global _current_mode, _current_storage
 

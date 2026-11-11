@@ -819,7 +819,7 @@ def _is_auth_error(e: Exception) -> bool:
 
 
 @contextlib.contextmanager
-def _suppress_provider_logs(suppress: bool = True) -> Generator[None, None, None]:
+def _suppress_provider_logs(suppress: bool = True) -> Generator[None]:
     """Context manager to suppress all provider-related logs during probing.
 
     When suppress=True, temporarily disables all logging. When suppress=False,
