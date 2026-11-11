@@ -36,6 +36,7 @@ from ogx.providers.registry.inference import available_providers
 from ogx.providers.remote.tool_runtime.brave_search.config import BraveSearchToolConfig
 from ogx.providers.remote.tool_runtime.exa_search.config import ExaSearchToolConfig
 from ogx.providers.remote.tool_runtime.nimble_search.config import NimbleSearchToolConfig
+from ogx.providers.remote.tool_runtime.searchapi_search.config import SearchApiSearchToolConfig
 from ogx.providers.remote.tool_runtime.serply_search.config import SerplySearchToolConfig
 from ogx.providers.remote.tool_runtime.tavily_search.config import TavilySearchToolConfig
 from ogx.providers.remote.vector_io.chroma.config import ChromaVectorIOConfig
@@ -62,6 +63,7 @@ def _get_config_for_provider(provider_spec: ProviderSpec) -> dict[str, Any]:
 ENABLED_INFERENCE_PROVIDERS = [
     "ollama",
     "vllm",
+    "sglang",
     "fireworks",
     "together",
     "gemini",
@@ -80,6 +82,7 @@ ENABLED_INFERENCE_PROVIDERS = [
 INFERENCE_PROVIDER_IDS = {
     "ollama": "${env.OLLAMA_URL:+ollama}",
     "vllm": "${env.VLLM_URL:+vllm}",
+    "sglang": "${env.SGLANG_URL:+sglang}",
     "cerebras": "${env.CEREBRAS_API_KEY:+cerebras}",
     "nvidia": "${env.NVIDIA_API_KEY:+nvidia}",
     "vertexai": "${env.VERTEX_AI_PROJECT:+vertexai}",
@@ -159,6 +162,7 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
             BuildProvider(provider_type="remote::tavily-search"),
             BuildProvider(provider_type="remote::nimble-search"),
             BuildProvider(provider_type="remote::serply-search"),
+            BuildProvider(provider_type="remote::searchapi-search"),
             BuildProvider(provider_type="inline::file-search"),
             BuildProvider(provider_type="remote::model-context-protocol"),
         ],
@@ -304,6 +308,11 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 provider_id="serply-search",
                 provider_type="remote::serply-search",
                 config=SerplySearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+            ),
+            Provider(
+                provider_id="searchapi-search",
+                provider_type="remote::searchapi-search",
+                config=SearchApiSearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="file-search",

@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_response_headers[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_response_headers[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hi"
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-8a5f7addb566f7b3",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay, the user just said \"Hi\". I need to respond appropriately. Since I'm an AI assistant, my response should be friendly and helpful. Maybe start with a greeting like \"Hello!\" to acknowledge their message. I should make sure the tone is cheerful and welcoming. Also, I should ask them how they're doing to show I'm here to help. Let me check if there's anything else they might need. Keep it simple and positive.\n",
+          "signature": "4b924ac62f7c4be3832312381257e28e"
+        },
+        {
+          "type": "text",
+          "text": "\n\nHello! How can I assist you today? \ud83d\ude0a"
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 9,
+        "output_tokens": 107
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

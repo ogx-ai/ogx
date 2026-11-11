@@ -11,12 +11,7 @@ interface JsonViewerProps {
 }
 
 type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 interface JsonNode {
   key?: string;

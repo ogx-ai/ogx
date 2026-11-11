@@ -5,6 +5,8 @@
 # the root directory of this source tree.
 
 
+import re
+
 import httpx2
 
 from ogx.log import get_logger
@@ -16,17 +18,38 @@ from ogx.providers.utils.inference.server_signature import (
     check_llama_cpp_server,
     verify_llama_cpp_server,
 )
+from ogx.providers.utils.inference.systemone import LOCAL_ENGINE_API_KEY, systemone_judge
 from ogx_api import (
     HealthResponse,
     Model,
+    ModelType,
     OpenAIChatCompletionContentPartImageParam,
     OpenAIChatCompletionContentPartTextParam,
     RerankData,
     RerankResponse,
+    SystemOneRequest,
+    SystemOneResponse,
 )
 from ogx_api.inference import RerankRequest
 
 logger = get_logger(name=__name__, category="inference::llama_cpp_server")
+
+# Names of decision models available as GGUF for llama.cpp, which serves the SystemOne
+# (decision) protocol natively since v0.6.0. llama.cpp's /v1/models listing does not
+# expose per-model capabilities, so decision models are recognized by name.
+_SYSTEMONE_MODEL_NAMES = frozenset({"laya", "julia-1", "openjev", "lev", "kev", "pplx-decider", "lfm2-d1"})
+
+# llama.cpp derives model IDs from GGUF filenames (e.g. "Laya-Q8_0.gguf"), so strip a
+# trailing quant suffix before matching.
+_QUANT_SUFFIX = re.compile(r"-(?:q\d+(?:_\d+)?(?:_k_[a-z]+)?|bf16|f16|f32)$", re.IGNORECASE)
+
+
+def _is_systemone_model(identifier: str) -> bool:
+    name = identifier.split(":", 1)[0]
+    if name.lower().endswith(".gguf"):
+        name = name[: -len(".gguf")]
+    name = _QUANT_SUFFIX.sub("", name)
+    return name.casefold() in _SYSTEMONE_MODEL_NAMES
 
 
 class LlamaCppServerInferenceAdapter(OpenAIMixin):
@@ -80,9 +103,43 @@ class LlamaCppServerInferenceAdapter(OpenAIMixin):
         # classify with models.dev with a name fallback, mirroring the vLLM adapter.
         # classify_model() covers both embedding and rerank classification.
         model = classify_model(identifier, self.__provider_id__)
-        if model is not None:
-            return model
-        return super().construct_model_from_identifier(identifier)
+        if model is None:
+            model = super().construct_model_from_identifier(identifier)
+        if _is_systemone_model(identifier):
+            # Decision models answer SystemOne judgments, not chat completions; register them
+            # under ModelType.systemone so the /v1/systemone router finds them.
+            model.model_type = ModelType.systemone
+        return model
+
+    def _get_systemone_base_url(self) -> str:
+        # The SystemOne endpoint lives at the server root, but config.base_url carries the
+        # /v1 prefix used by the OpenAI-compatible paths.
+        base_url_str = self.get_base_url()
+        if base_url_str.endswith("/v1"):
+            return base_url_str[:-3]
+        return base_url_str
+
+    async def judge(self, request: SystemOneRequest) -> SystemOneResponse:
+        """Answer a SystemOne judgment request by forwarding it to llama.cpp's /v1/systemone.
+
+        llama.cpp serves the TypeSafe-compatible SystemOne protocol natively for local decision
+        models, so no translation is needed; the shared helper validates the raw response body
+        into the OGX wire model.
+        """
+        # get_api_key() returns a display placeholder ("NO KEY REQUIRED") when no
+        # credential is configured, which the typesafe SDK rejects; pass the
+        # configured credential or the fixed local placeholder instead.
+        api_key = (
+            self.config.auth_credential.get_secret_value()
+            if self.config.auth_credential is not None
+            else LOCAL_ENGINE_API_KEY
+        )
+        return await systemone_judge(
+            self._get_systemone_base_url(),
+            api_key,
+            request,
+            network=self.config.network,
+        )
 
     async def rerank(
         self,

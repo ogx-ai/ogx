@@ -77,7 +77,7 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
         self, tool_name: str, kwargs: dict[str, Any], authorization: str | None = None
     ) -> ToolInvocationResult:
         api_key = self._get_api_key()
-        url = "https://api.search.brave.com/res/v1/web/search"
+        url = f"{str(self.config.base_url).rstrip('/')}/res/v1/web/search"
         headers: dict[str, str] = {
             "Accept-Encoding": "gzip",
             "Accept": "application/json",

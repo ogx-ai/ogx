@@ -112,6 +112,11 @@ class AnthropicMixin(OpenAIMixin):
             headers[auth[0]] = auth[1]
         return headers
 
+    def _prepare_passthrough_body(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Normalize a passthrough request body before sending. The default is a no-op;
+        providers whose backends deviate from the Messages API override this."""
+        return body
+
     async def _passthrough_anthropic_stream(
         self,
         url: str,
@@ -140,7 +145,7 @@ class AnthropicMixin(OpenAIMixin):
         """Forward the request to the provider's native /v1/messages endpoint."""
         self._validate_model_allowed(params.model)
         url = f"{self._get_anthropic_base_url()}/v1/messages"
-        body = params.model_dump(exclude_none=True)
+        body = self._prepare_passthrough_body(params.model_dump(exclude_none=True))
         # Resolve the headers here, not in the generator, so a missing API key fails the
         # request before any streaming starts.
         headers = self._anthropic_headers()
@@ -168,7 +173,7 @@ class AnthropicMixin(OpenAIMixin):
             # anthropic_messages (this override) with max_tokens=1.
             return await super().anthropic_count_tokens(params)
 
-        body = params.model_dump(exclude_none=True)
+        body = self._prepare_passthrough_body(params.model_dump(exclude_none=True))
         headers = self._anthropic_headers()
 
         async with httpx2.AsyncClient(**self._build_httpx_client_kwargs(self.anthropic_count_tokens_timeout)) as client:

@@ -122,6 +122,13 @@ PROVIDERS: tuple[Provider, ...] = (
         extra_location_pattern=r"LLAMA_TARBALL_SHA=",
     ),
     Provider(
+        key="sglang",
+        display="SGLang",
+        upstream="sgl-project/sglang",
+        pin_sources=(PinSource(".github/actions/setup-sglang/action.yml", r"lmsysorg/sglang:v(\d+(?:\.\d+)+)-xeon"),),
+        location_files=(".github/actions/setup-sglang/action.yml",),
+    ),
+    Provider(
         key="tei",
         display="TEI",
         upstream="huggingface/text-embeddings-inference",
@@ -301,6 +308,7 @@ LATEST_RESOLVERS: dict[str, Callable[[GitHubApi, Provider], Latest]] = {
     "vllm": resolve_latest_simple,
     "ollama": resolve_latest_simple,
     "llamacpp": resolve_latest_llamacpp,
+    "sglang": resolve_latest_simple,
     "tei": resolve_latest_simple,
 }
 

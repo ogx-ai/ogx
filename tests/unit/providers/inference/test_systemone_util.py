@@ -183,6 +183,49 @@ async def test_judge_closes_client_when_response_does_not_match_wire_model():
     client.aclose.assert_awaited_once()
 
 
+async def test_judge_drops_declared_extension_fields_before_validation():
+    # SGLang reports x_label_mass on every answer; a provider that declares it gets a valid
+    # wire response, with the extension gone from the answers.
+    client = _mock_client()
+    client.system_one.return_value = _sdk_response(
+        {
+            "model": "Qwen/Qwen3-0.6B",
+            "answers": {
+                "billing": {"type": "noul", "noul": 0.99, "x_label_mass": 0.35},
+                "team": {
+                    "type": "choice",
+                    "choice": "billing",
+                    "confidence": 0.998,
+                    "probabilities": {"billing": 0.999, "technical": 0.001},
+                    "x_label_mass": 0.97,
+                },
+            },
+            "usage": {"input_tokens": 109, "output_tokens": 0},
+        }
+    )
+    with _patch_client(client):
+        result = await systemone_judge(
+            "http://localhost:30000",
+            LOCAL_ENGINE_API_KEY,
+            _judge_request(),
+            extension_fields=frozenset({"x_label_mass"}),
+        )
+    assert result.answers["billing"].noul == 0.99
+    assert result.answers["team"].choice == "billing"
+    assert "x_label_mass" not in result.answers["team"].model_dump()
+
+
+async def test_judge_still_rejects_undeclared_extra_fields():
+    client = _mock_client()
+    client.system_one.return_value = _sdk_response(
+        {"model": "laya", "answers": {"billing": {"type": "noul", "noul": 0.9, "x_label_mass": 0.35}}}
+    )
+    with pytest.raises(ValidationError):
+        with _patch_client(client):
+            await systemone_judge("http://localhost:11434", LOCAL_ENGINE_API_KEY, _judge_request())
+    client.aclose.assert_awaited_once()
+
+
 def test_to_provider_error_keeps_4xx_and_maps_5xx_and_none():
     make = lambda status: TypeSafeAPIError(status=status, body=None, headers=httpx2.Headers())  # noqa: E731
     assert to_provider_error(make(404)).status_code == 404

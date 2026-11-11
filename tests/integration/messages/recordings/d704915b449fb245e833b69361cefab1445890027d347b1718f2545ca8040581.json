@@ -1,0 +1,48 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_stop_sequences[txt=deepseek/deepseek-chat]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_stop_sequences[txt=deepseek/deepseek-chat]",
+    "url": "https://api.deepseek.com/anthropic/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "deepseek-chat",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Count: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10"
+        }
+      ],
+      "max_tokens": 128,
+      "stream": false,
+      "stop_sequences": [
+        ","
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "3c1ea6f9-bbed-4fb8-96f9-b155d345075a",
+      "type": "message",
+      "role": "assistant",
+      "model": "deepseek-chat",
+      "content": [
+        {
+          "type": "text",
+          "text": "That's a simple count from 1 to 10. How can I help you with it?"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 35,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 20,
+        "service_tier": "standard"
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

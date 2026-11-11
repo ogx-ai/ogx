@@ -7,6 +7,8 @@
 
 from ogx.core.datatypes import Provider
 from ogx.distributions.template import DistributionTemplate
+from ogx.providers.remote.inference.deepseek.config import DEFAULT_ANTHROPIC_BASE_URL as DEEPSEEK_ANTHROPIC_BASE_URL
+from ogx.providers.remote.inference.deepseek.config import DEFAULT_BASE_URL as DEEPSEEK_BASE_URL
 from ogx.providers.remote.inference.llama_cpp_server.config import LlamaCppServerConfig
 from ogx.providers.remote.inference.text_embeddings_inference.config import TextEmbeddingsInferenceConfig
 from ogx.providers.remote.inference.typesafe.config import TypeSafeConfig
@@ -128,6 +130,19 @@ def get_distribution_template() -> DistributionTemplate:
         config=TextEmbeddingsInferenceConfig.sample_run_config(),
     )
 
+    # DeepSeek is not in the starter distribution; it is added here, env-gated on
+    # DEEPSEEK_API_KEY, so the messages suite can run against its native /v1/messages
+    # endpoint, which lives at anthropic_base_url rather than under base_url.
+    deepseek_provider = Provider(
+        provider_id="${env.DEEPSEEK_API_KEY:+deepseek}",
+        provider_type="remote::deepseek",
+        config={
+            "base_url": f"${{env.DEEPSEEK_BASE_URL:={DEEPSEEK_BASE_URL}}}",
+            "anthropic_base_url": f"${{env.DEEPSEEK_ANTHROPIC_BASE_URL:={DEEPSEEK_ANTHROPIC_BASE_URL}}}",
+            "api_key": "${env.DEEPSEEK_API_KEY:=}",
+        },
+    )
+
     # TypeSafe serves SystemOne (judgment) models, registered under the `systemone` provider
     # section (added to the template above), which the StackConfig normalizer reads as
     # `inference`. Always present; the api_key is read from TYPESAFE_API_KEY (empty by default),
@@ -160,6 +175,9 @@ def get_distribution_template() -> DistributionTemplate:
 
         # Add the CI-only text-embeddings-inference inference provider
         run_config.provider_overrides["inference"].append(text_embeddings_inference_provider)
+
+        # Add the env-gated DeepSeek inference provider
+        run_config.provider_overrides["inference"].append(deepseek_provider)
 
         # Register the TypeSafe (SystemOne judgment) provider under the `systemone` section
         run_config.provider_overrides["systemone"] = [typesafe_provider]

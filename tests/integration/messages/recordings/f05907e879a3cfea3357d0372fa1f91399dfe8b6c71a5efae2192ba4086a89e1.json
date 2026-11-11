@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_results[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_results[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say 'hello' and nothing else."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-a79a120f6ae8aa0c",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay, the user wants me to say 'hello' and nothing else. Let me make sure I understand the request correctly. They just want the word 'hello' and nothing more. I should confirm that there's no additional text expected. I'll respond by directly saying 'hello' and keep it concise.\n",
+          "signature": "87b848070f4e422c9991a9cebf93cf1e"
+        },
+        {
+          "type": "text",
+          "text": "\n\nhello"
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 16,
+        "output_tokens": 68
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

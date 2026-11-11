@@ -14,7 +14,7 @@ inference/
   fireworks/                # Fireworks AI
   gemini/                   # Google Gemini API
   groq/                     # Groq LPU inference
-  llama_cpp_server/         # llama.cpp server/router (serves llm and embedding models)
+  llama_cpp_server/         # llama.cpp server/router (serves llm, embedding, and SystemOne decision models)
   llama_openai_compat/      # Generic OpenAI-compatible endpoints
   nvidia/                   # NVIDIA NIM
   oci/                      # Oracle Cloud Infrastructure GenAI
@@ -23,12 +23,13 @@ inference/
   passthrough/              # Generic passthrough to any endpoint
   runpod/                   # RunPod cloud GPU
   sambanova/                # SambaNova
+  sglang/                   # SGLang inference server (serves llm, embedding, and SystemOne decision models)
   text_embeddings_inference/ # HuggingFace Text-Embeddings-Inference (embedding models)
   tgi/                      # HuggingFace TGI and Inference API
   together/                 # Together AI
   typesafe/                 # TypeSafe SystemOne (judgment) models
   vertexai/                 # Google Vertex AI
-  vllm/                     # vLLM inference server
+  vllm/                     # vLLM inference server (serves llm, embedding, and SystemOne decision models)
   watsonx/                  # IBM WatsonX
   __init__.py
 ```

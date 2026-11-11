@@ -4,9 +4,8 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import json
 import logging  # allow-direct-logging
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -432,51 +431,41 @@ def jwt_token_valid(rsa_key_pair):
 
 
 @pytest.fixture
-def mock_jwks_urlopen(rsa_key_pair):
-    """Mock urllib.request.urlopen for PyJWKClient JWKS requests."""
+def mock_jwks_fetch(rsa_key_pair):
+    """Mock PyJWKClient.fetch_data for JWKS requests (stable mock boundary across pyjwt versions)."""
     _, jwk = rsa_key_pair
-    with patch("urllib.request.urlopen") as mock_urlopen:
-        mock_response = Mock()
-        mock_response.read.return_value = json.dumps({"keys": [jwk]}).encode()
-        mock_urlopen.return_value.__enter__.return_value = mock_response
-        yield mock_urlopen
+    with patch("jwt.PyJWKClient.fetch_data", return_value={"keys": [jwk]}) as mock_fetch:
+        yield mock_fetch
 
 
 @pytest.fixture
-def mock_jwks_urlopen_with_auth_required(rsa_key_pair):
-    """Mock urllib.request.urlopen that requires Bearer token for JWKS requests."""
+def mock_jwks_fetch_requires_auth(rsa_key_pair):
+    """Simulate a JWKS endpoint that rejects requests without a Bearer token.
+
+    Inspects the Authorization header the PyJWKClient was configured with,
+    mirroring the outgoing-request check the old urlopen mock performed.
+    """
+    from jwt.exceptions import PyJWKClientConnectionError
+
     _, jwk = rsa_key_pair
-    with patch("urllib.request.urlopen") as mock_urlopen:
 
-        def side_effect(request, **kwargs):
-            auth_header = request.headers.get("Authorization") if hasattr(request, "headers") else None
+    def fetch_data(self):
+        auth_header = (self.headers or {}).get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise PyJWKClientConnectionError('Fail to fetch data from the url, err: "HTTP Error 401: Unauthorized"')
+        return {"keys": [jwk]}
 
-            if not auth_header or not auth_header.startswith("Bearer "):
-                import urllib.error
-
-                raise urllib.error.HTTPError(
-                    url=request.full_url if hasattr(request, "full_url") else "",
-                    code=401,
-                    msg="Unauthorized",
-                    hdrs={},
-                    fp=None,
-                )
-
-            mock_response = Mock()
-            mock_response.read.return_value = json.dumps({"keys": [jwk]}).encode()
-            return mock_response
-
-        mock_urlopen.side_effect = side_effect
-        yield mock_urlopen
+    with patch("jwt.PyJWKClient.fetch_data", fetch_data) as mock_fetch:
+        yield mock_fetch
 
 
-def test_valid_oauth2_authentication(oauth2_client, jwt_token_valid, mock_jwks_urlopen):
+def test_valid_oauth2_authentication(oauth2_client, jwt_token_valid, mock_jwks_fetch):
     response = oauth2_client.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
     assert response.status_code == 200
     assert response.json() == {"message": "Authentication successful"}
 
 
-def test_invalid_oauth2_authentication(oauth2_client, invalid_token, mock_jwks_urlopen, suppress_auth_errors):
+def test_invalid_oauth2_authentication(oauth2_client, invalid_token, mock_jwks_fetch, suppress_auth_errors):
     response = oauth2_client.get("/test", headers={"Authorization": f"Bearer {invalid_token}"})
     assert response.status_code == 401
     assert "Invalid JWT token" in response.json()["error"]["message"]
@@ -515,14 +504,23 @@ def oauth2_client_with_jwks_token(oauth2_app_with_jwks_token):
 
 
 def test_oauth2_with_jwks_token_expected(
-    oauth2_client, jwt_token_valid, mock_jwks_urlopen_with_auth_required, suppress_auth_errors
+    oauth2_client, jwt_token_valid, mock_jwks_fetch_requires_auth, suppress_auth_errors
 ):
     response = oauth2_client.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
     assert response.status_code == 503
     assert "Authentication service unavailable" in response.json()["error"]["message"]
 
 
-def test_oauth2_with_jwks_token_configured(oauth2_client_with_jwks_token, jwt_token_valid, mock_jwks_urlopen):
+def test_oauth2_with_jwks_token_configured(oauth2_client_with_jwks_token, jwt_token_valid, mock_jwks_fetch):
+    response = oauth2_client_with_jwks_token.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
+    assert response.status_code == 200
+    assert response.json() == {"message": "Authentication successful"}
+
+
+def test_oauth2_with_jwks_token_sent_to_jwks_endpoint(
+    oauth2_client_with_jwks_token, jwt_token_valid, mock_jwks_fetch_requires_auth
+):
+    """The configured JWKS token must be sent as a Bearer header on JWKS requests."""
     response = oauth2_client_with_jwks_token.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
     assert response.status_code == 200
     assert response.json() == {"message": "Authentication successful"}

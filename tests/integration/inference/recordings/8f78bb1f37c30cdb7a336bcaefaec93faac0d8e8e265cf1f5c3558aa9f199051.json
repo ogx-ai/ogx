@@ -1,0 +1,77 @@
+{
+  "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_mixed_questions[judge=llama-cpp-server/laya]",
+  "request": {
+    "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_mixed_questions[judge=llama-cpp-server/laya]",
+    "url": "http://localhost:8080/v1/systemone",
+    "method": "POST",
+    "payload": {
+      "state": "I was charged twice and the agent was rude about it.",
+      "model": "laya",
+      "questions": {
+        "billing": {
+          "type": "noul",
+          "instructions": "Is this about billing?"
+        },
+        "tone": {
+          "type": "choice",
+          "instructions": "What is the tone?",
+          "criteria": {
+            "calm": null,
+            "angry": null
+          }
+        },
+        "quality": {
+          "type": "score",
+          "instructions": "Rate the interaction.",
+          "criteria": [
+            "Bad",
+            "Ok",
+            "Good"
+          ]
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "laya",
+      "answers": {
+        "billing": {
+          "type": "noul",
+          "noul": 0.9300100911672332
+        },
+        "tone": {
+          "type": "choice",
+          "choice": "angry",
+          "probabilities": {
+            "calm": 0.024783366188380482,
+            "angry": 0.9752166338116195
+          },
+          "confidence": 0.950433267623239
+        },
+        "quality": {
+          "type": "score",
+          "score": 0.013705770200844583,
+          "legend": {
+            "0": "Bad",
+            "1": "Ok",
+            "2": "Good"
+          },
+          "probabilities": {
+            "0": 0.9898173152352556,
+            "1": 0.006659599328643948,
+            "2": 0.0035230854361003173
+          },
+          "confidence": 0.9794413446987331
+        }
+      },
+      "usage": {
+        "input_tokens": 109,
+        "output_tokens": 0
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

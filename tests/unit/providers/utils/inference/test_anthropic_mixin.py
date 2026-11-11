@@ -175,7 +175,7 @@ class TestUrls:
         assert url == f"{self._expected_base(provider, base_url)}/v1/messages"
         assert "/v1/v1/" not in url
 
-    @pytest.mark.parametrize("provider", ["anthropic", "meta", "ollama", "vllm"])
+    @pytest.mark.parametrize("provider", ["anthropic", "meta", "vllm"])
     @pytest.mark.parametrize("base_url", BASE_URLS)
     async def test_count_tokens_url(self, provider, base_url, mock_client):
         mock_client.response.json.return_value = {"input_tokens": 1}
@@ -186,7 +186,7 @@ class TestUrls:
         assert url == f"{self._expected_base(provider, base_url)}/v1/messages/count_tokens"
         assert "/v1/v1/" not in url
 
-    @pytest.mark.parametrize("provider", ["fireworks", "deepseek"])
+    @pytest.mark.parametrize("provider", ["fireworks", "deepseek", "ollama"])
     @pytest.mark.parametrize("base_url", BASE_URLS)
     async def test_no_native_count_endpoint_falls_back_to_messages_with_max_tokens_one(
         self, provider, base_url, mock_client
@@ -214,6 +214,24 @@ class TestHeadersAndBody:
         assert body["max_tokens"] == 16
         assert body["metadata"] == {"user_id": "u1"}
         assert body["stream"] is False
+
+    async def test_body_keeps_custom_tool_type_by_default(self, mock_client):
+        """The default _prepare_passthrough_body is a no-op, so tools keep their type marker
+        (only providers whose backends reject it, e.g. DeepSeek, strip it)."""
+        await _adapter("meta").anthropic_messages(
+            _message_request(
+                tools=[
+                    {
+                        "type": "custom",
+                        "name": "get_weather",
+                        "input_schema": {"type": "object", "properties": {"location": {"type": "string"}}},
+                    }
+                ]
+            )
+        )
+
+        body = mock_client.client.post.call_args.kwargs["json"]
+        assert body["tools"][0]["type"] == "custom"
 
 
 class TestErrors:
@@ -321,9 +339,10 @@ class TestTimeouts:
         await adapter.anthropic_messages(_message_request())
         assert mock_client.client_class.call_args.kwargs["timeout"] == httpx2.Timeout(12.0)
 
-        if provider not in ("fireworks", "deepseek"):
-            # Fireworks and DeepSeek have no native endpoint and count via anthropic_messages,
-            # which expects a message response rather than a count_tokens one.
+        if provider not in ("fireworks", "deepseek", "ollama"):
+            # Fireworks, DeepSeek and Ollama have no native endpoint and count via
+            # anthropic_messages, which expects a message response rather than a
+            # count_tokens one (the fixture default).
             mock_client.response.json.return_value = {"input_tokens": 1}
         await adapter.anthropic_count_tokens(_count_tokens_request())
         assert mock_client.client_class.call_args.kwargs["timeout"] == httpx2.Timeout(12.0)

@@ -50,8 +50,8 @@ def sample_chunks():
 
     from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 
-    chunk_id_1 = generate_chunk_id("mock-doc-1", "MOCK text content 1")
-    chunk_id_2 = generate_chunk_id("mock-doc-2", "MOCK text content 1")
+    chunk_id_1 = generate_chunk_id(document_id="mock-doc-1", chunk_text="MOCK text content 1")
+    chunk_id_2 = generate_chunk_id(document_id="mock-doc-2", chunk_text="MOCK text content 1")
 
     return [
         Chunk(
@@ -433,7 +433,7 @@ async def test_query_vector_with_filter_returns_correct_chunks(embedding_dimensi
 
     chunks = []
     for i, topic in enumerate(["ai", "ml", "ai", "cv"]):
-        cid = generate_chunk_id(f"doc{i}", f"content {i}")
+        cid = generate_chunk_id(document_id=f"doc{i}", chunk_text=f"content {i}")
         chunks.append(
             EmbeddedChunk(
                 content=f"content {i}",

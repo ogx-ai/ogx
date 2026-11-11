@@ -813,6 +813,26 @@ class TestToolCallingResponseTranslation:
 
         assert result.outputs[0].args == {}
 
+    @pytest.mark.parametrize("arguments", ["[1, 2]", "null", '"text"'])
+    async def test_non_object_function_arguments_json(self, impl, arguments):
+        openai_resp = MagicMock()
+        openai_resp.choices = [MagicMock()]
+        openai_resp.choices[0].message = MagicMock()
+        openai_resp.choices[0].message.content = None
+
+        tc = MagicMock()
+        tc.id = "call_bad"
+        tc.function = MagicMock()
+        tc.function.name = "fn"
+        tc.function.arguments = arguments
+        openai_resp.choices[0].message.tool_calls = [tc]
+        openai_resp.choices[0].finish_reason = "tool_calls"
+        openai_resp.usage = None
+
+        result = await impl._openai_to_google(openai_resp, "m", [])
+
+        assert result.outputs[0].args == {}
+
 
 class TestToolCallingStreamingTranslation:
     async def test_streaming_function_call(self, impl):

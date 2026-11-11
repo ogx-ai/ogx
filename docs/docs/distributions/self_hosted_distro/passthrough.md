@@ -13,7 +13,7 @@ The `ogxai/distribution-passthrough` distribution consists of the following prov
 | eval | `inline::builtin` |
 | inference | `remote::passthrough`, `inline::sentence-transformers` |
 | scoring | `inline::basic`, `inline::llm-as-judge`, `inline::braintrust` |
-| tool_runtime | `remote::brave-search`, `remote::tavily-search`, `remote::wolfram-alpha`, `inline::file-search`, `remote::model-context-protocol` |
+| tool_runtime | `remote::brave-search`, `remote::tavily-search`, `inline::file-search`, `remote::model-context-protocol` |
 | vector_io | `inline::faiss`, `remote::chromadb`, `remote::pgvector` |
 
 ## Environment Variables
