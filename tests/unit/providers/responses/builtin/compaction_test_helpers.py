@@ -4,13 +4,14 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-"""Shared helpers for the auto-compaction test suite (test_auto_compaction.py and
-test_auto_compaction_followups.py).
+"""Shared helpers for the compaction test suite (test_auto_compaction*.py and
+test_compact_endpoint.py).
 """
 
 from unittest.mock import AsyncMock
 
 from ogx.providers.utils.responses.responses_store import _OpenAIResponseObjectWithInputAndMessages
+from ogx_api.conversations.models import ConversationItemList
 from ogx_api.inference import (
     OpenAIChatCompletion,
     OpenAIChatCompletionResponseMessage,
@@ -110,3 +111,23 @@ def _previous_response(
         else usage,
         store=True,
     )
+
+
+def _conversation_pages(total_items: int, page_size: int = 100) -> list[ConversationItemList]:
+    """Build the sequence of ConversationItemList pages _fetch_full_conversation_items
+    walks through -- more than one page when total_items exceeds page_size, so the
+    pagination loop itself is exercised, not just a single-page call.
+    """
+    items = [OpenAIResponseMessage(id=f"item-{i}", role="user", content=f"Message {i}") for i in range(total_items)]
+    pages = []
+    for start in range(0, total_items, page_size):
+        chunk = items[start : start + page_size]
+        pages.append(
+            ConversationItemList(
+                data=chunk,
+                first_id=chunk[0].id if chunk else None,
+                last_id=chunk[-1].id if chunk else None,
+                has_more=start + page_size < total_items,
+            )
+        )
+    return pages

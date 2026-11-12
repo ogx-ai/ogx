@@ -68,6 +68,8 @@ from ogx_api import (
     OpenAIResponseInputMessageContentText,
     OpenAIResponseInputTool,
     OpenAIResponseInputToolChoice,
+    OpenAIResponseMCPApprovalRequest,
+    OpenAIResponseMCPApprovalResponse,
     OpenAIResponseMessage,
     OpenAIResponseObject,
     OpenAIResponseObjectStream,
@@ -110,6 +112,13 @@ from .utils import (
 )
 
 logger = get_logger(name=__name__, category="openai_responses")
+
+# Arguments _build_compaction sets on the summarization call itself; a caller-supplied
+# extra param with one of these names is dropped rather than raising a duplicate-keyword
+# TypeError or silently overriding the call's own settings.
+_SUMMARIZATION_RESERVED_PARAMS = frozenset(
+    {"model", "messages", "stream", "prompt_cache_key", "max_completion_tokens", "max_output_tokens"}
+)
 
 BACKGROUND_RESPONSE_TIMEOUT_SECONDS = 300  # 5 minutes
 BACKGROUND_QUEUE_MAX_SIZE = 100
@@ -1627,13 +1636,22 @@ class OpenAIResponsesImpl:
                 "Failed to compact response: no model specified in request and no "
                 "summarization_model configured in CompactionConfig"
             )
+        forwarded_params = {
+            key: value for key, value in (extra_body or {}).items() if key not in _SUMMARIZATION_RESERVED_PARAMS
+        }
+        ignored_params = sorted(set(extra_body or {}) - set(forwarded_params))
+        if ignored_params:
+            logger.warning(
+                "Ignoring extra parameters that collide with the compaction summarization call's own arguments",
+                ignored_params=ignored_params,
+            )
         params = OpenAIChatCompletionRequestWithExtraBody(
             model=summarization_model,
             messages=messages,
             stream=False,
             prompt_cache_key=prompt_cache_key,
             max_completion_tokens=max_output_tokens,
-            **(extra_body or {}),
+            **forwarded_params,
         )
         completion = await self.inference_api.openai_chat_completion(params)
         assert not isinstance(completion, AsyncIterator)
@@ -1972,40 +1990,53 @@ class OpenAIResponsesImpl:
         return max(1, sum(len(s) for s in segments) // APPROX_CHARS_PER_TOKEN)
 
     @staticmethod
-    def _split_open_tool_calls(
+    def _split_referenced_history_items(
         history: list[OpenAIResponseInput], new_input: list[OpenAIResponseInput]
     ) -> tuple[list[OpenAIResponseInput], list[OpenAIResponseInput]]:
-        """Pull function_call items out of history whose matching function_call_output
-        is arriving right now in new_input, so they survive compaction instead of being
-        silently dropped.
+        """Pull every item out of history that new_input refers back to by id, so it
+        survives compaction instead of being summarized away.
 
-        _build_compaction's "keep every user message verbatim" rule only preserves
-        OpenAIResponseMessage items -- a function_call in history that's about to be
-        answered by new_input would otherwise be summarized away, leaving the
-        function_call_output with no corresponding function_call anywhere in the final
-        input and making convert_response_input_to_chat_messages raise. Returns
-        (compactable_history, open_calls); open_calls must be re-inserted into the
-        final input, after the compaction item and before new_input.
+        _build_compaction only keeps user messages verbatim, so any other history item
+        the new turn depends on would otherwise be lost:
+
+        - a function_call answered by a function_call_output (matched on call_id):
+          without it the output has no corresponding call and
+          convert_response_input_to_chat_messages raises;
+        - an mcp_approval_request answered by an mcp_approval_response (matched on
+          approval_request_id): without it ChatCompletionContext cannot pair the
+          approval with its request, so the approved tool call is sent back for
+          approval again instead of being executed.
+
+        Returns (compactable_history, referenced_items); referenced_items keep their
+        original order and must be re-inserted into the final input after the
+        compaction item and before new_input.
         """
         pending_call_ids = {
             item.call_id for item in new_input if isinstance(item, OpenAIResponseInputFunctionToolCallOutput)
         }
-        if not pending_call_ids:
+        pending_approval_ids = {
+            item.approval_request_id for item in new_input if isinstance(item, OpenAIResponseMCPApprovalResponse)
+        }
+        if not pending_call_ids and not pending_approval_ids:
             return history, []
         compactable_history: list[OpenAIResponseInput] = []
-        open_calls: list[OpenAIResponseInput] = []
+        referenced_items: list[OpenAIResponseInput] = []
         for item in history:
-            if isinstance(item, OpenAIResponseOutputMessageFunctionToolCall) and item.call_id in pending_call_ids:
-                open_calls.append(item)
+            is_open_call = (
+                isinstance(item, OpenAIResponseOutputMessageFunctionToolCall) and item.call_id in pending_call_ids
+            )
+            is_pending_approval = isinstance(item, OpenAIResponseMCPApprovalRequest) and item.id in pending_approval_ids
+            if is_open_call or is_pending_approval:
+                referenced_items.append(item)
             else:
                 compactable_history.append(item)
-        return compactable_history, open_calls
+        return compactable_history, referenced_items
 
     @staticmethod
     def _open_calls_from_messages(
         messages: list[OpenAIMessageParam], new_input: list[OpenAIResponseInput]
     ) -> list[OpenAIResponseInput]:
-        """Same as _split_open_tool_calls, but reconstructs the function_call items
+        """Same as the function_call half of _split_referenced_history_items, but reconstructs the function_call items
         from chat-message tool_calls instead of OpenAIResponseInput items -- for
         conversation= mode's compaction, which only has the stored message log, not
         the original items (see messages_for_compaction).
@@ -2082,7 +2113,7 @@ class OpenAIResponsesImpl:
 
         messages_for_compaction, when given, is compacted from instead of history --
         history is then expected to be empty, and only used as the source for the
-        open-tool-call carryover. It's set only in conversation= mode once a stored
+        referenced-item carryover (see _split_referenced_history_items). It's set only in conversation= mode once a stored
         chat-message log exists, because that mode's raw item log never shrinks after
         a compaction (compaction items are deliberately excluded from it), so using it
         here would re-summarize the entire, ever-growing raw history every turn after
@@ -2117,10 +2148,12 @@ class OpenAIResponsesImpl:
                 token_count = self._count_tokens(history + new_input, model=model, extra_body=extra_body)
             if token_count > threshold:
                 logger.debug("Auto-compacting", token_count=token_count, threshold=threshold)
-                compactable_history, open_calls = self._split_open_tool_calls(history, new_input)
+                compactable_history, referenced_items = self._split_referenced_history_items(history, new_input)
                 summarizer_messages = messages_for_compaction
                 if messages_for_compaction is not None:
-                    open_calls = open_calls + self._open_calls_from_messages(messages_for_compaction, new_input)
+                    referenced_items = referenced_items + self._open_calls_from_messages(
+                        messages_for_compaction, new_input
+                    )
                     summarizer_messages = self._drop_open_tool_calls_from_messages(messages_for_compaction, new_input)
                 try:
                     result, chat_usage = await self._build_compaction(
@@ -2154,7 +2187,7 @@ class OpenAIResponsesImpl:
                         threshold=threshold,
                     )
                     return history + new_input, None, chat_usage
-                return result.output_items + open_calls + new_input, result.compaction_item, chat_usage
+                return result.output_items + referenced_items + new_input, result.compaction_item, chat_usage
 
         return history + new_input, None, None
 

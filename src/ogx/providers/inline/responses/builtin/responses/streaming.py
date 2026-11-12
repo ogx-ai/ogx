@@ -411,7 +411,6 @@ class StreamingResponseOrchestrator:
             store=self.store,
             prompt_cache_key=self.prompt_cache_key,
             previous_response_id=self.previous_response_id,
-            usage=self.accumulated_usage,
         )
 
         self.sequence_number += 1

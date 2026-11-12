@@ -4,22 +4,20 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-"""Regression tests for #6829: automatic compaction put the new question before the
-summary (so the model's last message was its own summary, producing empty replies on
-some models), stored a hidden response the caller never asked for, dropped
-instructions/max_output_tokens/extra_body, dropped the summarization call's usage,
-checked a stale threshold, could silently corrupt history on an empty summary, and
-only ever compacted the latest turn in conversation= mode instead of the whole
-conversation.
-
-See test_auto_compaction_followups.py for regression tests covering code-review
-follow-up fixes on top of this one.
+"""Automatic compaction (context_management) via previous_response_id and single-call
+input: the new turn always follows the compaction item, no hidden response is stored,
+instructions/extra_body reach the summarizer, the summary has its own output budget and
+its usage is reported, the threshold counts current context, and a failed or empty
+summary falls back to the original history (#6829).
 """
 
 from unittest.mock import AsyncMock
 
 from ogx.providers.inline.responses.builtin.responses.openai_responses import OpenAIResponsesImpl
-from ogx_api.openai_responses import OpenAIResponseCompaction, OpenAIResponseMessage
+from ogx_api.openai_responses import (
+    OpenAIResponseCompaction,
+    OpenAIResponseMessage,
+)
 from ogx_api.responses.models import CreateResponseRequest
 from tests.unit.providers.responses.builtin.compaction_test_helpers import (
     _compaction_completion,
@@ -347,114 +345,152 @@ class TestAutoCompactionEndToEnd:
         assert main_call.args[0].messages[-1].content == "Summarize what we discussed."
 
 
-class TestConversationModeCompaction:
-    """Point 8: conversation= mode must compact the whole conversation, not just the
-    newly submitted turn.
+class TestPreviousResponseIdChaining:
+    """Multi-turn chaining check requested in code review of #6838's Test Plan
+    section, exercising a second previous_response_id turn built on a compacting
+    one -- not just the final response object a single call produces.
     """
 
-    def _conversation_pages(self, total_items: int, page_size: int = 100):
-        """Build the sequence of ConversationItemList pages _fetch_full_conversation_items
-        will walk through -- more than one page when total_items exceeds page_size, so the
-        pagination loop itself is exercised, not just a single-page call.
-        """
-        from ogx_api.conversations.models import ConversationItemList
-
-        items = [OpenAIResponseMessage(id=f"item-{i}", role="user", content=f"Message {i}") for i in range(total_items)]
-        pages = []
-        for start in range(0, total_items, page_size):
-            chunk = items[start : start + page_size]
-            has_more = start + page_size < total_items
-            pages.append(
-                ConversationItemList(
-                    data=chunk,
-                    first_id=chunk[0].id if chunk else None,
-                    last_id=chunk[-1].id if chunk else None,
-                    has_more=has_more,
-                )
-            )
-        return pages
-
-    async def test_full_history_is_compacted_not_just_the_new_turn(
-        self, openai_responses_impl, mock_inference_api, mock_responses_store, mock_conversations_api
+    async def test_previous_response_id_chains_correctly_across_two_compacting_turns(
+        self, openai_responses_impl, mock_inference_api, mock_responses_store
     ):
-        from ogx_api import OpenAIUserMessageParam
-
-        mock_responses_store.get_conversation_messages.return_value = [
-            OpenAIUserMessageParam(content=f"Message {i}") for i in range(25)
-        ]
+        """End-to-end chaining check tying together point 4: build on a response that
+        itself compacted, and confirm the second turn still only summarizes its
+        history once, not twice.
+        """
+        mock_responses_store.get_response_object.return_value = _previous_response()
         mock_inference_api.openai_chat_completion = _dual_inference_mock()
 
-        await openai_responses_impl.create_openai_response(
+        first_result = await openai_responses_impl.create_openai_response(
             CreateResponseRequest(
-                input="What did we discuss?",
+                input="What is the code word?",
                 model="meta-llama/Llama-3.1-8B-Instruct",
-                conversation="conv_272fa1af1b67b662ee7ef05f72ec300d92425257645a531a",
+                previous_response_id="resp-previous-123",
                 context_management=[{"type": "compaction", "compact_threshold": 1}],
             )
         )
 
-        # Performance note (code review of #6838): once a stored message log exists,
-        # the conversation's raw item log is never fetched at all -- not even a single
-        # page -- see TestConversationRawItemLogFetchedOnlyWhenNeeded.
-        mock_conversations_api.list_items.assert_not_called()
-        compaction_call = next(
-            call for call in mock_inference_api.openai_chat_completion.call_args_list if not call.args[0].stream
+        # Capture what the first (compacting) turn actually stored, and feed it back
+        # as the second turn's previous_response -- mirroring how get_response_object
+        # would resolve a real previous_response_id chained onto this one.
+        final_store_call = next(
+            call
+            for call in mock_responses_store.upsert_response_object.call_args_list
+            if call.kwargs["response_object"].status == "completed"
         )
-        # The summarization call's messages must reflect the full 25-item history, not
-        # just the single new turn.
-        assert len(compaction_call.args[0].messages) > 2
+        stored_input = final_store_call.kwargs["input"]
+        chained_previous_response = _previous_response()
+        chained_previous_response.input = stored_input
+        chained_previous_response.output = first_result.output
+        chained_previous_response.messages = final_store_call.kwargs["messages"]
+        mock_responses_store.get_response_object.return_value = chained_previous_response
 
-    async def test_non_compacting_conversation_turn_still_stores_only_the_new_turn(
-        self, openai_responses_impl, mock_inference_api, mock_responses_store, mock_conversations_api
+        await openai_responses_impl.create_openai_response(
+            CreateResponseRequest(
+                input="And the follow-up?",
+                model="meta-llama/Llama-3.1-8B-Instruct",
+                previous_response_id=first_result.id,
+                context_management=[{"type": "compaction", "compact_threshold": 1}],
+            )
+        )
+
+        second_compaction_call = [
+            call for call in mock_inference_api.openai_chat_completion.call_args_list if not call.args[0].stream
+        ][-1]
+        compaction_item_count = sum(
+            1
+            for m in second_compaction_call.args[0].messages
+            if getattr(m, "content", None) and "Summary of prior turns." in str(m.content)
+        )
+        assert compaction_item_count == 1
+
+
+class TestSummaryMaxOutputTokensDefault:
+    async def test_default_is_none_not_a_small_cap(self, openai_responses_impl):
+        assert openai_responses_impl.compaction_config.summary_max_output_tokens is None
+
+    async def test_uncapped_summary_call_reaches_a_reasoning_model_without_truncation(
+        self, openai_responses_impl, mock_inference_api, mock_responses_store
     ):
-        """A turn where compaction doesn't fire must keep conversation= mode's existing
-        O(1)-per-response storage behavior -- this fix must not make every conversation
-        turn snapshot the full history.
-        """
-        from ogx_api import OpenAIUserMessageParam
-
-        pages = self._conversation_pages(total_items=5, page_size=10)
-        mock_conversations_api.list_items = AsyncMock(side_effect=pages)
-        mock_responses_store.get_conversation_messages.return_value = [
-            OpenAIUserMessageParam(content=f"Message {i}") for i in range(5)
-        ]
+        mock_responses_store.get_response_object.return_value = _previous_response()
         mock_inference_api.openai_chat_completion = _dual_inference_mock()
 
         await openai_responses_impl.create_openai_response(
             CreateResponseRequest(
-                input="A new question.",
+                input="What is the code word?",
                 model="meta-llama/Llama-3.1-8B-Instruct",
-                conversation="conv_272fa1af1b67b662ee7ef05f72ec300d92425257645a531a",
-                context_management=[{"type": "compaction", "compact_threshold": 100000}],
+                previous_response_id="resp-previous-123",
+                context_management=[{"type": "compaction", "compact_threshold": 1}],
             )
         )
 
-        store_call_args = mock_responses_store.upsert_response_object.call_args
-        stored_input = store_call_args.kwargs["input"]
-        assert len(stored_input) == 1
-        assert stored_input[0].content[0].text == "A new question."
+        compaction_call = next(
+            call for call in mock_inference_api.openai_chat_completion.call_args_list if not call.args[0].stream
+        )
+        assert compaction_call.args[0].max_completion_tokens is None
 
 
-class TestManualCompactEndpoint:
-    """The manual /v1/responses/compact endpoint's own dead-parameter bugs (point 3's
-    "unlike the manual endpoint" claim didn't hold up under inspection -- it drops
-    extra_body/max_output_tokens too) and its empty-summary handling, which differs
-    deliberately from the automatic path: the caller explicitly asked to compact here,
-    so a hollow result is surfaced as an error rather than silently kept as-is.
+class TestTruncatedToEmptySummaryKeepsItsUsage:
+    """A reasoning model that spends its whole output-token cap thinking, and never
+    writes a summary, must still be distinguishable (via the finish_reason=="length"
+    warning) from any other empty-summary cause, and its wasted tokens must still be
+    accounted for rather than silently dropped.
     """
 
-    async def test_extra_body_and_max_output_tokens_reach_the_summarization_call(
-        self, openai_responses_impl, mock_inference_api
+    async def test_empty_summary_truncated_by_length_still_returns_its_usage(
+        self, openai_responses_impl, mock_inference_api, mock_responses_store, caplog
     ):
-        mock_inference_api.openai_chat_completion = _dual_inference_mock()
+        mock_responses_store.get_response_object.return_value = _previous_response()
 
-        await openai_responses_impl.compact_openai_response(
-            model="test-model",
-            input="Some content to compact.",
-            extra_body={"cache_salt": "xyz"},
-            max_output_tokens=77,
+        async def side_effect(params):
+            if params.stream:
+                from tests.unit.providers.responses.builtin.test_openai_responses_helpers import fake_stream
+
+                return fake_stream()
+            return _compaction_completion(None, finish_reason="length", prompt_tokens=200, completion_tokens=150)
+
+        mock_inference_api.openai_chat_completion = AsyncMock(side_effect=side_effect)
+
+        with caplog.at_level("WARNING"):
+            result = await openai_responses_impl.create_openai_response(
+                CreateResponseRequest(
+                    input="What is the code word?",
+                    model="meta-llama/Llama-3.1-8B-Instruct",
+                    previous_response_id="resp-previous-123",
+                    context_management=[{"type": "compaction", "compact_threshold": 1}],
+                )
+            )
+
+        assert "own output token cap" in caplog.text
+        # The wasted summarization call's tokens must still show up, not be dropped
+        # just because the summary itself came back empty.
+        assert result.usage.input_tokens >= 200
+        assert result.usage.output_tokens >= 150
+
+
+class TestAutoCompactionSummarizerExceptionFallsBackInsteadOfFailingTheTurn:
+    async def test_summarizer_call_raising_keeps_the_turn_working(
+        self, openai_responses_impl, mock_inference_api, mock_responses_store
+    ):
+        mock_responses_store.get_response_object.return_value = _previous_response()
+
+        async def side_effect(params):
+            if params.stream:
+                from tests.unit.providers.responses.builtin.test_openai_responses_helpers import fake_stream
+
+                return fake_stream()
+            raise RuntimeError("summarization model is over capacity")
+
+        mock_inference_api.openai_chat_completion = AsyncMock(side_effect=side_effect)
+
+        result = await openai_responses_impl.create_openai_response(
+            CreateResponseRequest(
+                input="What is the code word?",
+                model="meta-llama/Llama-3.1-8B-Instruct",
+                previous_response_id="resp-previous-123",
+                context_management=[{"type": "compaction", "compact_threshold": 1}],
+            )
         )
 
-        params = mock_inference_api.openai_chat_completion.call_args.args[0]
-        assert params.max_completion_tokens == 77
-        assert params.cache_salt == "xyz"
+        assert result.status == "completed"
+        assert not any(isinstance(item, OpenAIResponseCompaction) for item in result.output)
