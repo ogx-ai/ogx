@@ -282,6 +282,53 @@ async def test_file_batch_pagination(vector_io_adapter):
     assert all_returned_ids == {"file_2", "file_3", "file_4", "file_5"}
 
 
+async def test_file_batch_pagination_before_cursor(vector_io_adapter):
+    """A `before` cursor returns the page immediately preceding it, not the head of the list."""
+    store_id = "vs_1234"
+    file_ids = [f"file_{i}" for i in range(1, 7)]
+
+    files = {}
+    for i, file_id in enumerate(file_ids):
+        files[file_id] = VectorStoreFileObject(
+            id=file_id,
+            object="vector_store.file",
+            usage_bytes=1000,
+            created_at=int(time.time()) + i,
+            vector_store_id=store_id,
+            status="completed",
+            chunking_strategy=VectorStoreChunkingStrategyAuto(),
+        )
+
+    vector_io_adapter.openai_vector_stores[store_id] = {
+        "id": store_id,
+        "name": "Test Store",
+        "files": files,
+        "file_ids": file_ids,
+    }
+
+    vector_io_adapter._load_openai_vector_store_file = AsyncMock(
+        side_effect=lambda vs_id, f_id: files[f_id].model_dump()
+    )
+    vector_io_adapter.openai_attach_file_to_vector_store = AsyncMock()
+
+    batch = await vector_io_adapter.openai_create_vector_store_file_batch(
+        vector_store_id=store_id, params=OpenAICreateVectorStoreFileBatchRequestWithExtraBody(file_ids=file_ids)
+    )
+
+    previous_page = await vector_io_adapter.openai_list_files_in_vector_store_file_batch(
+        batch_id=batch.id,
+        vector_store_id=store_id,
+        limit=2,
+        order="asc",
+        before="file_5",
+    )
+
+    assert [file_obj.id for file_obj in previous_page.data] == ["file_3", "file_4"]
+    assert previous_page.first_id == "file_3"
+    assert previous_page.last_id == "file_4"
+    assert previous_page.has_more is True
+
+
 async def test_file_batch_status_filtering(vector_io_adapter):
     """Test file batch status filtering."""
     store_id = "vs_1234"
