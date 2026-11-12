@@ -57,6 +57,8 @@ class OGXError(Exception):
     """A base class for all OGX errors with an HTTP status code for API responses."""
 
     status_code: httpx2.codes
+    # OpenAI's machine-readable error code, written to the error body when set.
+    code: str | None = None
 
     def __init__(self, message: str):
         super().__init__(message)
@@ -347,6 +349,17 @@ class ServiceNotEnabledError(OGXError, ValueError):
         if provider_specific_message:
             message += f"\n\n{provider_specific_message}"
         super().__init__(message)
+
+
+class ContextLengthExceededError(OGXError):
+    """Raised when a request does not fit the model's context window.
+
+    Maps to HTTP 400 Bad Request with OpenAI's ``context_length_exceeded`` code:
+    the caller has to shorten the input, and retrying the same request cannot succeed.
+    """
+
+    status_code: httpx2.codes = httpx2.codes.BAD_REQUEST
+    code = "context_length_exceeded"
 
 
 class InternalServerError(OGXError):
