@@ -260,7 +260,7 @@ class UnstructuredFileProcessor:
             element_type = element.category  # Use .category attribute
 
             # Generate chunk_id
-            chunk_id = generate_chunk_id(document_id, text, str(idx))
+            chunk_id = generate_chunk_id(document_id=document_id, chunk_text=text, chunk_window=str(idx))
 
             # Calculate token count (heuristic: 1 token ≈ 4 characters)
             content_token_count = len(text) // 4

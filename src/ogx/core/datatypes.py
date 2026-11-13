@@ -624,6 +624,12 @@ class FileIngestionParams(BaseModel):
         default=128,
         description="Default overlap in tokens between chunks (original default: 512 // 4 = 128)",
     )
+    embedding_batch_size: int = Field(
+        default=256,
+        ge=1,
+        le=2048,
+        description="Maximum number of chunks sent in one embeddings request when attaching a file. A file with more chunks is embedded in several sequential requests. At most 2048, the embeddings API input limit.",
+    )
 
 
 class ChunkRetrievalParams(BaseModel):
