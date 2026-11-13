@@ -6,6 +6,7 @@
 
 """Unit tests for Anthropic<->OpenAI translation utilities in anthropic_translation."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -812,6 +813,131 @@ class TestStreamingTranslation:
 
         msg_delta = [e for e in events if e.type == "message_delta"]
         assert msg_delta[0].delta.stop_reason == "tool_use"
+
+
+def _make_tool_call_chunk(tc_idx, arguments, *, name=None, call_id=None, finish_reason=None):
+    tc_delta = MagicMock()
+    tc_delta.index = tc_idx
+    tc_delta.id = call_id
+    tc_delta.function = MagicMock()
+    tc_delta.function.name = name
+    tc_delta.function.arguments = arguments
+
+    chunk = MagicMock()
+    chunk.choices = [MagicMock()]
+    chunk.choices[0].delta = MagicMock()
+    chunk.choices[0].delta.content = None
+    chunk.choices[0].delta.tool_calls = [tc_delta]
+    chunk.choices[0].finish_reason = finish_reason
+    chunk.usage = None
+    return chunk
+
+
+class TestStreamingToolCallNonObjectArguments:
+    """#6912: tool_use.input must end up an object in streaming, the same way
+    openai_response_to_anthropic already makes it one non-streaming (#6864), without
+    buffering each tool call's whole argument string to do it.
+    """
+
+    @staticmethod
+    async def _run(chunks):
+        async def stream():
+            for c in chunks:
+                yield c
+
+        events = [event async for event in openai_stream_to_anthropic(stream(), "m")]
+        json_deltas = [e for e in events if e.type == "content_block_delta" and hasattr(e.delta, "partial_json")]
+        return "".join(d.delta.partial_json for d in json_deltas)
+
+    async def test_valid_object_split_across_chunks_streams_through_unchanged(self):
+        chunks = [
+            _make_tool_call_chunk(0, '{"city":', name="get_weather", call_id="call_1"),
+            _make_tool_call_chunk(0, ' "Boston"}', finish_reason="tool_calls"),
+        ]
+        joined = await self._run(chunks)
+        assert json.loads(joined) == {"city": "Boston"}
+
+    @pytest.mark.parametrize("arguments", ["[1, 2]", '"hello"', "42", "true", "null"])
+    async def test_non_object_value_becomes_empty_object(self, arguments):
+        chunks = [
+            _make_tool_call_chunk(0, arguments, name="get_weather", call_id="call_1", finish_reason="tool_calls"),
+        ]
+        joined = await self._run(chunks)
+        assert joined == "{}"
+
+    async def test_non_object_value_split_across_chunks_still_becomes_empty_object(self):
+        """The decision is made from the first non-whitespace character alone, so a
+        non-object value split across several chunks (not just a single one) must
+        still collapse to exactly one "{}", not a partial/garbled string value.
+        """
+        chunks = [
+            _make_tool_call_chunk(0, '"he', name="get_weather", call_id="call_1"),
+            _make_tool_call_chunk(0, "llo"),
+            _make_tool_call_chunk(0, '"', finish_reason="tool_calls"),
+        ]
+        joined = await self._run(chunks)
+        assert joined == "{}"
+
+    async def test_leading_whitespace_before_object_is_held_back_then_flushed(self):
+        chunks = [
+            _make_tool_call_chunk(0, " ", name="get_weather", call_id="call_1"),
+            _make_tool_call_chunk(0, '{"city": "Boston"}', finish_reason="tool_calls"),
+        ]
+        joined = await self._run(chunks)
+        assert json.loads(joined) == {"city": "Boston"}
+
+    async def test_leading_whitespace_before_non_object_still_becomes_empty_object(self):
+        chunks = [
+            _make_tool_call_chunk(0, "  ", name="get_weather", call_id="call_1"),
+            _make_tool_call_chunk(0, "42", finish_reason="tool_calls"),
+        ]
+        joined = await self._run(chunks)
+        assert joined == "{}"
+
+    async def test_truly_empty_arguments_still_close_as_empty_object(self):
+        """A tool call with no arguments content at all (e.g. a no-arg tool) never
+        gets a chunk to decide from; closing it out must still produce a parseable {},
+        matching normalize_tool_call_arguments' own empty-arguments case.
+        """
+        chunks = [
+            _make_tool_call_chunk(0, None, name="get_time", call_id="call_1", finish_reason="tool_calls"),
+        ]
+        joined = await self._run(chunks)
+        assert joined == "{}"
+
+    async def test_object_that_turns_out_truncated_is_a_known_limitation_not_caught(self):
+        """Documents the accepted tradeoff: once the first non-whitespace character
+        confirms an object, every chunk streams through immediately, so truncated/
+        invalid JSON discovered only once the tool call ends cannot be replaced
+        in-flight. (Catching it would mean buffering every tool call's entire
+        argument string, delaying valid ones too.)
+        """
+        chunks = [
+            _make_tool_call_chunk(0, '{"city": "Bos', name="get_weather", call_id="call_1", finish_reason="tool_calls"),
+        ]
+        joined = await self._run(chunks)
+        assert joined == '{"city": "Bos'
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(joined)
+
+    async def test_two_tool_calls_are_decided_independently(self):
+        chunks = [
+            _make_tool_call_chunk(0, '{"a": 1}', name="tool_a", call_id="call_1"),
+            _make_tool_call_chunk(1, "[1, 2]", name="tool_b", call_id="call_2", finish_reason="tool_calls"),
+        ]
+
+        async def stream():
+            for c in chunks:
+                yield c
+
+        events = [event async for event in openai_stream_to_anthropic(stream(), "m")]
+        json_deltas = [e for e in events if e.type == "content_block_delta" and hasattr(e.delta, "partial_json")]
+        by_index: dict[int, str] = {}
+        for d in json_deltas:
+            by_index[d.index] = by_index.get(d.index, "") + d.delta.partial_json
+
+        assert json.loads(by_index[0]) == {"a": 1}
+        assert by_index[1] == "{}"
 
 
 # -- SSE Parsing --
