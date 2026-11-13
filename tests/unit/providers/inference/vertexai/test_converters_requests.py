@@ -10,6 +10,7 @@ All google-genai types are mocked via SimpleNamespace — no SDK installation re
 """
 
 import base64
+import enum
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -156,6 +157,24 @@ class TestConvertFinishReason:
     def test_standard_mappings(self, input_reason, expected):
         """Test that standard mappings."""
         assert convert_finish_reason(input_reason) == expected
+
+    @pytest.mark.parametrize(
+        "member,expected",
+        [("STOP", "stop"), ("MAX_TOKENS", "length"), ("RECITATION", "content_filter"), ("OTHER", "stop")],
+    )
+    def test_google_genai_enum_members(self, member, expected):
+        """The SDK returns FinishReason enum members (a str Enum), whose str() is 'FinishReason.<NAME>'."""
+
+        # The unit-test conftest stubs google.genai, so mirror the SDK's str-mixin enum here.
+        class FinishReason(str, enum.Enum):
+            STOP = "STOP"
+            MAX_TOKENS = "MAX_TOKENS"
+            RECITATION = "RECITATION"
+            OTHER = "OTHER"
+
+        reason = FinishReason[member]
+        assert convert_finish_reason(reason) == expected
+        assert vertexai_converters._resolve_finish_reason(reason, has_tool_calls=False) == expected
 
     def test_none(self):
         """Test that none."""
