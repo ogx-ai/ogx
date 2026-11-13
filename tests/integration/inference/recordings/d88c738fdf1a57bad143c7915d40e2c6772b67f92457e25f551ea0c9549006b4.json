@@ -1,0 +1,78 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_with_tool_choice_none[txt=thegrid/text-standard-inference:chat_completion:tool_calling]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.thegrid.ai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "text-standard",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Pretend you are a weather assistant."
+        },
+        {
+          "role": "user",
+          "content": "What's the weather like in San Francisco, CA?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "text-standard",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-d88c738fdf1a",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "I\u2019m not able to pull real\u2011time weather data, so I can\u2019t tell you today\u2019s exact conditions in San\u202fFrancisco. For the most up\u2011to\u2011date forecast, I recommend checking a reliable source such as the National Weather Service, Weather.com, AccuWeather, or a weather app on your phone.\n\n**Typical San\u202fFrancisco climate**  \n- **Seasonal pattern:** The city enjoys a mild, Mediterranean climate year\u2011round.  \n- **Winter (Dec\u2011Feb):** Temperatures usually stay in the mid\u201150s\u202f\u00b0F (around 12\u201113\u202f\u00b0C) during the day, with occasional rain showers.  \n- **Spring (Mar\u2011May):** Daytime highs climb into the upper 50s to low 60s\u202f\u00b0F (13\u201117\u202f\u00b0C); mornings can still be cool and foggy.  \n- **Summer (Jun\u2011Aug):** Despite the reputation for heat, daytime highs often linger in the mid\u201160s\u202f\u00b0F (18\u201120\u202f\u00b0C) along the coast, while inland areas get warmer. Expect the famous marine layer and fog, especially in the mornings.  \n- **Fall (Sep\u2011Nov):** Generally the warmest and driest period, with daytime highs reaching the upper 60s\u202f\u00b0F (20\u201122\u202f\u00b0C) and low humidity.  \n\n**Typical daily pattern**  \n- **Morning:** Fog and cooler temps, especially near the water.  \n- **Midday:** Fog may burn off, revealing clearer skies and a modest temperature rise.  \n- **Evening:** Temperatures dip back down, and fog can roll back in.\n\nIf you need the exact forecast for today or the next few days, a quick check on a weather website or app will give you the most accurate, up\u2011to\u2011date information.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "The user asks about current weather. As a language model, I don't have real-time data. According to policies, I must disclose that I cannot provide real-time info, suggest checking reliable source. I can give typical climate for San Francisco. So respond accordingly."
+            }
+          }
+        ],
+        "created": 0,
+        "model": "openai/gpt-oss-120b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 434,
+          "prompt_tokens": 90,
+          "total_tokens": 524,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": null,
+            "audio_tokens": null,
+            "reasoning_tokens": 52,
+            "rejected_prediction_tokens": null
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 65
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 52
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}
