@@ -56,6 +56,7 @@ from ogx.core.utils.context import preserve_contexts_async_generator
 from ogx.core.utils.exec import in_notebook
 from ogx.log import get_logger, setup_logging
 from ogx.providers.utils.files.response import response_body_bytes
+from ogx_api.common.upload_limits import PreReadUploadFile
 
 logger = get_logger(name=__name__, category="core")
 
@@ -155,16 +156,11 @@ def convert_to_pydantic(annotation: Any, value: Any) -> Any:
         raise ValueError(f"Failed to convert parameter {value} into {annotation}: {e}") from e
 
 
-class LibraryClientUploadFile:
-    """LibraryClient UploadFile object that mimics FastAPI's UploadFile interface."""
+class LibraryClientUploadFile(PreReadUploadFile):
+    """In-memory upload the library client passes to route handlers in place of a multipart-parsed one."""
 
-    def __init__(self, filename: str, content: bytes):
-        self.filename = filename
-        self.content = content
-        self.content_type = "application/octet-stream"
-
-    async def read(self) -> bytes:
-        return self.content
+    def __init__(self, filename: str, content: bytes) -> None:
+        super().__init__(content, filename=filename, content_type="application/octet-stream")
 
 
 class LibraryClientHttpxResponse:
