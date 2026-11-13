@@ -77,6 +77,11 @@ OPENAI_VECTOR_STORES_FILES_PREFIX = f"openai_vector_stores_files:milvus:{VERSION
 OPENAI_VECTOR_STORES_FILES_CONTENTS_PREFIX = f"openai_vector_stores_files_contents:milvus:{VERSION}::"
 
 
+def _like_literal(text: str) -> str:
+    """Escape text for use inside a double-quoted Milvus string literal."""
+    return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
 class MilvusIndex(EmbeddingIndex):
     """Embedding index backed by a Milvus collection."""
 
@@ -256,10 +261,11 @@ class MilvusIndex(EmbeddingIndex):
         """
         Perform BM25-based keyword search using Milvus's built-in full-text search.
         """
-        try:
-            # Translate filters to Milvus expression format
-            filter_expr = self._translate_filters(filters) if filters else None
+        # Translate filters to Milvus expression format. Done before the try so an
+        # untranslatable filter raises instead of being dropped by the fallback.
+        filter_expr = self._translate_filters(filters) if filters else None
 
+        try:
             search_kwargs = {
                 "collection_name": self.collection_name,
                 "data": [query_string],  # Raw text query
@@ -295,17 +301,22 @@ class MilvusIndex(EmbeddingIndex):
         except Exception as e:
             logger.error("Error performing BM25 search", error=str(e))
             # Fallback to simple text search
-            return await self._fallback_keyword_search(query_string, k, score_threshold)
+            return await self._fallback_keyword_search(query_string, k, score_threshold, filter_expr)
 
-    async def _fallback_keyword_search(self, query_string: str, k: int, score_threshold: float) -> QueryChunksResponse:
+    async def _fallback_keyword_search(
+        self, query_string: str, k: int, score_threshold: float, filter_expr: str | None = None
+    ) -> QueryChunksResponse:
         """
         Fallback to simple text search when BM25 search is not available.
         """
-        # Simple text search using content field
+        # Simple text search using content field, still restricted by the caller's filters.
+        # Milvus only accepts a string literal after LIKE (a template placeholder is a parse
+        # error there, and one inside quotes is never substituted), so the query is written
+        # into the literal with backslashes and double quotes escaped.
+        text_filter = f'content like "%{_like_literal(query_string)}%"'
         search_res = await self.client.query(
             collection_name=self.collection_name,
-            filter='content like "%{content}%"',
-            filter_params={"content": query_string},
+            filter=f"({filter_expr}) and {text_filter}" if filter_expr else text_filter,
             output_fields=["*"],
             limit=k,
         )
