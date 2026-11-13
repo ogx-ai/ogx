@@ -86,3 +86,12 @@ def test_types_surface_contains_core_symbols() -> None:
     }
     missing = required - set(types.__all__)
     assert not missing, f"Types surface missing required symbols: {sorted(missing)}"
+
+
+def test_top_level_all_exports_are_bound() -> None:
+    """Every symbol in ogx_api.__all__ must actually exist on ogx_api."""
+    missing = [name for name in ogx_api.__all__ if not hasattr(ogx_api, name)]
+    assert not missing, f"ogx_api.__all__ contains unbound symbols: {missing}"
+    assert hasattr(ogx_api, "remove_null_from_anyof")
+    assert hasattr(ogx_api, "schema_utils")
+    assert not hasattr(ogx_api, "ViolationLevel")
