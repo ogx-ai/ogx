@@ -1406,3 +1406,51 @@ class TestPassthroughStreamClientKwargs:
 async def _empty_lines():
     return
     yield
+
+
+class TestStopReasonWithToolCalls:
+    """Backends such as Gemini end a tool-requesting turn with finish_reason "stop"."""
+
+    @staticmethod
+    def _tool_delta():
+        function = SimpleNamespace(name="get_weather", arguments='{"location": "SF"}')
+        return SimpleNamespace(index=0, id="call_1", function=function)
+
+    @staticmethod
+    def _response(finish_reason, with_tool_call=True):
+        tc = MagicMock()
+        tc.id = "call_1"
+        tc.function.name = "get_weather"
+        tc.function.arguments = '{"location": "SF"}'
+        resp = MagicMock()
+        resp.choices = [MagicMock()]
+        resp.choices[0].message = MagicMock()
+        resp.choices[0].message.content = None
+        resp.choices[0].message.tool_calls = [tc] if with_tool_call else None
+        resp.choices[0].finish_reason = finish_reason
+        resp.usage = None
+        return resp
+
+    def test_stop_with_tool_calls_is_tool_use(self):
+        result = openai_response_to_anthropic(self._response("stop"), "m")
+
+        assert result.content[0].type == "tool_use"
+        assert result.stop_reason == "tool_use"
+
+    def test_stop_without_tool_calls_stays_end_turn(self):
+        assert openai_response_to_anthropic(self._response("stop", with_tool_call=False), "m").stop_reason == "end_turn"
+
+    def test_content_filter_with_tool_calls_stays_end_turn(self):
+        assert openai_response_to_anthropic(self._response("content_filter"), "m").stop_reason == "end_turn"
+
+    async def test_streamed_stop_with_tool_calls_is_tool_use(self):
+        events = await _stream_events(
+            [_delta_chunk(tool_calls=[self._tool_delta()]), _delta_chunk(finish_reason="stop")]
+        )
+
+        assert [e.delta.stop_reason for e in events if e.type == "message_delta"] == ["tool_use"]
+
+    async def test_streamed_stop_without_tool_calls_stays_end_turn(self):
+        events = await _stream_events([_delta_chunk(content="hi", finish_reason="stop")])
+
+        assert [e.delta.stop_reason for e in events if e.type == "message_delta"] == ["end_turn"]
