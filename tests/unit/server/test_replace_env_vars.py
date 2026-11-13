@@ -9,6 +9,9 @@ import os
 import pytest
 
 from ogx.core.stack import EnvVarError, extract_env_var_references, replace_env_vars
+from ogx.core.storage.datatypes import PostgresSqlStoreConfig
+from ogx.providers.remote.inference.vertexai.config import VertexAIConfig
+from ogx.providers.remote.inference.vllm.config import VLLMInferenceAdapterConfig
 
 
 @pytest.fixture
@@ -136,6 +139,50 @@ def test_explicit_strings_preserved(setup_env_vars):
     data = {"port": "8080", "enabled": "true", "count": "123", "ratio": "3.14"}
     expected = {"port": "8080", "enabled": "true", "count": "123", "ratio": "3.14"}
     assert replace_env_vars(data) == expected
+
+
+@pytest.mark.parametrize("value", ["12345678", "0123", "3.14", "1e5"])
+def test_numeric_env_value_stays_string(monkeypatch, value):
+    # Pydantic converts these for int/float fields; str fields must get the exact value back
+    monkeypatch.setenv("NUMERIC_VAR", value)
+    assert replace_env_vars("${env.NUMERIC_VAR}") == value
+    assert replace_env_vars("${env.NUMERIC_VAR:=default}") == value
+
+
+def test_numeric_default_stays_string(setup_env_vars):
+    assert replace_env_vars("${env.NOT_SET:=5432}") == "5432"
+
+
+@pytest.mark.parametrize("value,expected", [("true", True), ("False", False)])
+def test_boolean_env_value_is_converted(monkeypatch, value, expected):
+    monkeypatch.setenv("BOOL_VAR", value)
+    assert replace_env_vars("${env.BOOL_VAR}") is expected
+
+
+def test_postgres_config_with_numeric_password(monkeypatch):
+    for name in ("POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_POOL_SIZE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("POSTGRES_PASSWORD", "0123")
+    config = PostgresSqlStoreConfig(**replace_env_vars(PostgresSqlStoreConfig.sample_run_config()))
+    assert config.password.get_secret_value() == "0123"
+    assert config.pool_size == 10
+    assert config.engine_str.port == 5432
+
+
+def test_vertexai_config_with_numeric_project(monkeypatch):
+    # GCP project numbers are digits only and are accepted wherever a project ID is
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "123456789012")
+    config = VertexAIConfig(**replace_env_vars(VertexAIConfig.sample_run_config()))
+    assert config.project == "123456789012"
+
+
+@pytest.mark.parametrize("value,expected", [("0", False), ("1", True)])
+def test_vllm_legacy_tls_verify_from_env(monkeypatch, value, expected):
+    # postgres-demo still ships the deprecated tls_verify: ${env.VLLM_TLS_VERIFY:=true}
+    monkeypatch.setenv("VLLM_TLS_VERIFY", value)
+    with pytest.warns(DeprecationWarning, match="tls_verify"):
+        config = VLLMInferenceAdapterConfig(**replace_env_vars({"tls_verify": "${env.VLLM_TLS_VERIFY:=true}"}))
+    assert config.network.tls.verify is expected
 
 
 def test_resource_with_empty_vector_store_id_skipped(setup_env_vars):

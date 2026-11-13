@@ -607,6 +607,18 @@ class TestVLLMBackwardCompatibility:
         assert config.network.tls is not None
         assert config.network.tls.verify is False
 
+    @pytest.mark.parametrize("value,expected", [("0", False), ("1", True), ("false", False)])
+    def test_legacy_tls_verify_bool_string(self, value, expected):
+        """Test that bool-like strings from env substitution are read as booleans, not paths."""
+        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
+
+        with pytest.warns(DeprecationWarning, match="tls_verify.*deprecated"):
+            config = VLLMInferenceAdapterConfig(tls_verify=value)
+
+        assert config.network is not None
+        assert config.network.tls is not None
+        assert config.network.tls.verify is expected
+
     def test_legacy_tls_verify_path(self):
         """Test that legacy tls_verify path is migrated."""
         from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
