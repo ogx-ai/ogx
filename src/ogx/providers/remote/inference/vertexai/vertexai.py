@@ -636,6 +636,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         async def _iter() -> AsyncIterator[OpenAIChatCompletionChunk]:
             is_first_chunk = True
             last_chunk: Any = None
+            next_tool_call_index = 0
             async for chunk in stream:
                 signatures: dict[str, str] = {}
                 openai_chunk = converters.convert_gemini_stream_chunk_to_openai(
@@ -645,6 +646,11 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                     is_first_chunk=is_first_chunk,
                     signatures_out=signatures,
                 )
+                # Gemini sends whole function calls, and positions restart in each chunk.
+                for choice in openai_chunk.choices:
+                    for tool_call in choice.delta.tool_calls or []:
+                        tool_call.index = next_tool_call_index
+                        next_tool_call_index += 1
                 # Persist before yield: code after yield only runs when the
                 # consumer pulls the next item, and is skipped if the stream is
                 # closed after this chunk (client has the call id already).

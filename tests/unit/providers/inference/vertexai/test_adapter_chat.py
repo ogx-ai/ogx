@@ -633,6 +633,45 @@ class TestStreamChatCompletion:
         # Exactly 1 chunk — include_usage=False means no extra chunk
         assert len(chunks) == 1
 
+    async def test_stream_tool_call_indices_continue_across_chunks(self, monkeypatch):
+        """Function calls streamed in separate chunks get distinct, increasing tool-call indices."""
+        adapter = VertexAIInferenceAdapter(config=VertexAIConfig(project="p", location="l"))
+
+        def _function_call_chunk(*names: str) -> Any:
+            """Build a streaming chunk whose candidate holds one function_call part per name."""
+            parts = [
+                SimpleNamespace(text=None, thought=None, function_call=SimpleNamespace(name=name, args={"n": name}))
+                for name in names
+            ]
+            candidate = SimpleNamespace(
+                content=SimpleNamespace(parts=parts), finish_reason=None, index=0, logprobs_result=None
+            )
+            return SimpleNamespace(candidates=[candidate], usage_metadata=None)
+
+        async def fake_stream(**kwargs):
+            """Yield one function call, then two in one chunk, then one more."""
+            yield _function_call_chunk("first")
+            yield _function_call_chunk("second", "third")
+            yield _function_call_chunk("fourth")
+
+        fake_client = SimpleNamespace(
+            aio=SimpleNamespace(models=SimpleNamespace(generate_content_stream=AsyncMock(return_value=fake_stream())))
+        )
+        monkeypatch.setattr(adapter, "_get_client", lambda: fake_client)
+
+        stream = await adapter._stream_chat_completion(
+            client=cast(Any, fake_client),
+            provider_model_id="gemini-2.0-flash",
+            contents=[],
+            config=cast(Any, SimpleNamespace()),
+            model="gemini-2.0-flash",
+        )
+
+        tool_calls = [tc async for chunk in stream for tc in (chunk.choices[0].delta.tool_calls or [])]
+
+        assert [tc.function.name for tc in tool_calls] == ["first", "second", "third", "fourth"]
+        assert [tc.index for tc in tool_calls] == [0, 1, 2, 3]
+
 
 @pytest.fixture
 def make_adapter_with_mock_embed(monkeypatch):
