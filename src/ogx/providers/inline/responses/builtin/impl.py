@@ -205,13 +205,25 @@ class BuiltinResponsesImpl(Responses):
         request: CompactResponseRequest,
     ) -> OpenAICompactedResponse:
         assert self.openai_responses_impl is not None, "OpenAI responses not initialized"
+        # CompactResponseRequest has no typed extra_body/max_output_tokens fields, only the
+        # extra="allow" catch-all (request.model_extra). Every top-level extra field (e.g. a
+        # vendor param like top_k) is forwarded to the summarization call, merged with a
+        # nested "extra_body" dict if one was sent; "max_output_tokens" is read as its own
+        # key. Names colliding with the summarization call's own arguments are dropped in
+        # _build_compaction.
+        extra_params = dict(request.model_extra or {})
+        max_output_tokens = extra_params.pop("max_output_tokens", None)
+        nested_extra_body = extra_params.pop("extra_body", None)
+        if isinstance(nested_extra_body, dict):
+            extra_params.update(nested_extra_body)
         return await self.openai_responses_impl.compact_openai_response(
             model=request.model,
             input=request.input,
             instructions=request.instructions,
             previous_response_id=request.previous_response_id,
             prompt_cache_key=request.prompt_cache_key,
-            extra_body=request.model_extra,
+            extra_body=extra_params or None,
+            max_output_tokens=max_output_tokens,
         )
 
     async def delete_openai_response(
