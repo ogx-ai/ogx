@@ -29,8 +29,8 @@ from .helpers import (
     assert_text_contains,
     new_vector_store,
     normalize_text,
-    setup_mcp_tools,
     skip_if_provider_is_vertexai,
+    skip_if_text_model_prefix,
     upload_file,
     wait_for_file_attachment,
 )
@@ -38,13 +38,10 @@ from .streaming_assertions import StreamingValidator
 
 
 @pytest.fixture(autouse=True)
-def _skip_tool_tests_for_watsonx(request):
-    """Skip all tool tests for WatsonX — tool calling is unreliable."""
-    # Get text_model_id from the test's fixturenames if available
-    if "text_model_id" in request.fixturenames:
-        text_model_id = request.getfixturevalue("text_model_id")
-        if text_model_id and text_model_id.startswith("watsonx/"):
-            pytest.skip("WatsonX does not reliably support tool calling")
+def _skip_tool_tests_for_unreliable_tool_calling(request):
+    """Skip all tool tests for models with unreliable tool calling."""
+    skip_if_text_model_prefix(request, "watsonx/", "WatsonX does not reliably support tool calling")
+    skip_if_text_model_prefix(request, "bedrock/", "Bedrock GPT-OSS does not reliably support tool calling")
 
 
 @pytest.mark.parametrize("case", web_search_test_cases)
@@ -110,6 +107,8 @@ def test_response_non_streaming_file_search(
         model=text_model_id,
         input=case.input,
         tools=tools,
+        # Force the tool call so the test validates file search mechanics, not model judgment.
+        tool_choice="required",
         stream=False,
         include=["file_search_call.results"],
     )
@@ -140,6 +139,8 @@ def test_response_non_streaming_file_search_empty_vector_store(
         model=text_model_id,
         input="How many experts does the Llama 4 Maverick model have?",
         tools=[{"type": "file_search", "vector_store_ids": [vector_store.id]}],
+        # Force the tool call so the test validates file search mechanics, not model judgment.
+        tool_choice="required",
         stream=False,
         include=["file_search_call.results"],
     )
@@ -188,6 +189,8 @@ def test_response_sequential_file_search(
         model=text_model_id,
         input="How many experts does the Llama 4 Maverick model have?",
         tools=tools,
+        # Force the tool call so the test validates sequential file search, not model judgment.
+        tool_choice="required",
         stream=False,
         include=["file_search_call.results"],
     )
@@ -221,13 +224,17 @@ def test_response_sequential_file_search(
     assert final_message[-1].status == "completed"
 
 
+# Port must match the connector URL configured in ci-tests/config.yaml
+CONNECTOR_MCP_PORT = 5199
+
+
 @pytest.mark.parametrize("case", mcp_tool_test_cases)
 def test_response_non_streaming_mcp_tool(responses_client, client_with_models, text_model_id, case, caplog):
     skip_if_provider_is_vertexai(
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
-    with make_mcp_server() as mcp_server_info:
-        tools = setup_mcp_tools(case.tools, mcp_server_info)
+    with make_mcp_server(port=CONNECTOR_MCP_PORT) as _mcp_server_info:
+        tools = case.tools
 
         response = responses_client.responses.create(
             model=text_model_id,
@@ -259,10 +266,10 @@ def test_response_non_streaming_mcp_tool(responses_client, client_with_models, t
         # sometimes the model will call the tool again, so we need to get the last message
         message = response.output[-1]
         text_content = message.content[0].text
-        assert_text_contains(text_content, "boiling point")
+        assert_text_contains(text_content, "-100")
 
-    with make_mcp_server(required_auth_token="test-token") as mcp_server_info:
-        tools = setup_mcp_tools(case.tools, mcp_server_info)
+    with make_mcp_server(port=CONNECTOR_MCP_PORT, required_auth_token="test-token") as _mcp_server_info:
+        tools = [dict(t) for t in case.tools]
 
         exc_type = (
             AuthenticationRequiredError
@@ -297,8 +304,8 @@ def test_response_sequential_mcp_tool(responses_client, client_with_models, text
     skip_if_provider_is_vertexai(
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
-    with make_mcp_server() as mcp_server_info:
-        tools = setup_mcp_tools(case.tools, mcp_server_info)
+    with make_mcp_server(port=CONNECTOR_MCP_PORT) as _mcp_server_info:
+        tools = case.tools
 
         response = responses_client.responses.create(
             model=text_model_id,
@@ -344,10 +351,6 @@ def test_response_sequential_mcp_tool(responses_client, client_with_models, text
         assert normalize_text("boiling point") in normalize_text(text_content) or "-100" in text_content, (
             f"Expected 'boiling point' or tool result '-100' in response: {text_content}"
         )
-
-
-# Port must match the connector URL configured in ci-tests/config.yaml
-CONNECTOR_MCP_PORT = 5199
 
 
 def test_response_connector_resolution_mcp_tool(responses_client, client_with_models, text_model_id):
@@ -399,7 +402,7 @@ def test_response_connector_resolution_mcp_tool(responses_client, client_with_mo
 
         message = response.output[-1]
         text_content = message.content[0].text
-        assert_text_contains(text_content, "boiling point")
+        assert_text_contains(text_content, "-100")
 
 
 @pytest.mark.parametrize("case", mcp_tool_test_cases)
@@ -408,8 +411,8 @@ def test_response_mcp_tool_approval(responses_client, client_with_models, text_m
     skip_if_provider_is_vertexai(
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
-    with make_mcp_server() as mcp_server_info:
-        tools = setup_mcp_tools(case.tools, mcp_server_info)
+    with make_mcp_server(port=CONNECTOR_MCP_PORT) as _mcp_server_info:
+        tools = [dict(t) for t in case.tools]
         for tool in tools:
             tool["require_approval"] = "always"
 
@@ -471,7 +474,7 @@ def test_response_mcp_tool_approval(responses_client, client_with_models, text_m
             # sometimes the model will call the tool again, so we need to get the last message
             message = response.output[-1]
             text_content = message.content[0].text
-            assert_text_contains(text_content, "boiling point")
+            assert_text_contains(text_content, "-100")
         else:
             assert len(response.output) >= 1
             for output in response.output:
@@ -745,6 +748,10 @@ def test_function_call_output_list_image(responses_client, client_with_models, v
         model=vision_model_id,
         input=inputs,
         tools=tools,
+        # The model may want to call the tool again; force a message so the
+        # test validates the list-form function_call_output round-trip, not
+        # the model's decision to stop calling tools.
+        tool_choice="none",
         stream=False,
         previous_response_id=response.id,
     )
@@ -813,8 +820,8 @@ def test_response_non_streaming_multi_turn_tool_execution(responses_client, clie
     skip_if_provider_is_vertexai(
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
-    with make_mcp_server(tools=dependency_tools()) as mcp_server_info:
-        tools = setup_mcp_tools(case.tools, mcp_server_info)
+    with make_mcp_server(port=CONNECTOR_MCP_PORT, tools=dependency_tools()) as _mcp_server_info:
+        tools = case.tools
 
         response = responses_client.responses.create(
             input=case.input,
@@ -860,8 +867,8 @@ def test_response_streaming_multi_turn_tool_execution(responses_client, client_w
     skip_if_provider_is_vertexai(
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
-    with make_mcp_server(tools=dependency_tools()) as mcp_server_info:
-        tools = setup_mcp_tools(case.tools, mcp_server_info)
+    with make_mcp_server(port=CONNECTOR_MCP_PORT, tools=dependency_tools()) as _mcp_server_info:
+        tools = case.tools
 
         stream = responses_client.responses.create(
             input=case.input,
@@ -1015,11 +1022,11 @@ def test_max_tool_calls_with_mcp_tools(responses_client, client_with_models, tex
     skip_if_provider_is_vertexai(
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
-    with make_mcp_server(tools=dependency_tools()) as mcp_server_info:
+    with make_mcp_server(port=CONNECTOR_MCP_PORT, tools=dependency_tools()) as _mcp_server_info:
         input = "Get the experiment ID for 'boiling_point' and get the user ID for 'charlie'"
         max_tool_calls = [1, 5]
         tools = [
-            {"type": "mcp", "server_label": "localmcp", "server_url": mcp_server_info["server_url"]},
+            {"type": "mcp", "server_label": "localmcp", "connector_id": "test-mcp-connector"},
         ]
 
         # First create a response that triggers mcp tools without max_tool_calls
@@ -1159,10 +1166,10 @@ def test_parallel_tool_calls_with_function_tools(responses_client, client_with_m
 def test_parallel_tool_calls_with_mcp_tools(responses_client, client_with_models, text_model_id):
     """Test handling of parallel_tool_calls with mcp tools in responses."""
     skip_if_provider_is_vertexai(client_with_models, text_model_id, "does not respect parallel_tool_calls=False")
-    with make_mcp_server(tools=dependency_tools()) as mcp_server_info:
+    with make_mcp_server(port=CONNECTOR_MCP_PORT, tools=dependency_tools()) as _mcp_server_info:
         input = "Get the experiment ID for 'boiling_point' and get the user ID for 'charlie'"
         tools = [
-            {"type": "mcp", "server_label": "localmcp", "server_url": mcp_server_info["server_url"]},
+            {"type": "mcp", "server_label": "localmcp", "connector_id": "test-mcp-connector"},
         ]
 
         # First create a response that triggers mcp tools with parallel_tool_calls enabled

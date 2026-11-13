@@ -12,7 +12,7 @@ inputs:
   ollama-version:
     description: 'Ollama server release to run (Docker Hub tag, without the leading v). Tracked weekly by check-provider-versions.yml.'
     required: false
-    default: '0.40.6'
+    default: '0.40.15'
 runs:
   using: "composite"
   steps:
@@ -22,7 +22,11 @@ runs:
         OLLAMA_VERSION: ${{ inputs.ollama-version }}
       run: |
         echo "Starting Ollama server $OLLAMA_VERSION..."
-        docker run -d --name ollama -p 11434:11434 "ollama/ollama:${OLLAMA_VERSION}"
+        # The CPU-runner default context (4k) is too small for thinking models:
+        # reasoning can run past the cap and /v1/completions returns an empty
+        # completion (finish=length). 16k adds headroom; the KV cost is
+        # negligible for the sub-2b models used here.
+        docker run -d --name ollama -p 11434:11434 -e OLLAMA_CONTEXT_LENGTH=16384 "ollama/ollama:${OLLAMA_VERSION}"
         echo "Verifying Ollama status..."
         timeout 30 bash -c 'while ! curl -s -L http://127.0.0.1:11434; do sleep 1 && echo "."; done'
         echo "Ollama is ready"
@@ -49,7 +53,7 @@ runs:
           pull_model "deepseek-r1:1.5b"
           pull_model "nomic-embed-text:v1.5"
         else
-          pull_model "llama3.2:3b-instruct-fp16"
+          pull_model "qwen3.5:0.8b"
           pull_model "nomic-embed-text:v1.5"
           pull_model "llama-guard3:1b"
         fi

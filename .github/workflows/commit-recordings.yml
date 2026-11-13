@@ -1,6 +1,7 @@
 # Commits recordings from recording workflows back to PRs.
 # This workflow runs with elevated permissions but only executes trusted code from the base repo.
-# Triggered via workflow_run after recording workflows complete successfully.
+# Triggered via workflow_run after recording workflows complete. A failed lane produces no
+# artifact of its own, so only recordings from successful lanes are committed.
 name: Commit Recordings
 
 on:
@@ -17,8 +18,11 @@ permissions:
 jobs:
   commit-recordings:
     runs-on: ubuntu-latest
-    # Only run if the recording workflow succeeded
-    if: github.event.workflow_run.conclusion == 'success'
+    # Run when the recording workflow succeeded or failed: a failed lane
+    # skips its own artifact upload, so only recordings from successful
+    # lanes are committed. Cancelled and timed-out runs are excluded so a
+    # cancel-in-progress never commits half-finished artifacts.
+    if: github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure'
     steps:
       - name: Download workflow artifacts
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -120,6 +124,14 @@ jobs:
               } catch (e) {
                 console.log(`Failed to parse metadata: ${e.message}`);
               }
+            }
+
+            // Artifacts-only mode: the dispatch explicitly requested no commit.
+            // The recordings stay in the record run's artifacts for inspection.
+            if (commitMode === 'none') {
+              console.log('commit_mode=none: skipping commit, recordings remain as artifacts only');
+              core.setOutput('skip', 'true');
+              return;
             }
 
             // Branch mode: a dispatch on a branch (e.g. main) with no PR.
@@ -260,6 +272,28 @@ jobs:
               fi
             fi
           fi
+
+      - name: Set up uv
+        if: steps.pr-info.outputs.skip != 'true'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Pin to 3.13: new enough to sync PR branches that have raised
+          # requires-python to >=3.13, old enough that every locked dependency
+          # (e.g. onnxruntime 1.20.1) still ships a wheel. Without an explicit
+          # pin, uv falls back to the runner image's system python (3.14 on
+          # Ubuntu 26), where onnxruntime has no wheel and `uv sync` fails.
+          python-version: "3.13"
+
+      - name: Sync dev dependencies
+        if: steps.pr-info.outputs.skip != 'true'
+        run: uv sync --group dev
+
+      # Model-list recordings accumulate a new digest whenever a provider's
+      # catalog drifts between recordings. Prune the redundant digests here so
+      # the pushed commit is already a fixed point of the CI cleanup check.
+      - name: Prune redundant model-list recordings
+        if: steps.pr-info.outputs.skip != 'true'
+        run: PYTHONPATH=$PWD uv run --no-sync --group dev ./scripts/cleanup_recordings.py --model-lists-only --delete
 
       - name: Commit and push recordings
         id: commit

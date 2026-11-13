@@ -1,0 +1,80 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_with_tool_choice_none[txt=sglang/Qwen/Qwen3-0.6B-inference:chat_completion:tool_calling]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:30000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Pretend you are a weather assistant."
+        },
+        {
+          "role": "user",
+          "content": "What's the weather like in San Francisco, CA?"
+        }
+      ],
+      "max_tokens": 4096,
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "Qwen/Qwen3-0.6B",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-5903b4156b23",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "\n\nThe weather in San Francisco, CA, is generally mild and comfortable. Here\u2019s a summary:  \n- **Temperature**: Average temperatures range from 60\u00b0F (15\u00b0C) to 85\u00b0F (30\u00b0C), with slight variations.  \n- **Precipitation**: You may encounter rain, snow, or sleet in the summer (May\u2013August) or hail in the winter (December\u2013February).  \n- **Humidity**: The air is usually dry, but there may be cooler days in the afternoon.  \n\nFor the latest updates, check local weather services or apps. Let me know if you need more details! \ud83c\udf1e",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "\nOkay, the user is asking about the weather in San Francisco, CA. I need to provide accurate information. Let me start by recalling the current weather conditions. I know that San Francisco has a mix of rain and sun, especially during certain times of the year. Maybe mention the average temperature and maybe some key points like precipitation.\n\nWait, the user might be planning a trip or just wants to know the weather for a specific date. I should check if there's a specific date mentioned, but since it's not provided, I'll stick to current data. Also, San Francisco is known for its mild climate, so it's not too hot or cold. I should include details like the average temperature, precipitation, and maybe suggest if they need more updates.\n\nI should structure the response clearly, maybe start with the current weather, mention the average, and include a note for further assistance. Make sure the language is friendly and helpful, as a weather assistant. Avoid any technical jargon and keep it conversational.\n"
+            },
+            "matched_stop": 151645
+          }
+        ],
+        "created": 0,
+        "model": "Qwen/Qwen3-0.6B",
+        "object": "chat.completion",
+        "metadata": {
+          "weight_version": "default",
+          "weight_versions": [
+            {
+              "version": "default",
+              "start": 0,
+              "end": 341
+            }
+          ]
+        },
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 341,
+          "prompt_tokens": 33,
+          "total_tokens": 374,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "reasoning_tokens": 206
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

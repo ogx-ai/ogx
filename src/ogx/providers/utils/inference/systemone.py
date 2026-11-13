@@ -7,10 +7,12 @@
 """Shared SystemOne (judgment) support for TypeSafe-compatible backends.
 
 The TypeSafe cloud API and local engines that serve the SystemOne wire protocol
-natively (Ollama, llama.cpp server) all accept ``POST /v1/systemone`` with the same
-request and response shapes. This module wraps the official ``typesafe_sdk`` client so
-every such provider shares one call path, one error mapping, and one raw-body
-validation into the OGX wire model.
+natively (Ollama, llama.cpp server, SGLang, vLLM) all accept ``POST /v1/systemone``
+with the same request and response shapes, modulo each engine's own extension or
+diagnostic fields (see ``extension_fields``/``extension_fields_by_type``/
+``top_level_extension_fields`` below). This module wraps the official
+``typesafe_sdk`` client so every such provider shares one call path, one error
+mapping, and one raw-body validation into the OGX wire model.
 """
 
 import json
@@ -65,6 +67,8 @@ async def systemone_judge(
     *,
     network: NetworkConfig | None = None,
     extension_fields: frozenset[str] = frozenset(),
+    extension_fields_by_type: dict[str, frozenset[str]] | None = None,
+    top_level_extension_fields: frozenset[str] = frozenset(),
 ) -> SystemOneResponse:
     """Answer a SystemOne judgment request against a TypeSafe-compatible endpoint.
 
@@ -82,9 +86,15 @@ async def systemone_judge(
     the backend's schema and the OGX wire model is caught here and surfaces as a validation
     error instead of passing a wrong-shaped object through unchecked.
 
-    ``extension_fields`` names answer fields a backend adds beyond the SystemOne schema
-    (SGLang reports ``x_label_mass`` on every answer); they are dropped from each answer
-    before validation so the strict wire model still catches real drift.
+    ``extension_fields`` names answer fields a backend adds beyond the SystemOne schema on
+    every answer regardless of its type (SGLang reports ``x_label_mass`` this way);
+    ``extension_fields_by_type`` names fields added only to answers of a given ``type``
+    (vLLM's ``noul`` answers carry ``probabilities``/``confidence`` that its ``choice``/
+    ``score`` answers also carry, but as required SystemOne fields rather than an
+    extension, so they can only be stripped conditionally on ``type``). Both are dropped
+    from each answer before validation so the strict wire model still catches real drift.
+    ``top_level_extension_fields`` names fields a backend adds alongside ``answers`` itself
+    (vLLM reports ``id``/``object``/``created``/``diagnostics`` this way).
     """
     client_kwargs: dict[str, Any] = {}
     if network is not None:
@@ -102,11 +112,19 @@ async def systemone_judge(
             model=request.model,
         )
         body = json.loads(sdk_response.raw_http_response.content)
-        if extension_fields and isinstance(body, dict):
-            for answer in body.get("answers", {}).values():
-                if isinstance(answer, dict):
+        if isinstance(body, dict):
+            for field in top_level_extension_fields:
+                body.pop(field, None)
+            if extension_fields or extension_fields_by_type:
+                for answer in body.get("answers", {}).values():
+                    if not isinstance(answer, dict):
+                        continue
                     for field in extension_fields:
                         answer.pop(field, None)
+                    if extension_fields_by_type:
+                        answer_type = answer.get("type") or ""
+                        for field in extension_fields_by_type.get(answer_type, frozenset()):
+                            answer.pop(field, None)
         return SystemOneResponse.model_validate(body)
     except TypeSafeAPIResponseValidationError as exc:
         # The backend answered 200 with a structurally invalid body: an upstream failure,

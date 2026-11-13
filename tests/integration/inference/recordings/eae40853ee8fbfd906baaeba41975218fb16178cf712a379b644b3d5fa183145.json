@@ -1,0 +1,99 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestOpenAICompatibility::test_openai_format_preserves_complex_schemas[openai_client-txt=ollama/qwen3.5:0.8b]",
+  "request": {
+    "method": "POST",
+    "url": "http://0.0.0.0:11434/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3.5:0.8b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Process this data"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "process_data",
+            "description": "Process structured data",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "$ref": "#/$defs/DataObject"
+                }
+              },
+              "$defs": {
+                "DataObject": {
+                  "type": "object",
+                  "properties": {
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3.5:0.8b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-eae40853ee8f",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "I'd be happy to help you process the data! However, you haven't shared any specific data yet. \n\nCould you please provide:\n- The data you'd like me to process (text, numbers, codes, structured data, etc.)\n- Whether this is text, numbers, or some other type of information\n\nOnce you share the data, I can process it according to your needs. Please feel free to ask for specific aspects you'd like me to focus on!",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning": "The user is asking me to \"Process this data\", but they haven't actually provided any data. I need to ask them what specific data they're referring to before I can process it.\n\nLet me respond accordingly by informing them that they haven't provided the data yet. I should ask them to share the data they want me to analyze or process."
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3.5:0.8b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "fp_ollama",
+        "usage": {
+          "completion_tokens": 172,
+          "prompt_tokens": 293,
+          "total_tokens": 465,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

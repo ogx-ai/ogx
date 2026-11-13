@@ -108,12 +108,11 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           CHANGED=$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename')
-          # Pass as a single-line escaped string for the argument
-          {
-            echo "files<<EOF"
-            echo "$CHANGED"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          # Write to a file instead of passing as a command-line argument: large PRs
+          # (hundreds of recording files) exceed the kernel's 128 KiB per-argument limit.
+          # This step stays separate from matrix generation so that only it needs GH_TOKEN.
+          echo "$CHANGED" > "${RUNNER_TEMP}/changed-files.txt"
+          echo "file=${RUNNER_TEMP}/changed-files.txt" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -127,7 +126,7 @@ jobs:
             --schedule "${{ github.event.schedule }}" \
             --test-setup "${{ github.event.inputs.test-setup || '' }}" \
             --matrix-key "${{ inputs.matrix_key || 'default' }}" \
-            --changed-files "${{ steps.changed-files.outputs.files || '' }}")
+            --changed-files-file "${{ steps.changed-files.outputs.file }}")
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "Generated matrix: $MATRIX"
 
@@ -167,7 +166,9 @@ jobs:
       # called from pull_request_target workflows.
       - name: Setup test environment
         if: ${{ matrix.config.allowed_clients == null || contains(matrix.config.allowed_clients, matrix.client) }}
-        uses: ogx-ai/ogx/.github/actions/setup-test-environment@0807a93e8508bb22dcd633de0a993343a6b1b346
+        uses: ogx-ai/ogx/.github/actions/setup-test-environment@d4ffee2179c7035d3e1377fc0468e83936feb11a
+        env:
+          SGLANG_MODEL: ${{ matrix.config.setup == 'sglang-systemone' && 'togethercomputer/Tev1-0.8B-experimental' || 'Qwen/Qwen3-0.6B' }}
         with:
           python-version: ${{ matrix.python-version }}
           client-version: ${{ matrix.client-version }}
@@ -193,7 +194,7 @@ jobs:
 
       - name: Run tests
         if: ${{ matrix.config.allowed_clients == null || contains(matrix.config.allowed_clients, matrix.client) }}
-        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@0807a93e8508bb22dcd633de0a993343a6b1b346
+        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@d4ffee2179c7035d3e1377fc0468e83936feb11a
         env:
           OPENAI_API_KEY: dummy
           AZURE_API_KEY: replay-mode-dummy-key

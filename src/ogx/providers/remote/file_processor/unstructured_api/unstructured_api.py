@@ -262,7 +262,7 @@ class UnstructuredApiFileProcessor:
             element_type = element.get("type", "Unknown")
 
             # Generate chunk_id from content and position
-            chunk_id = generate_chunk_id(document_id, text, str(idx))
+            chunk_id = generate_chunk_id(document_id=document_id, chunk_text=text, chunk_window=str(idx))
 
             # Calculate token count (rough estimate: split on whitespace) for num words in text
             content_token_count = len(text.split())

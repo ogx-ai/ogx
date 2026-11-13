@@ -347,6 +347,8 @@ def openai_response_to_anthropic(
                     tool_input = json.loads(tc.function.arguments) if tc.function.arguments else {}
                 except json.JSONDecodeError:
                     tool_input = {}
+                if not isinstance(tool_input, dict):
+                    tool_input = {}
 
                 content.append(
                     AnthropicToolUseBlock(

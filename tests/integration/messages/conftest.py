@@ -16,6 +16,7 @@ from ogx.core.testing_context import get_test_context
 
 # Import fixtures from common module to make them available in this test directory
 from tests.integration.fixtures.common import (  # noqa: F401
+    mock_sentinel,
     openai_client,
     require_server,
 )
@@ -59,10 +60,17 @@ def messages_client(messages_base_url):
 #   - vllm (Qwen3-0.6B): thinks by default in a typical deployment; keep the
 #     deployment standard and just raise max_tokens so text follows the
 #     thinking blocks.
+#   - ollama (qwen3.5:0.8b): hybrid-thinking model that thinks by default,
+#     like vllm's Qwen3-0.6B; keep the deployment standard and just raise
+#     max_tokens so text follows the thinking blocks.
+#   - gpt (gpt-5-nano): OpenAI reasoning models charge reasoning tokens
+#     against max_tokens (translated to max_completion_tokens), so a small
+#     explicit budget is exhausted before any text is emitted; raise
+#     max_tokens to leave headroom for the reasoning.
 # Other providers default to non-thinking models.
 _THINKING_DISABLED_SETUPS = frozenset({"fireworks"})
 _THINKING_BUDGET_SETUPS = frozenset({"meta"})
-_THINKING_FLOOR_SETUPS = frozenset({"meta", "vllm"})
+_THINKING_FLOOR_SETUPS = frozenset({"meta", "vllm", "gpt", "ollama", "ollama-postgres"})
 _THINKING_BUDGET_TOKENS = 1024
 _THINKING_MAX_TOKENS = 2048
 
@@ -96,9 +104,26 @@ def _thinking_params_fragment() -> dict[str, Any]:
 # existing recordings (the request body is hashed for replay).
 _TEMP_LOCKED_SETUPS = frozenset({"anthropic"})
 
+# Models known to restrict sampling parameters in chat completions:
+# non-default temperature values are rejected ("Only the default (1) value
+# is supported") and the stop parameter is rejected entirely ("Unsupported
+# parameter: 'stop'"). Verified against gpt-5-nano; add models here as
+# their restrictions are verified.
+_LIMITED_SAMPLING_MODELS = frozenset({"gpt-5-nano"})
 
-def _temperature_value(default: float) -> float:
+
+def _model_name(model_id: str) -> str:
+    return model_id.rsplit("/", 1)[-1]
+
+
+def _is_limited_sampling_model(model_id: str) -> bool:
+    return _model_name(model_id) in _LIMITED_SAMPLING_MODELS
+
+
+def _temperature_value(model_id: str, default: float) -> float:
     if os.environ.get("OGX_TEST_SETUP") in _TEMP_LOCKED_SETUPS:
+        return 1.0
+    if _is_limited_sampling_model(model_id):
         return 1.0
     return default
 
@@ -141,7 +166,7 @@ def _build_messages_body(
             tool_choice = {"type": "auto"}
         body["tool_choice"] = tool_choice
     if temperature is not None:
-        body["temperature"] = _temperature_value(temperature)
+        body["temperature"] = _temperature_value(model, temperature)
     if stop_sequences is not None and not _is_meta_limited():
         body["stop_sequences"] = stop_sequences
     return body
@@ -157,6 +182,16 @@ def _build_headers() -> dict[str, str]:
         provider_data = {"__test_id": test_id}
         headers["X-OGX-Provider-Data"] = json.dumps(provider_data)
     return headers
+
+
+def _all_block_text(content: list[dict]) -> str:
+    """Readable output of a message: text blocks plus thinking blocks.
+
+    Thinking content is accepted as evidence the model processed the turn:
+    a thinking model truncated at max_tokens still proves the request (system
+    prompt, conversation history) reached it, even without any text block.
+    """
+    return " ".join(b.get("text") or b.get("thinking") or "" for b in content if b["type"] in ("text", "thinking"))
 
 
 def make_messages_request(

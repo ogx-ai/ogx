@@ -2,12 +2,12 @@
 #
 # podman build --platform linux/amd64 -f ./ollama-with-models.containerfile -t ollama-with-models .
 #
-FROM --platform=linux/amd64 ollama/ollama:0.40.6
+FROM --platform=linux/amd64 ollama/ollama:0.40.15
 
 # Start ollama and pull models in a single layer
 RUN ollama serve & \
     sleep 5 && \
-    ollama pull llama3.2:3b-instruct-fp16 && \
+    ollama pull qwen3.5:0.8b && \
     ollama pull nomic-embed-text:v1.5 && \
     ollama pull llama-guard3:1b
 

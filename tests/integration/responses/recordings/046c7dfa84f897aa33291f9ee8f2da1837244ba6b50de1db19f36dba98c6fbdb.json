@@ -1,0 +1,58 @@
+{
+  "test_id": "tests/integration/responses/test_openai_responses.py::TestOpenAIResponses::test_openai_response_streaming_failed_error_code_is_spec_compliant[txt=azure/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://llama-stack-test.openai.azure.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Describe this image"
+            },
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "data:text/plain;base64,SGVsbG8gd29ybGQ=",
+                "detail": "auto"
+              }
+            }
+          ]
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      }
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": null,
+    "is_streaming": false,
+    "is_exception": true,
+    "exception_data": {
+      "category": "provider_sdk",
+      "provider": "openai",
+      "type": "BadRequestError",
+      "message": "Error code: 400 - {'error': {'message': \"Invalid image URL: 'messages[0].content[1].image_url.url'. Expected a base64-encoded data URL with an image MIME type (e.g. 'data:image/png;base64,aW1nIGJ5dGVzIGhlcmU='), but got unsupported MIME type 'text/plain'.\", 'type': 'invalid_request_error', 'param': 'messages[0].content[1].image_url.url', 'code': 'invalid_value'}}",
+      "status_code": 400,
+      "body": {
+        "message": "Invalid image URL: 'messages[0].content[1].image_url.url'. Expected a base64-encoded data URL with an image MIME type (e.g. 'data:image/png;base64,aW1nIGJ5dGVzIGhlcmU='), but got unsupported MIME type 'text/plain'.",
+        "type": "invalid_request_error",
+        "param": "messages[0].content[1].image_url.url",
+        "code": "invalid_value"
+      }
+    },
+    "exception_message": "Error code: 400 - {'error': {'message': \"Invalid image URL: 'messages[0].content[1].image_url.url'. Expected a base64-encoded data URL with an image MIME type (e.g. 'data:image/png;base64,aW1nIGJ5dGVzIGhlcmU='), but got unsupported MIME type 'text/plain'.\", 'type': 'invalid_request_error', 'param': 'messages[0].content[1].image_url.url', 'code': 'invalid_value'}}"
+  },
+  "id_normalization_mapping": {}
+}
