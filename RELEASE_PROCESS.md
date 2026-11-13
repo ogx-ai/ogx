@@ -128,6 +128,7 @@ Backports are handled automatically by Mergify — patch releases ship whatever 
 
 - [ ] Create GitHub release: tag `v0.4.5`, target `release-0.4.x`
   - The release workflow publishes the server packages using the clients published above.
+  - Before building Docker images, it checks the selected package index for the exact server and API wheels. Missing or withdrawn wheels are retried for up to 20 attempts, with 30 seconds between attempts; the build stops if they remain unavailable. Historical `llama-stack` releases only require the server wheel because their API may be bundled.
   - Mark an older maintenance release as not latest.
 - [ ] Verify all 4 packages published:
   - [ogx on PyPI](https://pypi.org/project/ogx/)
