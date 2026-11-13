@@ -10,9 +10,9 @@ set -euo pipefail
 # Add pre-commit golang environment to PATH if it exists
 # This allows Python scripts to access tools installed by golang hooks (e.g., oasdiff)
 if [[ -n "${HOME:-}" ]]; then
-  GOLANG_BIN=$(find "$HOME/.cache/pre-commit" -path "*/golangenv-default/bin" -type d 2>/dev/null | head -1)
-  if [[ -n "$GOLANG_BIN" ]]; then
-    export PATH="$GOLANG_BIN:$PATH"
+  OASDIFF_BIN=$(find "$HOME/.cache/pre-commit" -type f -name oasdiff 2>/dev/null | head -1)
+  if [[ -n "$OASDIFF_BIN" ]]; then
+    export PATH="$(dirname "$OASDIFF_BIN"):$PATH"
   fi
 fi
 
