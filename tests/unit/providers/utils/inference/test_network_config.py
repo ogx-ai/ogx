@@ -8,6 +8,7 @@ import ssl
 import tempfile
 from pathlib import Path
 
+import certifi
 import httpx2
 import pytest
 
@@ -559,6 +560,37 @@ class TestBuildHttpClient:
         config = NetworkConfig(timeout=30.0)
         client_kwargs = _build_network_client_kwargs(config)
         assert "limits" not in client_kwargs
+
+
+class TestProxyTransportsHonourNetworkConfig:
+    """Requests to the provider go through the mounted proxy transport, not the client's
+    default transport, so TLS and pool limits must be applied to the proxy transport too."""
+
+    def _https_proxy_pool(self, config: NetworkConfig):
+        client = httpx2.AsyncClient(**_build_network_client_kwargs(config))
+        transport = client._transport_for_url(httpx2.URL("https://upstream.example.com/v1"))
+        return transport._pool  # type: ignore[attr-defined]  # httpx2.AsyncHTTPTransport has _pool
+
+    def test_tls_verify_false_applies_to_proxy_transport(self):
+        config = NetworkConfig(tls=TLSConfig(verify=False), proxy=ProxyConfig(url="http://proxy:8080"))
+        assert self._https_proxy_pool(config)._ssl_context.verify_mode == ssl.CERT_NONE
+
+    def test_tls_min_version_applies_to_proxy_transport(self):
+        config = NetworkConfig(tls=TLSConfig(min_version="TLSv1.3"), proxy=ProxyConfig(url="http://proxy:8080"))
+        assert self._https_proxy_pool(config)._ssl_context.minimum_version == ssl.TLSVersion.TLSv1_3
+
+    def test_tls_and_proxy_cacert_are_combined(self):
+        config = NetworkConfig(
+            tls=TLSConfig(min_version="TLSv1.3"),
+            proxy=ProxyConfig(url="http://proxy:8080", cacert=certifi.where()),
+        )
+        ssl_context = self._https_proxy_pool(config)._ssl_context
+        assert ssl_context.minimum_version == ssl.TLSVersion.TLSv1_3
+        assert ssl_context.verify_mode == ssl.CERT_REQUIRED
+
+    def test_limits_apply_to_proxy_transport(self):
+        config = NetworkConfig(limits=LimitsConfig(max_connections=7), proxy=ProxyConfig(url="http://proxy:8080"))
+        assert self._https_proxy_pool(config)._max_connections == 7
 
 
 class TestBuildLimits:

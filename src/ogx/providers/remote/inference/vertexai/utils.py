@@ -80,17 +80,19 @@ def build_httpx_kwargs(network_config: NetworkConfig) -> tuple[dict[str, Any], b
         httpx_kwargs["verify"] = resolve_ssl_verify(network_config.tls)
         needs_httpx_client = True
 
-    if network_config.proxy:
-        if network_config.proxy.no_proxy:
-            logger.warning("ProxyConfig.no_proxy is not supported by the VertexAI provider and will be ignored.")
-        mounts = _build_proxy_mounts(network_config.proxy)
-        if mounts:
-            httpx_kwargs["mounts"] = mounts
-            needs_httpx_client = True
-
     if network_config.limits:
         httpx_kwargs["limits"] = _build_limits(network_config.limits)
         needs_httpx_client = True
+
+    if network_config.proxy:
+        if network_config.proxy.no_proxy:
+            logger.warning("ProxyConfig.no_proxy is not supported by the VertexAI provider and will be ignored.")
+        mounts = _build_proxy_mounts(
+            network_config.proxy, verify=httpx_kwargs.get("verify"), limits=httpx_kwargs.get("limits")
+        )
+        if mounts:
+            httpx_kwargs["mounts"] = mounts
+            needs_httpx_client = True
 
     return httpx_kwargs, needs_httpx_client
 

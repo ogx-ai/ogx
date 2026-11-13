@@ -89,17 +89,40 @@ def _build_ssl_context(tls_config: TLSConfig) -> ssl.SSLContext | bool | str:
     return ctx
 
 
-def _build_proxy_mounts(proxy_config: ProxyConfig) -> dict[str, httpx2.AsyncHTTPTransport] | None:
+def _proxy_transport_verify(
+    verify: ssl.SSLContext | bool | str | None, cacert: Path | None
+) -> ssl.SSLContext | bool | str | None:
+    """Combine the upstream TLS verify setting with the proxy CA certificate, if any."""
+    if cacert is None or verify is False:
+        return verify
+    if verify is None or verify is True:
+        # Convert Path to string for httpx2
+        return str(cacert)
+    ssl_context = verify if isinstance(verify, ssl.SSLContext) else ssl.create_default_context(cafile=verify)
+    ssl_context.load_verify_locations(str(cacert))
+    return ssl_context
+
+
+def _build_proxy_mounts(
+    proxy_config: ProxyConfig,
+    verify: ssl.SSLContext | bool | str | None = None,
+    limits: httpx2.Limits | None = None,
+) -> dict[str, httpx2.AsyncHTTPTransport] | None:
     """
     Build httpx2 proxy mounts from proxy configuration.
+
+    Mounted transports do not inherit the client's ``verify`` or ``limits``, so the
+    TLS settings and pool limits for upstream requests must be passed in here.
 
     Returns:
         Dictionary of proxy mounts for httpx2, or None if no proxies configured
     """
     transport_kwargs: dict[str, Any] = {}
-    if proxy_config.cacert:
-        # Convert Path to string for httpx2
-        transport_kwargs["verify"] = str(proxy_config.cacert)
+    transport_verify = _proxy_transport_verify(verify, proxy_config.cacert)
+    if transport_verify is not None:
+        transport_kwargs["verify"] = transport_verify
+    if limits is not None:
+        transport_kwargs["limits"] = limits
 
     if proxy_config.url:
         # Convert HttpUrl to string for httpx2
@@ -148,8 +171,13 @@ def build_network_client_kwargs(network_config: NetworkConfig | None) -> dict[st
         ssl_context = _build_ssl_context(network_config.tls)
         client_kwargs["verify"] = ssl_context
 
+    if network_config.limits:
+        client_kwargs["limits"] = _build_limits(network_config.limits)
+
     if network_config.proxy:
-        mounts = _build_proxy_mounts(network_config.proxy)
+        mounts = _build_proxy_mounts(
+            network_config.proxy, verify=client_kwargs.get("verify"), limits=client_kwargs.get("limits")
+        )
         if mounts:
             client_kwargs["mounts"] = mounts
 
@@ -169,9 +197,6 @@ def build_network_client_kwargs(network_config: NetworkConfig | None) -> dict[st
 
     if network_config.headers:
         client_kwargs["headers"] = network_config.headers
-
-    if network_config.limits:
-        client_kwargs["limits"] = _build_limits(network_config.limits)
 
     return client_kwargs
 
