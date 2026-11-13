@@ -632,6 +632,11 @@ class OpenAIChoiceDelta(BaseModel):
     reasoning_content: str | None = Field(
         default=None, description="The reasoning content from the model (for o1/o3 models)."
     )
+    annotations: list[dict[str, Any]] | None = Field(
+        default=None,
+        json_schema_extra=remove_null_from_anyof,
+        description="Annotations for the delta, when applicable.",
+    )
 
 
 # OpenAI finish_reason enum values
