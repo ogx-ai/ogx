@@ -32,6 +32,7 @@ scripts/
   generate_prompt_format.py    # Generate prompt format documentation
   generate_openai_coverage_docs.py # Generate OpenAI API coverage docs
    openai_coverage.py           # OpenAI API coverage analysis
+  refresh_openresponses_spec.py # Regenerate docs/static/openresponses-spec.json from OpenAI's spec
    systemone_coverage.py        # TypeSafe SystemOne API conformance analysis
    provider_compat_matrix.py    # Provider compatibility matrix
   responses_test_coverage.py   # Responses API test coverage
@@ -49,6 +50,15 @@ uv run python scripts/distro_codegen.py
 
 ```bash
 uv run python scripts/provider_codegen.py
+```
+
+### Refresh the OpenAI Responses coverage reference
+
+```bash
+curl -sL -o /tmp/openai-openapi.yaml \
+    https://raw.githubusercontent.com/openai/openai-openapi/main/openapi.yaml
+uv run python scripts/refresh_openresponses_spec.py /tmp/openai-openapi.yaml
+uv run python scripts/openai_coverage.py --update --generate-docs
 ```
 
 ### Run tests

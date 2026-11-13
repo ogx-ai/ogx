@@ -18,12 +18,12 @@ This documentation is auto-generated from the OpenAI API specification compariso
 
 | Metric | Value |
 |--------|-------|
-| **Overall Conformance Score** | 93.8% |
-| **Endpoints Implemented** | 29/146 |
-| **Total Properties Checked** | 3432 |
-| **Schema/Type Issues** | 150 |
-| **Missing Properties** | 64 |
-| **Total Issues to Fix** | 214 |
+| **Overall Conformance Score** | 97.0% |
+| **Endpoints Implemented** | 32/149 |
+| **Total Properties Checked** | 7754 |
+| **Schema/Type Issues** | 141 |
+| **Missing Properties** | 88 |
+| **Total Issues to Fix** | 229 |
 
 ## Integration Test Coverage
 
@@ -48,11 +48,11 @@ Categories are sorted by conformance score (lowest first, needing most attention
 | Models | 60.0% | 15 | 0 | 6 |
 | Completions | 60.9% | 46 | 17 | 1 |
 | Embeddings | 78.6% | 14 | 3 | 0 |
-| Vector stores | 82.9% | 310 | 41 | 12 |
+| Vector stores | 84.5% | 310 | 36 | 12 |
 | Files | 92.9% | 42 | 1 | 2 |
-| Responses | 96.4% | 223 | 8 | 0 |
 | Chat | 98.7% | 449 | 5 | 1 |
 | Conversations | 99.3% | 2165 | 15 | 1 |
+| Responses | 99.4% | 4545 | 4 | 24 |
 
 ## Missing Endpoints
 
@@ -487,7 +487,7 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 
 ### Vector stores
 
-**Score:** 82.9% · **Issues:** 41 · **Missing:** 12
+**Score:** 84.5% · **Issues:** 36 · **Missing:** 12
 
 #### `/vector_stores`
 
@@ -605,12 +605,11 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 **GET**
 
 <details>
-<summary>Schema Issues (3)</summary>
+<summary>Schema Issues (2)</summary>
 
 | Property | Issues |
 |----------|--------|
 | `responses.200.content.application/json.properties.data.items.properties.chunking_strategy` | Type removed: ['object']; Union variants added: 3; Union variants removed: 2 |
-| `responses.200.content.application/json.properties.data.items.properties.last_error` | Union variants added: 1; Union variants removed: 1 |
 | `responses.200.content.application/json.properties.data.items.properties.usage_bytes` | Default changed: None -&gt; 0 |
 
 </details>
@@ -620,12 +619,11 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 **GET**
 
 <details>
-<summary>Schema Issues (3)</summary>
+<summary>Schema Issues (2)</summary>
 
 | Property | Issues |
 |----------|--------|
 | `responses.200.content.application/json.properties.data.items.properties.chunking_strategy` | Type removed: ['object']; Union variants added: 3; Union variants removed: 2 |
-| `responses.200.content.application/json.properties.data.items.properties.last_error` | Union variants added: 1; Union variants removed: 1 |
 | `responses.200.content.application/json.properties.data.items.properties.usage_bytes` | Default changed: None -&gt; 0 |
 
 </details>
@@ -633,13 +631,12 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 **POST**
 
 <details>
-<summary>Schema Issues (4)</summary>
+<summary>Schema Issues (3)</summary>
 
 | Property | Issues |
 |----------|--------|
 | `requestBody.content.application/json.properties.chunking_strategy` | Type removed: ['object']; Union variants added: 2 |
 | `responses.200.content.application/json.properties.chunking_strategy` | Type removed: ['object']; Union variants added: 3; Union variants removed: 2 |
-| `responses.200.content.application/json.properties.last_error` | Union variants added: 1; Union variants removed: 1 |
 | `responses.200.content.application/json.properties.usage_bytes` | Default changed: None -&gt; 0 |
 
 </details>
@@ -649,12 +646,11 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 **GET**
 
 <details>
-<summary>Schema Issues (3)</summary>
+<summary>Schema Issues (2)</summary>
 
 | Property | Issues |
 |----------|--------|
 | `responses.200.content.application/json.properties.chunking_strategy` | Type removed: ['object']; Union variants added: 3; Union variants removed: 2 |
-| `responses.200.content.application/json.properties.last_error` | Union variants added: 1; Union variants removed: 1 |
 | `responses.200.content.application/json.properties.usage_bytes` | Default changed: None -&gt; 0 |
 
 </details>
@@ -662,13 +658,12 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 **POST**
 
 <details>
-<summary>Schema Issues (4)</summary>
+<summary>Schema Issues (3)</summary>
 
 | Property | Issues |
 |----------|--------|
 | `requestBody.content.application/json.properties.attributes` | Type added: ['object']; Nullable removed (OpenAI nullable); Union variants removed: 2 |
 | `responses.200.content.application/json.properties.chunking_strategy` | Type removed: ['object']; Union variants added: 3; Union variants removed: 2 |
-| `responses.200.content.application/json.properties.last_error` | Union variants added: 1; Union variants removed: 1 |
 | `responses.200.content.application/json.properties.usage_bytes` | Default changed: None -&gt; 0 |
 
 </details>
@@ -718,42 +713,6 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 | Property | Issues |
 |----------|--------|
 | `requestBody.content.multipart/form-data.properties.expires_after` | Type removed: ['object']; Union variants added: 2 |
-
-</details>
-
-### Responses
-
-**Score:** 96.4% · **Issues:** 8 · **Missing:** 0
-
-#### `/responses`
-
-**POST**
-
-<details>
-<summary>Schema Issues (7)</summary>
-
-| Property | Issues | Tested |
-|----------|--------|--------|
-| `requestBody.content.application/json.properties.input` | Union variants added: 2; Union variants removed: 2 | Yes |
-| `requestBody.content.application/json.properties.model` | Type added: ['string']; Nullable removed (OpenAI nullable); Union variants removed: 2 | Yes |
-| `requestBody.content.application/json.properties.service_tier` | Union variants added: 2 | Yes |
-| `requestBody.content.application/json.properties.tool_choice` | Union variants added: 2; Union variants removed: 1 | Yes |
-| `responses.200.content.application/json.properties.output.items` | Union variants added: 8; Union variants removed: 4 | Yes |
-| `responses.200.content.application/json.properties.tool_choice` | Union variants added: 3 | Yes |
-| `responses.200.content.application/json.properties.tools.items` | Union variants added: 4; Union variants removed: 1 | Yes |
-
-</details>
-
-#### `/responses/compact`
-
-**POST**
-
-<details>
-<summary>Schema Issues (1)</summary>
-
-| Property | Issues | Tested |
-|----------|--------|--------|
-| `responses.200.content.application/json.properties.output.items` | Union variants added: 4 | Yes |
 
 </details>
 
@@ -908,6 +867,120 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 | Property | Issues | Tested |
 |----------|--------|--------|
 | `responses.200.content.application/json.properties.metadata` | Union variants added: 2 | Yes |
+
+</details>
+
+### Responses
+
+**Score:** 99.4% · **Issues:** 4 · **Missing:** 24
+
+#### `/responses`
+
+**POST**
+
+<details>
+<summary>Missing Properties (4)</summary>
+
+- `responses.400.content.application/json.properties.error`
+- `responses.404`
+- `responses.429.content.application/json.properties.error`
+- `responses.503`
+
+</details>
+
+#### `/responses/compact`
+
+**POST**
+
+<details>
+<summary>Missing Properties (6)</summary>
+
+- `requestBody.content.application/json.properties.prompt_cache_options`
+- `requestBody.content.application/json.properties.prompt_cache_retention`
+- `requestBody.content.application/json.properties.service_tier`
+- `responses.400.content.application/json.properties.error`
+- `responses.429.content.application/json.properties.error`
+- `responses.503`
+
+</details>
+
+<details>
+<summary>Schema Issues (1)</summary>
+
+| Property | Issues | Tested |
+|----------|--------|--------|
+| `responses.200.content.application/json.properties.output.items` | Union variants added: 4 | Yes |
+
+</details>
+
+#### `/responses/{response_id}`
+
+**DELETE**
+
+<details>
+<summary>Missing Properties (2)</summary>
+
+- `responses.404`
+- `responses.429.content.application/json.properties.error`
+
+</details>
+
+<details>
+<summary>Schema Issues (2)</summary>
+
+| Property | Issues | Tested |
+|----------|--------|--------|
+| `responses.200.content.application/json.properties.deleted` | Default changed: None -&gt; True | No |
+| `responses.200.content.application/json.properties.object` | Enum values removed: ['response.deleted']; Default changed: response.deleted -&gt; None | No |
+
+</details>
+
+**GET**
+
+<details>
+<summary>Missing Properties (6)</summary>
+
+- `parameters.query.include`
+- `parameters.query.include_obfuscation`
+- `parameters.query.starting_after`
+- `parameters.query.stream`
+- `responses.404`
+- `responses.429.content.application/json.properties.error`
+
+</details>
+
+#### `/responses/{response_id}/cancel`
+
+**POST**
+
+<details>
+<summary>Missing Properties (1)</summary>
+
+- `responses.429.content.application/json.properties.error`
+
+</details>
+
+#### `/responses/{response_id}/input_items`
+
+**GET**
+
+<details>
+<summary>Missing Properties (5)</summary>
+
+- `responses.200.content.application/json.properties.first_id`
+- `responses.200.content.application/json.properties.has_more`
+- `responses.200.content.application/json.properties.last_id`
+- `responses.404`
+- `responses.429.content.application/json.properties.error`
+
+</details>
+
+<details>
+<summary>Schema Issues (1)</summary>
+
+| Property | Issues | Tested |
+|----------|--------|--------|
+| `responses.200.content.application/json.properties.data.items` | Union variants added: 4 | No |
 
 </details>
 
