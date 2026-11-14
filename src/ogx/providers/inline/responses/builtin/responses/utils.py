@@ -16,6 +16,7 @@ from ogx.providers.utils.files.response import response_body_bytes
 from ogx_api import (
     Files,
     Inference,
+    InvalidParameterError,
     OpenAIAssistantMessageParam,
     OpenAIChatCompletionContentPartImageParam,
     OpenAIChatCompletionContentPartParam,
@@ -462,15 +463,27 @@ async def convert_response_text_to_chat_response_format(
     """
     Convert an OpenAI Response text parameter into an OpenAI Chat Completion response format.
     """
-    if not text.format or text.format["type"] == "text":
+    if not text.format:
         return OpenAIResponseFormatText(type="text")
-    if text.format["type"] == "json_object":
+    format_type = text.format.get("type")
+    if not format_type:
+        raise InvalidParameterError("text.format.type", format_type, "Required when text.format is set.")
+    if format_type == "text":
+        return OpenAIResponseFormatText(type="text")
+    if format_type == "json_object":
         return OpenAIResponseFormatJSONObject()
-    if text.format["type"] == "json_schema":
-        # Assert name exists for json_schema format
-        assert text.format.get("name"), "json_schema format requires a name"
-        schema_name: str = text.format["name"]  # type: ignore[assignment]
-        json_schema = OpenAIJSONSchema(name=schema_name, schema_=text.format["schema"])
+    if format_type == "json_schema":
+        schema_name = text.format.get("name")
+        if not schema_name:
+            raise InvalidParameterError(
+                "text.format.name", schema_name, "Required when text.format.type is 'json_schema'."
+            )
+        schema_def = text.format.get("schema")
+        if schema_def is None:
+            raise InvalidParameterError(
+                "text.format.schema", schema_def, "Required when text.format.type is 'json_schema'."
+            )
+        json_schema = OpenAIJSONSchema(name=schema_name, schema_=schema_def)
         # Only set fields the client explicitly provided; unset fields must
         # stay out of the provider request (strict omitted = best-effort).
         if (description := text.format.get("description")) is not None:
