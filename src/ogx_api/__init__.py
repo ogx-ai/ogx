@@ -40,7 +40,6 @@ from .schema_utils import (  # noqa: I001
     json_schema_type,
     register_dynamic_schema_type,
     register_schema,
-    remove_null_from_anyof,
 )
 from .admin import (
     Admin,
@@ -1125,6 +1124,4 @@ __all__ = [
     "AnthropicUsage",
     # Validators
     "validate_embeddings_input_is_text",
-    # helpers
-    "remove_null_from_anyof",
 ]
