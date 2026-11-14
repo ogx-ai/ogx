@@ -171,6 +171,7 @@ _GUARDRAIL_BATCH_CHARS = 200
 # Maps OpenAI Chat Completions error codes to Responses API error codes
 _RESPONSES_API_ERROR_CODES = {
     "invalid_base64": "invalid_base64_image",
+    "context_length_exceeded": "invalid_prompt",
 }
 
 _VALID_RESPONSE_ERROR_CODES = frozenset(
