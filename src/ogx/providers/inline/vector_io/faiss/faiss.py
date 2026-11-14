@@ -239,6 +239,8 @@ class FaissIndex(EmbeddingIndex):
 
         new_chunk_by_index = {}
         for idx, chunk in self.chunk_by_index.items():
+            if idx == removed_pos:
+                continue
             # Shift all chunks after the removed chunk to the left
             if idx > removed_pos:
                 new_chunk_by_index[idx - 1] = chunk
