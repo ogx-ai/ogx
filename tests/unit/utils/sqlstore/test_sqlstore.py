@@ -220,6 +220,37 @@ async def test_sqlstore_pagination_basic():
         assert result3.has_more is False
 
 
+async def test_sqlstore_pagination_same_order_value():
+    """Rows that share the cursor row's order value must not be skipped (keyset tiebreaker)."""
+    with TemporaryDirectory() as tmp_dir:
+        db_path = tmp_dir + "/test.db"
+        store = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=db_path))
+
+        await store.create_table(
+            "test_records",
+            {
+                "id": ColumnType.STRING,
+                "created_at": ColumnType.INTEGER,
+                "name": ColumnType.STRING,
+            },
+        )
+
+        # All rows share the same created_at, so pagination must fall back to the
+        # unique id as a tiebreaker instead of dropping the tied rows.
+        for record_id in ["a", "b", "c", "d", "e"]:
+            await store.insert("test_records", {"id": record_id, "created_at": 1000, "name": record_id})
+
+        # The page after id "b" is every same-second row whose id sorts after "b".
+        result = await store.fetch_all(
+            table="test_records",
+            order_by=[("created_at", "desc")],
+            cursor=("id", "b"),
+            limit=10,
+        )
+
+        assert [row["id"] for row in result.data] == ["c", "d", "e"]
+
+
 async def test_sqlstore_pagination_with_filter():
     """Test pagination with WHERE conditions."""
     with TemporaryDirectory() as tmp_dir:
@@ -575,6 +606,24 @@ async def test_pool_pre_ping_defaults_to_true():
 
     pg_cfg = PostgresSqlStoreConfig(user="test", password="test")
     assert pg_cfg.pool_pre_ping is True
+
+
+async def test_postgres_connection_string_is_passed_as_asyncpg_dsn() -> None:
+    """PostgreSQL URI options are passed to asyncpg as DSN options, not URL kwargs."""
+    dsn = (
+        "postgresql://pguser:secret@db.local/mydb?application_name=ogx"
+        "&target_session_attrs=read-write&sslmode=require&sslrootcert=%2Fetc%2Fpostgres%2Fca.pem"
+    )
+    with patch.object(_SQLSTORE_MODULE, "create_async_engine") as mock_create:
+        config = PostgresSqlStoreConfig(connection_string=dsn)
+        store = SqlAlchemySqlStoreImpl(config)
+        await store._ensure_engine()
+
+        url = mock_create.call_args.args[0]
+        kwargs = mock_create.call_args.kwargs
+        assert url.drivername == "postgresql+asyncpg"
+        assert not url.query
+        assert kwargs["connect_args"] == {"dsn": dsn}
 
 
 async def test_postgres_pool_config_defaults():

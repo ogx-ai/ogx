@@ -19,7 +19,10 @@ on:
       - 'uv.lock'
       - 'pyproject.toml'
       - '.github/workflows/integration-tests.yml' # This workflow
+      - '.github/actions/setup-llamacpp/action.yml'
       - '.github/actions/setup-ollama/action.yml'
+      - '.github/actions/setup-sglang/action.yml'
+      - '.github/actions/setup-tei/action.yml'
       - '.github/actions/setup-test-environment/action.yml'
       - '.github/actions/run-and-record-tests/action.yml'
       - 'scripts/integration-tests.sh'
@@ -43,10 +46,6 @@ on:
         default: 'ollama'
   workflow_call:
     inputs:
-      sdk_install_url:
-        required: false
-        type: string
-        description: 'URL to install Python SDK from (for testing preview builds)'
       matrix_key:
         required: false
         type: string
@@ -100,7 +99,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.pr_head_sha || github.event.pull_request.head.sha || github.sha }}
 
@@ -109,12 +108,11 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           CHANGED=$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename')
-          # Pass as a single-line escaped string for the argument
-          {
-            echo "files<<EOF"
-            echo "$CHANGED"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          # Write to a file instead of passing as a command-line argument: large PRs
+          # (hundreds of recording files) exceed the kernel's 128 KiB per-argument limit.
+          # This step stays separate from matrix generation so that only it needs GH_TOKEN.
+          echo "$CHANGED" > "${RUNNER_TEMP}/changed-files.txt"
+          echo "file=${RUNNER_TEMP}/changed-files.txt" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -128,7 +126,7 @@ jobs:
             --schedule "${{ github.event.schedule }}" \
             --test-setup "${{ github.event.inputs.test-setup || '' }}" \
             --matrix-key "${{ inputs.matrix_key || 'default' }}" \
-            --changed-files "${{ steps.changed-files.outputs.files || '' }}")
+            --changed-files-file "${{ steps.changed-files.outputs.file }}")
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "Generated matrix: $MATRIX"
 
@@ -159,7 +157,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.pr_head_sha || github.event.pull_request.head.sha || github.sha }}
 
@@ -168,11 +166,12 @@ jobs:
       # called from pull_request_target workflows.
       - name: Setup test environment
         if: ${{ matrix.config.allowed_clients == null || contains(matrix.config.allowed_clients, matrix.client) }}
-        uses: ogx-ai/ogx/.github/actions/setup-test-environment@68c0994a790e4f029007f3cce12a744d69a7d435
+        uses: ogx-ai/ogx/.github/actions/setup-test-environment@d4ffee2179c7035d3e1377fc0468e83936feb11a
+        env:
+          SGLANG_MODEL: ${{ matrix.config.setup == 'sglang-systemone' && 'togethercomputer/Tev1-0.8B-experimental' || 'Qwen/Qwen3-0.6B' }}
         with:
           python-version: ${{ matrix.python-version }}
           client-version: ${{ matrix.client-version }}
-          sdk_install_url: ${{ inputs.sdk_install_url || '' }}
           setup: ${{ matrix.config.setup }}
           suite: ${{ matrix.config.suite }}
           inference-mode: ${{ matrix.config.inference_mode || 'replay' }}
@@ -189,13 +188,13 @@ jobs:
       - name: Setup TypeScript client
         if: ${{ matrix.client == 'server' }}
         id: setup-ts-client
-        uses: ogx-ai/ogx/.github/actions/setup-typescript-client@fb32709e3b29816b52085c92820531e4e6d94be8
+        uses: ogx-ai/ogx/.github/actions/setup-typescript-client@75ed067efcadcb30bf61df4684c5151aa2640cae
         with:
           client-version: ${{ matrix.client-version }}
 
       - name: Run tests
         if: ${{ matrix.config.allowed_clients == null || contains(matrix.config.allowed_clients, matrix.client) }}
-        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@fb32709e3b29816b52085c92820531e4e6d94be8
+        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@d4ffee2179c7035d3e1377fc0468e83936feb11a
         env:
           OPENAI_API_KEY: dummy
           AZURE_API_KEY: replay-mode-dummy-key
@@ -209,7 +208,12 @@ jobs:
           AWS_BEARER_TOKEN_BEDROCK: replay-mode-dummy-key
           AWS_DEFAULT_REGION: us-west-2
           GEMINI_API_KEY: replay-mode-dummy-key
+          FIREWORKS_API_KEY: replay-mode-dummy-key
+          ANTHROPIC_API_KEY: ${{ matrix.config.setup == 'anthropic' && 'replay-mode-dummy-key' || '' }}
+          META_API_KEY: ${{ matrix.config.setup == 'meta' && 'replay-mode-dummy-key' || '' }}
+          DEEPSEEK_API_KEY: ${{ matrix.config.setup == 'deepseek' && 'replay-mode-dummy-key' || '' }}
           TAVILY_SEARCH_API_KEY: ${{ secrets.TAVILY_SEARCH_API_KEY || 'replay-mode-dummy-key' }}
+          TYPESAFE_API_KEY: replay-mode-dummy-key
           TS_CLIENT_PATH: ${{ steps.setup-ts-client.outputs.ts-client-path || '' }}
         with:
           stack-config: >-

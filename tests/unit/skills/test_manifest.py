@@ -4,6 +4,8 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import pytest
+
 from ogx.providers.inline.skills.builtin.manifest import parse_skill_manifest
 
 
@@ -88,3 +90,16 @@ Line three."""
         assert manifest.name == "multi"
         assert "Line one." in manifest.instructions
         assert "Line three." in manifest.instructions
+
+    @pytest.mark.parametrize(
+        "frontmatter",
+        [
+            "name: my-skill\ndescription: Does: something: useful",
+            "name: [unclosed",
+            'name: "unterminated',
+        ],
+    )
+    def test_invalid_yaml_frontmatter_raises_value_error(self, frontmatter):
+        content = f"---\n{frontmatter}\n---\nInstructions."
+        with pytest.raises(ValueError, match="Failed to parse SKILL.md frontmatter"):
+            parse_skill_manifest(content)

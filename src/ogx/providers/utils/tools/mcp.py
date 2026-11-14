@@ -6,20 +6,24 @@
 
 import asyncio
 import hashlib
+import json
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, cast
+from urllib.parse import urlparse
 
-import httpx
-from mcp import ClientSession, McpError
+import httpx2
+from mcp import ClientSession, MCPError
 from mcp import types as mcp_types
 from mcp.client.sse import sse_client
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
+from mcp.shared._httpx_utils import MCP_DEFAULT_SSE_READ_TIMEOUT, MCP_DEFAULT_TIMEOUT
 
 from ogx.core.datatypes import AuthenticationRequiredError
 from ogx.log import get_logger
+from ogx.providers.utils.common.url_validation import resolve_public_ips
 from ogx.providers.utils.tools.ttl_dict import TTLDict
 from ogx_api import (
     ImageContentItem,
@@ -32,6 +36,82 @@ from ogx_api import (
 )
 
 logger = get_logger(__name__, category="tools")
+
+
+def validate_mcp_endpoint(endpoint: str) -> dict[str, str]:
+    """Validate an MCP endpoint and pin it to a validated public IP.
+
+    Applies the same private-IP guard used for inference content and file-search
+    URLs so caller-controlled MCP ``server_url`` values cannot be used for SSRF:
+    only http(s) URLs whose host resolves exclusively to publicly routable
+    addresses are accepted.
+
+    The host is resolved here, immediately before the transport is built, and
+    the returned ``{hostname: ip}`` map pins the connection to the validated
+    address (the Host header and TLS SNI keep the original name), so a
+    DNS-rebinding swap between this check and the TCP connect cannot redirect
+    the request to a non-public address. Callers must re-invoke this (with a
+    fresh resolution) right before each connection, including tool invocation.
+
+    Raises:
+        ValueError: If the scheme is not http/https, the host is unresolvable,
+            or any resolved address is not publicly routable.
+    """
+    parsed = urlparse(endpoint)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Failed to connect to MCP endpoint: only http and https URLs are allowed ({endpoint})")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError(f"Failed to parse hostname from URL: {endpoint}")
+    return {hostname: resolve_public_ips(hostname)[0]}
+
+
+class _PinnedIPTransport(httpx2.AsyncHTTPTransport):
+    """Route requests for pinned hosts to a validated IP address.
+
+    The Host header (and, for https, the TLS SNI name) is kept at the original
+    hostname so the target server sees the request as unremarkable.
+
+    Fails closed: any request to a host without a pin is rejected rather than
+    resolved, so a server-supplied URL (e.g. an SSE endpoint event) cannot
+    steer the connection to an address that never passed validation.
+    """
+
+    def __init__(self, pins: dict[str, str], **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._pins = pins
+
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
+        host = request.url.host
+        pinned = self._pins.get(host)
+        if pinned is None:
+            raise ValueError(
+                f"Failed to connect to MCP endpoint: requests to non-pinned hosts are not allowed ({host})"
+            )
+        # Keep the original Host header (includes a non-default port) so the
+        # target server sees the request as unremarkable.
+        host_header = request.headers.get("host", host)
+        request.url = request.url.copy_with(host=pinned)
+        request.headers["host"] = host_header
+        if request.url.scheme == "https":
+            request.extensions["sni_hostname"] = host
+        return await super().handle_async_request(request)
+
+
+def _pinned_sse_client_factory(pins: dict[str, str]):
+    """Build the httpx_client_factory passed to sse_client for pinned connections."""
+
+    def factory(headers: dict[str, str] | None = None, timeout: httpx2.Timeout | None = None, auth: Any = None):
+        if timeout is None:
+            timeout = httpx2.Timeout(MCP_DEFAULT_TIMEOUT, read=MCP_DEFAULT_SSE_READ_TIMEOUT)
+        kwargs: dict[str, Any] = {"timeout": timeout, "transport": _PinnedIPTransport(pins)}
+        if headers is not None:
+            kwargs["headers"] = headers
+        if auth is not None:
+            kwargs["auth"] = auth
+        return httpx2.AsyncClient(**kwargs)
+
+    return factory
 
 
 def prepare_mcp_headers(base_headers: dict[str, str] | None, authorization: str | None) -> dict[str, str]:
@@ -117,12 +197,19 @@ class MCPSessionManager:
                 self._locks[key] = asyncio.Lock()
             return self._locks[key]
 
-    async def get_session(self, endpoint: str, headers: dict[str, str]) -> ClientSession:
+    async def get_session(
+        self,
+        endpoint: str,
+        headers: dict[str, str],
+        endpoint_pins: dict[str, str] | None = None,
+    ) -> ClientSession:
         """Get or create an MCP session for the given endpoint and headers.
 
         Args:
             endpoint: MCP server endpoint URL
             headers: Headers including authorization
+            endpoint_pins: Optional ``{hostname: ip}`` map pinning the connection to
+                pre-validated public addresses (see ``validate_mcp_endpoint``)
 
         Returns:
             An initialized ClientSession ready for tool calls
@@ -143,12 +230,17 @@ class MCPSessionManager:
                 return session
 
             # Create new session
-            session, client_ctx, session_ctx = await self._create_session(endpoint, headers)
+            session, client_ctx, session_ctx = await self._create_session(endpoint, headers, endpoint_pins)
             self._sessions[key] = (session, client_ctx, session_ctx)
             logger.debug("Created new MCP session", endpoint=endpoint, key=key[:32])
             return session
 
-    async def _create_session(self, endpoint: str, headers: dict[str, str]) -> tuple[ClientSession, Any, Any]:
+    async def _create_session(
+        self,
+        endpoint: str,
+        headers: dict[str, str],
+        endpoint_pins: dict[str, str] | None = None,
+    ) -> tuple[ClientSession, Any, Any]:
         """Create a new MCP session.
 
         Returns:
@@ -164,13 +256,34 @@ class MCPSessionManager:
 
         for i, strategy in enumerate(connection_strategies):
             try:
-                client = streamablehttp_client
-                if strategy == MCPProtol.SSE:
-                    client = cast(Any, sse_client)
-
-                # Enter the client context manager manually
-                client_ctx = client(endpoint, headers=headers)
-                client_streams = await client_ctx.__aenter__()
+                # Enter the client context managers manually. Streamable HTTP takes
+                # headers via an httpx2 client (caller-owned, so tracked on the exit
+                # stack); SSE still accepts headers directly.
+                client_stack = AsyncExitStack()
+                try:
+                    if strategy == MCPProtol.SSE:
+                        sse_kwargs: dict[str, Any] = {}
+                        if endpoint_pins is not None:
+                            sse_kwargs["httpx_client_factory"] = _pinned_sse_client_factory(endpoint_pins)
+                        transport = sse_client(endpoint, headers=headers, **sse_kwargs)
+                    else:
+                        client_kwargs: dict[str, Any] = {"headers": headers}
+                        if endpoint_pins is not None:
+                            client_kwargs["transport"] = _PinnedIPTransport(endpoint_pins)
+                        http_client = await client_stack.enter_async_context(httpx2.AsyncClient(**client_kwargs))
+                        transport = streamable_http_client(endpoint, http_client=http_client)
+                    client_streams = await client_stack.enter_async_context(transport)
+                except httpx2.HTTPStatusError as e:
+                    # A 401 during connect is raised outside the SDK's task group, so
+                    # it bypasses the except* clauses below; map it explicitly.
+                    await client_stack.__aexit__(None, None, None)
+                    if e.response.status_code == 401:
+                        raise AuthenticationRequiredError(e) from e
+                    raise
+                except BaseException:
+                    await client_stack.__aexit__(None, None, None)
+                    raise
+                client_ctx = client_stack
 
                 try:
                     # Enter the session context manager manually
@@ -189,15 +302,15 @@ class MCPSessionManager:
                     await client_ctx.__aexit__(None, None, None)
                     raise
 
-            except* httpx.HTTPStatusError as eg:
+            except* httpx2.HTTPStatusError as eg:
                 for exc in eg.exceptions:
-                    err = cast(httpx.HTTPStatusError, exc)
+                    err = cast(httpx2.HTTPStatusError, exc)
                     if err.response.status_code == 401:
                         raise AuthenticationRequiredError(exc) from exc
                 if i == len(connection_strategies) - 1:
                     raise
                 last_exception = eg
-            except* httpx.ConnectError as eg:
+            except* httpx2.ConnectError as eg:
                 if i == len(connection_strategies) - 1:
                     error_msg = f"Failed to connect to MCP server at {endpoint}: Connection refused"
                     logger.error("MCP connection error", error=error_msg)
@@ -210,7 +323,7 @@ class MCPSessionManager:
                         connection_strategies_i_1_name=connection_strategies[i + 1].name,
                     )
                 last_exception = eg
-            except* httpx.TimeoutException as eg:
+            except* httpx2.TimeoutException as eg:
                 if i == len(connection_strategies) - 1:
                     error_msg = f"MCP server at {endpoint} timed out"
                     logger.error("MCP timeout error", error=error_msg)
@@ -223,7 +336,7 @@ class MCPSessionManager:
                         connection_strategies_i_1_name=connection_strategies[i + 1].name,
                     )
                 last_exception = eg
-            except* httpx.RequestError as eg:
+            except* httpx2.RequestError as eg:
                 if i == len(connection_strategies) - 1:
                     exc_msg = str(eg.exceptions[0]) if eg.exceptions else "Unknown error"
                     error_msg = f"Network error connecting to MCP server at {endpoint}: {exc_msg}"
@@ -237,7 +350,7 @@ class MCPSessionManager:
                         connection_strategies_i_1_name=connection_strategies[i + 1].name,
                     )
                 last_exception = eg
-            except* McpError:
+            except* MCPError:
                 if i < len(connection_strategies) - 1:
                     logger.warning(
                         "failed to connect via , falling back to",
@@ -259,6 +372,14 @@ class MCPSessionManager:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Exit the async context manager and cleanup all sessions.
 
+        Sessions are closed in the reverse order of their creation. Each session
+        holds anyio cancel scopes (the task groups of the transport client and of
+        the ClientSession), and anyio only allows leaving cancel scopes in the
+        reverse order of entering them. Closing the oldest session first while a
+        newer one is still open fails with "Attempted to exit a cancel scope that
+        isn't the current task's current cancel scope", and leaves the task with
+        cancel scopes it never leaves, which breaks the task later on.
+
         Note: We catch BaseException (not just Exception) because:
         1. CancelledError is a BaseException and can occur during cleanup
         2. anyio cancel scope errors can occur if cleanup runs in a different
@@ -267,7 +388,7 @@ class MCPSessionManager:
         """
         errors = []
         session_count = len(self._sessions)
-        for key, (session, client_ctx, _) in list(self._sessions.items()):
+        for key, (session, client_ctx, _) in reversed(list(self._sessions.items())):
             try:
                 await session.__aexit__(None, None, None)
             except BaseException as e:
@@ -294,12 +415,16 @@ class MCPSessionManager:
 
 
 @asynccontextmanager
-async def client_wrapper(endpoint: str, headers: dict[str, str]) -> AsyncGenerator[ClientSession, Any]:
+async def client_wrapper(
+    endpoint: str, headers: dict[str, str], endpoint_pins: dict[str, str] | None = None
+) -> AsyncGenerator[ClientSession, Any]:
     """Create an MCP client session for the given endpoint with protocol auto-detection.
 
     Args:
         endpoint: MCP server endpoint URL
         headers: HTTP headers to include in the connection
+        endpoint_pins: Optional ``{hostname: ip}`` map pinning the connection to
+            pre-validated public addresses (see ``validate_mcp_endpoint``)
 
     Returns:
         An async context manager yielding an initialized ClientSession
@@ -313,29 +438,46 @@ async def client_wrapper(endpoint: str, headers: dict[str, str]) -> AsyncGenerat
 
     for i, strategy in enumerate(connection_strategies):
         try:
-            client = streamablehttp_client
-            if strategy == MCPProtol.SSE:
-                # sse_client and streamablehttp_client have different signatures, but both
-                # are called the same way here, so we cast to Any to avoid type errors
-                client = cast(Any, sse_client)
+            # Streamable HTTP takes headers via an httpx2 client; SSE accepts them directly.
+            async with AsyncExitStack() as client_stack:
+                if strategy == MCPProtol.SSE:
+                    sse_kwargs: dict[str, Any] = {}
+                    if endpoint_pins is not None:
+                        sse_kwargs["httpx_client_factory"] = _pinned_sse_client_factory(endpoint_pins)
+                    transport = sse_client(endpoint, headers=headers, **sse_kwargs)
+                else:
+                    client_kwargs: dict[str, Any] = {"headers": headers}
+                    if endpoint_pins is not None:
+                        client_kwargs["transport"] = _PinnedIPTransport(endpoint_pins)
+                    http_client = await client_stack.enter_async_context(httpx2.AsyncClient(**client_kwargs))
+                    transport = streamable_http_client(endpoint, http_client=http_client)
 
-            async with client(endpoint, headers=headers) as client_streams:
-                async with ClientSession(read_stream=client_streams[0], write_stream=client_streams[1]) as session:
-                    await session.initialize()
-                    protocol_cache[endpoint] = strategy
-                    yield session
-                    return
-        except* httpx.HTTPStatusError as eg:
+                # A 401 during connect is raised outside the SDK's task group, so it
+                # bypasses the except* clauses below; map it explicitly.
+                try:
+                    async with transport as client_streams:
+                        async with ClientSession(
+                            read_stream=client_streams[0], write_stream=client_streams[1]
+                        ) as session:
+                            await session.initialize()
+                            protocol_cache[endpoint] = strategy
+                            yield session
+                            return
+                except httpx2.HTTPStatusError as e:
+                    if e.response.status_code == 401:
+                        raise AuthenticationRequiredError(e) from e
+                    raise
+        except* httpx2.HTTPStatusError as eg:
             for exc in eg.exceptions:
                 # mypy does not currently narrow the type of `eg.exceptions` based on the `except*` filter,
-                # so we explicitly cast each item to httpx.HTTPStatusError. This is safe because
-                # `except* httpx.HTTPStatusError` guarantees all exceptions in `eg.exceptions` are of that type.
-                err = cast(httpx.HTTPStatusError, exc)
+                # so we explicitly cast each item to httpx2.HTTPStatusError. This is safe because
+                # `except* httpx2.HTTPStatusError` guarantees all exceptions in `eg.exceptions` are of that type.
+                err = cast(httpx2.HTTPStatusError, exc)
                 if err.response.status_code == 401:
                     raise AuthenticationRequiredError(exc) from exc
             if i == len(connection_strategies) - 1:
                 raise
-        except* httpx.ConnectError as eg:
+        except* httpx2.ConnectError as eg:
             # Connection refused, server down, network unreachable
             if i == len(connection_strategies) - 1:
                 error_msg = f"Failed to connect to MCP server at {endpoint}: Connection refused"
@@ -348,7 +490,7 @@ async def client_wrapper(endpoint: str, headers: dict[str, str]) -> AsyncGenerat
                     name=strategy.name,
                     connection_strategies_i_1_name=connection_strategies[i + 1].name,
                 )
-        except* httpx.TimeoutException as eg:
+        except* httpx2.TimeoutException as eg:
             # Request timeout, server too slow
             if i == len(connection_strategies) - 1:
                 error_msg = f"MCP server at {endpoint} timed out"
@@ -361,7 +503,7 @@ async def client_wrapper(endpoint: str, headers: dict[str, str]) -> AsyncGenerat
                     name=strategy.name,
                     connection_strategies_i_1_name=connection_strategies[i + 1].name,
                 )
-        except* httpx.RequestError as eg:
+        except* httpx2.RequestError as eg:
             # DNS resolution failures, network errors, invalid URLs
             if i == len(connection_strategies) - 1:
                 # Get the first exception's message for the error string
@@ -376,7 +518,7 @@ async def client_wrapper(endpoint: str, headers: dict[str, str]) -> AsyncGenerat
                     name=strategy.name,
                     connection_strategies_i_1_name=connection_strategies[i + 1].name,
                 )
-        except* McpError:
+        except* MCPError:
             if i < len(connection_strategies) - 1:
                 logger.warning(
                     "failed to connect via , falling back to",
@@ -392,6 +534,7 @@ async def list_mcp_tools(
     headers: dict[str, str] | None = None,
     authorization: str | None = None,
     session_manager: MCPSessionManager | None = None,
+    endpoint_pins: dict[str, str] | None = None,
 ) -> ListToolDefsResponse:
     """List tools available from an MCP server.
 
@@ -403,6 +546,8 @@ async def list_mcp_tools(
             When provided, sessions are cached and reused, avoiding redundant session
             creation when list_mcp_tools and invoke_mcp_tool are called for the same
             server within a request. (Fix for #4452)
+        endpoint_pins: Optional ``{hostname: ip}`` map pinning the connection to
+            pre-validated public addresses (see ``validate_mcp_endpoint``)
 
     Returns:
         List of tool definitions from the MCP server
@@ -423,8 +568,8 @@ async def list_mcp_tools(
                 ToolDef(
                     name=tool.name,
                     description=tool.description,
-                    input_schema=tool.inputSchema,
-                    output_schema=getattr(tool, "outputSchema", None),
+                    input_schema=tool.input_schema,
+                    output_schema=tool.output_schema,
                     metadata={
                         "endpoint": endpoint,
                     },
@@ -433,18 +578,26 @@ async def list_mcp_tools(
 
     # If a session manager is provided, use it for session reuse (fix for #4452)
     if session_manager is not None:
-        session = await session_manager.get_session(endpoint, final_headers)
+        session = await session_manager.get_session(endpoint, final_headers, endpoint_pins)
         await _list_tools_from_session(session)
     else:
         # Fallback to original behavior: create a new session for this call
-        async with client_wrapper(endpoint, final_headers) as session:
+        async with client_wrapper(endpoint, final_headers, endpoint_pins) as session:
             await _list_tools_from_session(session)
 
     return ListToolDefsResponse(data=tools)
 
 
-def _parse_mcp_result(result) -> ToolInvocationResult:
+def _parse_mcp_result(result: mcp_types.CallToolResult) -> ToolInvocationResult:
     """Parse MCP tool call result into ToolInvocationResult.
+
+    Every content block becomes something the model can read: text and images
+    pass through, embedded text resources contribute their text, and binary
+    resources, resource links and audio are described in a text item instead
+    of failing the whole call. A result that only carries ``structured_content``
+    is serialized to JSON so the model does not receive an empty tool message;
+    the structured value is also kept under ``metadata["structured_content"]``.
+    When the tool reports ``is_error``, its text becomes ``error_message``.
 
     Args:
         result: The raw MCP tool call result
@@ -459,12 +612,37 @@ def _parse_mcp_result(result) -> ToolInvocationResult:
         elif isinstance(item, mcp_types.ImageContent):
             content.append(ImageContentItem(image=_URLOrData(data=item.data)))
         elif isinstance(item, mcp_types.EmbeddedResource):
-            logger.warning("EmbeddedResource is not supported", item=item)
+            resource = item.resource
+            if isinstance(resource, mcp_types.TextResourceContents):
+                content.append(TextContentItem(text=resource.text))
+            else:
+                mime_type = resource.mime_type or "unknown type"
+                content.append(TextContentItem(text=f"[binary resource {resource.uri}, {mime_type}]"))
+        elif isinstance(item, mcp_types.ResourceLink):
+            description = f": {item.description}" if item.description else ""
+            content.append(TextContentItem(text=f"[resource link {item.uri} ({item.name}){description}]"))
+        elif isinstance(item, mcp_types.AudioContent):
+            content.append(TextContentItem(text=f"[audio content, {item.mime_type}]"))
         else:
-            raise ValueError(f"Unknown content type: {type(item)}")
+            # Keep the call alive and let the model see that something was there.
+            logger.warning("Unsupported MCP content block", block_type=type(item).__name__)
+            content.append(TextContentItem(text=f"[unsupported MCP content block: {type(item).__name__}]"))
+
+    metadata = None
+    if result.structured_content is not None:
+        metadata = {"structured_content": result.structured_content}
+        if not content:
+            content.append(TextContentItem(text=json.dumps(result.structured_content)))
+
+    error_message = None
+    if result.is_error:
+        error_message = "\n".join(item.text for item in content if isinstance(item, TextContentItem)) or None
+
     return ToolInvocationResult(
         content=content,
-        error_code=1 if result.isError else 0,
+        error_code=1 if result.is_error else 0,
+        error_message=error_message,
+        metadata=metadata,
     )
 
 
@@ -475,6 +653,7 @@ async def invoke_mcp_tool(
     headers: dict[str, str] | None = None,
     authorization: str | None = None,
     session_manager: MCPSessionManager | None = None,
+    endpoint_pins: dict[str, str] | None = None,
 ) -> ToolInvocationResult:
     """Invoke an MCP tool with the given arguments.
 
@@ -487,6 +666,8 @@ async def invoke_mcp_tool(
         session_manager: Optional MCPSessionManager for session reuse within a request.
             When provided, sessions are cached and reused for multiple tool calls to
             the same endpoint, avoiding redundant tools/list calls. (Fix for #4452)
+        endpoint_pins: Optional ``{hostname: ip}`` map pinning the connection to
+            pre-validated public addresses (see ``validate_mcp_endpoint``)
 
     Returns:
         Tool invocation result with content and error information
@@ -499,12 +680,12 @@ async def invoke_mcp_tool(
 
     # If a session manager is provided, use it for session reuse (fix for #4452)
     if session_manager is not None:
-        session = await session_manager.get_session(endpoint, final_headers)
+        session = await session_manager.get_session(endpoint, final_headers, endpoint_pins)
         result = await session.call_tool(tool_name, kwargs)
         return _parse_mcp_result(result)
 
     # Fallback to original behavior: create a new session for each call
-    async with client_wrapper(endpoint, final_headers) as session:
+    async with client_wrapper(endpoint, final_headers, endpoint_pins) as session:
         result = await session.call_tool(tool_name, kwargs)
         return _parse_mcp_result(result)
 
@@ -538,8 +719,8 @@ async def get_mcp_server_info(
         init_result = await session.initialize()
 
         return MCPServerInfo(
-            name=init_result.serverInfo.name,
-            version=init_result.serverInfo.version,
-            title=init_result.serverInfo.title,
+            name=init_result.server_info.name,
+            version=init_result.server_info.version,
+            title=init_result.server_info.title,
             description=init_result.instructions,
         )

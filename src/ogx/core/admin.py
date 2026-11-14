@@ -86,10 +86,9 @@ class AdminImpl(Admin):
     # Provider management methods
     async def list_providers(self) -> ListProvidersResponse:
         config = self.config.config
-        safe_config = StackConfig(**redact_sensitive_fields(config.model_dump()))
         providers_health = await self.get_providers_health()
         ret = []
-        for api, providers in safe_config.providers.items():
+        for api, providers in config.providers.items():
             for p in providers:
                 # Skip providers that are not enabled
                 if p.provider_id is None:
@@ -99,7 +98,7 @@ class AdminImpl(Admin):
                         api=api,
                         provider_id=p.provider_id,
                         provider_type=p.provider_type,
-                        config=p.config,
+                        config=redact_sensitive_fields(p.model_dump(mode="json")["config"]),
                         health=providers_health.get(api, {}).get(
                             p.provider_id,
                             HealthResponse(

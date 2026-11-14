@@ -178,7 +178,7 @@ describe("file-utils", () => {
         ...global.URL,
         createObjectURL: mockCreateObjectURL,
         revokeObjectURL: mockRevokeObjectURL,
-      } as typeof URL;
+      } as unknown as typeof URL;
     });
 
     beforeEach(() => {

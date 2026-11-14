@@ -1,7 +1,7 @@
 # OpenResponses Conformance Recordings
 
 This directory holds inference recordings used by the
-[OpenResponses conformance CI job](../../.github/workflows/openresponses-conformance.yml)
+[OpenResponses conformance CI job](../../../.github/workflows/openresponses-conformance.yml)
 to replay underlying OpenAI API calls without needing a live API key.
 
 ## How recordings work

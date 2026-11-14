@@ -1,0 +1,47 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_temperature[txt=ollama/qwen3.5:0.8b]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_temperature[txt=ollama/qwen3.5:0.8b]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "qwen3.5:0.8b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say hello."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false,
+      "temperature": 0.0
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_bb3bff0a2e619031b4fa5041",
+      "type": "message",
+      "role": "assistant",
+      "model": "qwen3.5:0.8b",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   Input: \"Say hello.\"\n    *   Intent: The user is initiating a greeting conversation.\n    *   Tone: Friendly, welcoming, and conversational.\n\n2.  **Determine the appropriate response:**\n    *   Acknowledge the greeting.\n    *   Express readiness to chat.\n    *   Keep it concise but warm.\n    *   Avoid being overly robotic or formal unless necessary (though \"Say hello\" is casual).\n\n3.  **Drafting options:**\n    *   Option 1: Hello! How can I help you today?\n    *   Option 2: Hi there! I'm ready to chat. What's on your mind?\n    *   Option 3: Hello! It's great to meet you. How are you doing?\n\n4.  **Selecting the best option:**\n    *   Option 1 is clear and polite.\n    *   Option 2 is friendly.\n    *   I'll go with a mix that acknowledges the greeting warmly.\n\n5.  **Refining the response:**\n    *   \"Hello! It's great to meet you.\" (Simple)\n    *   \"Hi there! How can I assist you today?\" (Friendly)\n    *   Let's keep it open-ended so they can continue the conversation.\n\n6.  **Final Polish:**\n    *   \"Hello! It's a pleasure to say hello. How can I help you today?\"\n\n7.  **Output Generation:** (Matches the selected draft)."
+        },
+        {
+          "type": "text",
+          "text": "Hello! It's great to meet you. How can I help you today?"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 13,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 357
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

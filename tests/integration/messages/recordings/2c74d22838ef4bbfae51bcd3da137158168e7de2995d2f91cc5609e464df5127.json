@@ -1,0 +1,70 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_tool_use_round_trip[txt=deepseek/deepseek-chat]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_tool_use_round_trip[txt=deepseek/deepseek-chat]",
+    "url": "https://api.deepseek.com/anthropic/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "deepseek-chat",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Use the calculator tool to compute 15 * 7."
+        }
+      ],
+      "max_tokens": 256,
+      "tools": [
+        {
+          "name": "calculator",
+          "description": "Perform basic arithmetic. Use this for any math question.",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "expression": {
+                "type": "string",
+                "description": "The math expression to evaluate"
+              }
+            },
+            "required": [
+              "expression"
+            ]
+          }
+        }
+      ],
+      "tool_choice": {
+        "type": "any"
+      },
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "962c4cac-1df3-4056-8ad6-59373540b9cc",
+      "type": "message",
+      "role": "assistant",
+      "model": "deepseek-chat",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call_00_29UggmoW8J8E7lNBtQOl0787",
+          "name": "calculator",
+          "input": {
+            "expression": "15 * 7"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 289,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 39,
+        "service_tier": "standard"
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

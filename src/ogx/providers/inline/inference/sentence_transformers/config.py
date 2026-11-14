@@ -15,7 +15,7 @@ class SentenceTransformersInferenceConfig(BaseModel):
     trust_remote_code: bool = Field(
         default=False,
         description="Whether to trust and execute remote code from model repositories. "
-        "Set to True for models that require custom code (e.g., nomic-ai/nomic-embed-text-v1.5). "
+        "Set to True for models that require custom modeling code. "
         "Defaults to False for security.",
     )
 

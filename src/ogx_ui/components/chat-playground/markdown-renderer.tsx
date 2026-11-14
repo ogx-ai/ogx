@@ -1,6 +1,7 @@
 import React, { Suspense, useEffect, useState } from "react";
-import Markdown from "react-markdown";
+import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { ThemedToken } from "shiki";
 
 import { cn } from "@/lib/utils";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -12,7 +13,10 @@ interface MarkdownRendererProps {
 export function MarkdownRenderer({ children }: MarkdownRendererProps) {
   return (
     <div className="space-y-3">
-      <Markdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        components={COMPONENTS as unknown as Components}
+      >
         {children}
       </Markdown>
     </div>
@@ -26,7 +30,7 @@ interface HighlightedPre extends React.HTMLAttributes<HTMLPreElement> {
 
 const HighlightedPre = React.memo(
   ({ children, language, ...props }: HighlightedPre) => {
-    const [tokens, setTokens] = useState<unknown[] | null>(null);
+    const [tokens, setTokens] = useState<ThemedToken[][] | null>(null);
     const [isSupported, setIsSupported] = useState(false);
 
     useEffect(() => {
@@ -160,8 +164,9 @@ function childrenTakeAllStringContents(element: unknown): string {
     return element;
   }
 
-  if (element?.props?.children) {
-    const children = element.props.children;
+  const withProps = element as { props?: { children?: unknown } } | null;
+  if (withProps?.props?.children) {
+    const children = withProps.props.children;
 
     if (Array.isArray(children)) {
       return children
@@ -229,11 +234,11 @@ const COMPONENTS = {
   hr: withClass("hr", "border-foreground/20"),
 };
 
-function withClass(Tag: keyof JSX.IntrinsicElements, classes: string) {
+function withClass(Tag: keyof React.JSX.IntrinsicElements, classes: string) {
   const Component = ({ ...props }: Record<string, unknown>) => (
     <Tag className={classes} {...props} />
   );
-  Component.displayName = Tag;
+  Component.displayName = Tag as string;
   return Component;
 }
 

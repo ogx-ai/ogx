@@ -29,7 +29,7 @@ This gives you:
 You can run the unit tests with:
 
 ```bash
-uv run --group unit pytest -sv tests/unit/
+uv run --group dev pytest -sv tests/unit/
 ```
 
 For running integration tests, you must provide a few things:
@@ -47,7 +47,7 @@ You can run the integration tests in replay mode with:
 
 ```bash
 # Run all tests with existing recordings
-  uv run --group test \
+  uv run --group dev \
   pytest -sv tests/integration/ --stack-config=starter
 ```
 
@@ -59,7 +59,7 @@ If you want to re-record tests locally, you can do so with:
 
 ```bash
 OGX_TEST_INFERENCE_MODE=record \
-  uv run --group test \
+  uv run --group dev \
   pytest -sv tests/integration/ --stack-config=starter -k "<appropriate test name>"
 ```
 

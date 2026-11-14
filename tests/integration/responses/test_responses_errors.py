@@ -44,7 +44,7 @@ See: https://github.com/openai/openai-python/blob/main/src/openai/types/response
 import os
 from typing import get_args
 
-import httpx
+import httpx2
 import pytest
 from openai import APIError, APIStatusError, BadRequestError, NotFoundError
 from openai.types.responses import ResponseError
@@ -194,7 +194,7 @@ class TestResponsesAPIErrors:
     def test_malformed_request_returns_sdk_compatible_error(self, openai_client):
         """Pydantic validation errors return 400 with OpenAI error format, not FastAPI's 422."""
         base_url = str(openai_client.base_url).rstrip("/")
-        response = httpx.post(
+        response = httpx2.post(
             f"{base_url}/responses", json={}, headers={"Authorization": f"Bearer {openai_client.api_key}"}
         )
         assert response.status_code == 400

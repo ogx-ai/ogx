@@ -10,7 +10,7 @@ import ssl
 from pathlib import Path
 from typing import Any
 
-import httpx
+import httpx  # allow-direct-httpx: google-genai's httpx_async_client option is httpx-based
 from google.genai import types as genai_types
 
 from ogx.log import get_logger

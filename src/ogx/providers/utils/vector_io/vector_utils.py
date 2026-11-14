@@ -12,10 +12,13 @@ from typing import Any
 from ogx_api import EmbeddedChunk
 
 
-def generate_chunk_id(document_id: str, chunk_text: str, chunk_window: str | None = None) -> str:
+def generate_chunk_id(*, document_id: str, chunk_text: str, chunk_window: str | None = None) -> str:
     """
     Generate a unique chunk ID using a hash of the document ID and chunk text.
     Then use the first 32 characters of the hash to create a UUID.
+
+    Arguments are keyword-only so a caller can never swap ``document_id`` and
+    ``chunk_text`` (ids would silently hash the wrong values).
     """
     hash_input = f"{document_id}:{chunk_text}".encode()
     if chunk_window:
@@ -181,11 +184,16 @@ class WeightedInMemoryAggregator:
                     doc_id: i + 1
                     for i, (doc_id, _) in enumerate(sorted(keyword_scores.items(), key=lambda x: x[1], reverse=True))
                 }
-                all_ids = set(vector_scores.keys()) | set(keyword_scores.keys())
+                # Leave out documents found only by a zero-weighted search: they would score 0 and pad the results.
+                weighted_ids: set[str] = set()
+                if vector_weight:
+                    weighted_ids.update(vector_scores)
+                if keyword_weight:
+                    weighted_ids.update(keyword_scores)
                 return {
                     doc_id: (vector_weight / (impact_factor + vector_ranks.get(doc_id, float("inf"))))
                     + (keyword_weight / (impact_factor + keyword_ranks.get(doc_id, float("inf"))))
-                    for doc_id in all_ids
+                    for doc_id in weighted_ids
                 }
             return WeightedInMemoryAggregator.rrf_rerank(vector_scores, keyword_scores, impact_factor)
 

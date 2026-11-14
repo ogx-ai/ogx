@@ -1,0 +1,69 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_with_tool_definitions[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_with_tool_definitions[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What's the weather in San Francisco?"
+        }
+      ],
+      "max_tokens": 2048,
+      "tools": [
+        {
+          "type": "custom",
+          "name": "get_weather",
+          "description": "Get the current weather in a given location",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string",
+                "description": "The city and state, e.g. San Francisco, CA"
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
+        }
+      ],
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-b2d8d63ff648f10a",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay, the user is asking about the weather in San Francisco. I need to use the get_weather function for that. The function requires the location parameter, which in this case is San Francisco. Let me check if there are any other parameters needed, but no, the required field is just location. So I should call the function with \"location\": \"San Francisco\". That should retrieve the current weather information for them.\n",
+          "signature": "d5c31729e3234e1f89b61f63b3925655"
+        },
+        {
+          "type": "tool_use",
+          "id": "chatcmpl-tool-9956cd2b42b1268f",
+          "name": "get_weather",
+          "input": {
+            "location": "San Francisco"
+          }
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 174,
+        "output_tokens": 109
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

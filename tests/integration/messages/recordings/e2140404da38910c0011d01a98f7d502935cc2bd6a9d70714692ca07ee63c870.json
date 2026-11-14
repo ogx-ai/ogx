@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_create_and_retrieve[txt=ollama/qwen3.5:0.8b]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_create_and_retrieve[txt=ollama/qwen3.5:0.8b]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "qwen3.5:0.8b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is 2+2? Reply with just the number."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_e4567157048739eb03a204fb",
+      "type": "message",
+      "role": "assistant",
+      "model": "qwen3.5:0.8b",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Thinking Process:\n\n1.  **Analyze the Request:** The user is asking \"What is 2+2?\" and specifically requests the answer to be \"Reply with just the number.\"\n2.  **Identify the Mathematical Fact:** In standard arithmetic, addition of 2 plus 2 equals 4.\n3.  **Check Constraints:** The user instructed to reply *with just the number*.\n4.  **Formulate Output:** The output should be \"4\".\n5.  **Review against constraints:** Does it include any additional text? No. Is it exactly the mathematical answer for this specific query (2+2)? Yes, that is the standard answer to the arithmetic problem presented, and following the instruction about brevity.\n\n6.  **Final Output Construction:** 4"
+        },
+        {
+          "type": "text",
+          "text": "4"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 23,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 170
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Iterable
 from typing import Any
 
-import httpx
+import httpx2
 from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 from openai.types.chat import ChatCompletionChunk
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
@@ -25,11 +25,13 @@ from ogx.providers.utils.inference.http_client import (
     build_network_client_kwargs,
 )
 from ogx.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
+from ogx.providers.utils.inference.models_dev_registry import supports_reasoning
 from ogx.providers.utils.inference.openai_compat import (
     get_stream_options_for_telemetry,
     prepare_openai_completion_params,
 )
 from ogx.providers.utils.inference.prompt_adapter import localize_image_content
+from ogx.providers.utils.inference.stream_utils import close_async_stream
 from ogx_api import (
     Model,
     ModelType,
@@ -251,7 +253,10 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         api_key = self._get_api_key_from_config_or_provider_data()
         if not api_key:
             message = "API key not provided."
-            if self.provider_data_api_key_field:
+            provider_id = getattr(self, "__provider_id__", None)
+            if provider_id:
+                message += f' Please provide a valid API key in the provider data header, e.g. x-ogx-provider-data: {{"{provider_id}_api_key": "<API_KEY>"}}.'
+            elif self.provider_data_api_key_field:
                 message += f' Please provide a valid API key in the provider data header, e.g. x-ogx-provider-data: {{"{self.provider_data_api_key_field}": "<API_KEY>"}}.'
             raise ValueError(message)
 
@@ -273,7 +278,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
                     extra_params["http_client"], self.config.network
                 )
         elif network_kwargs:
-            extra_params["http_client"] = httpx.AsyncClient(**network_kwargs)
+            extra_params["http_client"] = httpx2.AsyncClient(**network_kwargs)
         else:
             extra_params["http_client"] = DefaultAsyncHttpxClient(verify=self.shared_ssl_context)
 
@@ -286,6 +291,23 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         self._cached_client = client
         self._cached_client_key = cache_key
         return client
+
+    def _build_httpx_client_kwargs(self, default_timeout: float | None = None) -> dict[str, Any]:
+        """Build ``httpx2.AsyncClient`` kwargs for ad-hoc calls outside the OpenAI client.
+
+        Health checks, Anthropic passthrough and rerank build their own client, which must
+        apply ``config.network`` (proxy, TLS, headers, timeout, pool limits). TLS verification
+        uses the shared SSL context unless ``network.tls`` configures its own, so setting only a
+        proxy, headers, a timeout or limits does not silently change how certificates are checked.
+
+        ``default_timeout`` (seconds) is the call's own timeout and only applies when
+        ``network.timeout`` is unset: an operator-configured timeout takes precedence.
+        """
+        kwargs = build_network_client_kwargs(self.config.network)
+        kwargs.setdefault("verify", self.shared_ssl_context)
+        if default_timeout is not None:
+            kwargs.setdefault("timeout", httpx2.Timeout(default_timeout))
+        return kwargs
 
     def _get_api_key_from_config_or_provider_data(self) -> str | None:
         api_key = self.get_api_key()
@@ -321,25 +343,28 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
                 last_id = None
                 last_created = None
                 last_model = None
-                async for chunk in resp:
-                    if new_id:
-                        chunk.id = new_id
-                    if fix_usage and chunk.usage is not None:
-                        last_usage = chunk.usage
-                        last_id = chunk.id
-                        last_created = chunk.created
-                        last_model = chunk.model
-                        chunk.usage = None
-                    yield chunk
-                if fix_usage and last_usage is not None:
-                    yield ChatCompletionChunk(
-                        id=last_id,
-                        choices=[],
-                        created=last_created,
-                        model=last_model,
-                        object="chat.completion.chunk",
-                        usage=last_usage,
-                    )
+                try:
+                    async for chunk in resp:
+                        if new_id:
+                            chunk.id = new_id
+                        if fix_usage and chunk.usage is not None:
+                            last_usage = chunk.usage
+                            last_id = chunk.id
+                            last_created = chunk.created
+                            last_model = chunk.model
+                            chunk.usage = None
+                        yield chunk
+                    if fix_usage and last_usage is not None:
+                        yield ChatCompletionChunk(
+                            id=last_id,
+                            choices=[],
+                            created=last_created,
+                            model=last_model,
+                            object="chat.completion.chunk",
+                            usage=last_usage,
+                        )
+                finally:
+                    await close_async_stream(resp)
 
             return _gen()
         else:
@@ -617,19 +642,23 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         """Handle Anthropic Messages API via translation to OpenAI chat completions."""
         from ogx.providers.utils.inference.anthropic_translation import (
             anthropic_request_to_openai,
+            is_thinking_requested,
             openai_response_to_anthropic,
             openai_stream_to_anthropic,
         )
 
-        openai_params = anthropic_request_to_openai(params)
+        include_thinking = is_thinking_requested(params.thinking)
+        openai_params = anthropic_request_to_openai(
+            params, reasoning_capable=include_thinking and supports_reasoning(params.model)
+        )
         self._validate_model_allowed(openai_params.model)
 
         result = await self.openai_chat_completion(openai_params)
 
         if isinstance(result, AsyncIterator):
-            return openai_stream_to_anthropic(result, params.model)
+            return openai_stream_to_anthropic(result, params.model, include_thinking=include_thinking)
 
-        return openai_response_to_anthropic(result, params.model)
+        return openai_response_to_anthropic(result, params.model, include_thinking=include_thinking)
 
     async def anthropic_count_tokens(
         self,

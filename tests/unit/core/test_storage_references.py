@@ -56,7 +56,6 @@ def _base_run_config(**overrides):
     return StackConfig(
         version=OGX_RUN_CONFIG_VERSION,
         distro_name="test-distro",
-        apis=[],
         providers={},
         storage=storage,
         **overrides,

@@ -29,8 +29,6 @@ class DistributionRegistry(Protocol):
 
     async def get(self, type: str, identifier: str) -> RoutableObjectWithProvider | None: ...
 
-    def get_cached(self, type: str, identifier: str) -> RoutableObjectWithProvider | None: ...
-
     async def update(self, obj: RoutableObjectWithProvider) -> RoutableObjectWithProvider: ...
 
     async def register(self, obj: RoutableObjectWithProvider) -> bool: ...
@@ -71,10 +69,6 @@ class DiskDistributionRegistry(DistributionRegistry):
 
     async def initialize(self) -> None:
         pass
-
-    def get_cached(self, type: str, identifier: str) -> RoutableObjectWithProvider | None:
-        # Disk registry does not have a cache
-        raise NotImplementedError("Disk registry does not have a cache")
 
     async def get_all(self) -> list[RoutableObjectWithProvider]:
         start_key, end_key = _get_registry_key_range()
@@ -182,9 +176,6 @@ class CachedDiskDistributionRegistry(DiskDistributionRegistry):
     async def initialize(self) -> None:
         await self._ensure_initialized()
 
-    def get_cached(self, type: str, identifier: str) -> RoutableObjectWithProvider | None:
-        return self.cache.get((type, identifier), None)
-
     def _should_refresh_cache(self) -> bool:
         """Check if cache should be refreshed based on TTL."""
         current_time = time.time()
@@ -238,10 +229,10 @@ class CachedDiskDistributionRegistry(DiskDistributionRegistry):
 
     async def register(self, obj: RoutableObjectWithProvider) -> bool:
         await self._ensure_initialized()
-        # Use super().get() (DB read) rather than self.get_cached() so that in
-        # multi-worker deployments, where each process has its own in-memory
-        # cache, we always read the authoritative stored object regardless of
-        # whether this worker's cache was warmed by _ensure_initialized().
+        # Read from disk (not cache) to handle multi-worker scenarios where
+        # each process has its own in-memory cache. This ensures we always
+        # get the authoritative stored object regardless of whether this
+        # worker's cache was warmed by _ensure_initialized().
         existing_obj = await super().get(obj.type, obj.identifier)
         success = await super().register(obj)
 

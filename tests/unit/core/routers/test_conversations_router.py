@@ -37,4 +37,4 @@ def test_consecutive_errors_keep_connection_alive():
 
     resp2 = client.get("/v1/conversations/conv_abc")
     assert resp2.status_code == 400
-    assert resp2.json()["detail"] == "bad request"
+    assert resp2.json()["error"]["message"] == "bad request"

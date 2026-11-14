@@ -14,7 +14,8 @@ to HTTP status codes. It is used by:
 
 import asyncio
 
-import httpx
+import httpx  # allow-direct-httpx: SDKs still built on httpx raise httpx exception classes we must map
+import httpx2
 from fastapi import HTTPException
 from openai import BadRequestError
 
@@ -25,19 +26,30 @@ from ogx.core.datatypes import AuthenticationRequiredError
 # The exception's own message is used when present. The fallback is only
 # used when the exception has no message.
 EXCEPTION_MAP: dict[type, tuple[int, str]] = {
-    ValueError: (httpx.codes.BAD_REQUEST, "Invalid value"),
-    BadRequestError: (httpx.codes.BAD_REQUEST, "Bad request"),
-    PermissionError: (httpx.codes.FORBIDDEN, "Permission denied"),
-    AccessDeniedError: (httpx.codes.FORBIDDEN, "Permission denied"),
-    ConnectionError: (httpx.codes.BAD_GATEWAY, "Connection error"),
+    ValueError: (httpx2.codes.BAD_REQUEST, "Invalid value"),
+    BadRequestError: (httpx2.codes.BAD_REQUEST, "Bad request"),
+    PermissionError: (httpx2.codes.FORBIDDEN, "Permission denied"),
+    AccessDeniedError: (httpx2.codes.FORBIDDEN, "Permission denied"),
+    ConnectionError: (httpx2.codes.BAD_GATEWAY, "Connection error"),
+    httpx2.ConnectError: (httpx2.codes.BAD_GATEWAY, "Connection error"),
+    # SDKs that still build on httpx (e.g. google-genai, qdrant-client,
+    # docling-slim) raise httpx exceptions; map those alongside the httpx2
+    # equivalents until they migrate.
     httpx.ConnectError: (httpx.codes.BAD_GATEWAY, "Connection error"),
-    TimeoutError: (httpx.codes.GATEWAY_TIMEOUT, "Operation timed out"),
-    asyncio.TimeoutError: (httpx.codes.GATEWAY_TIMEOUT, "Operation timed out"),
-    NotImplementedError: (httpx.codes.NOT_IMPLEMENTED, "Not implemented"),
-    AuthenticationRequiredError: (httpx.codes.UNAUTHORIZED, "Authentication required"),
+    TimeoutError: (httpx2.codes.GATEWAY_TIMEOUT, "Operation timed out"),
+    asyncio.TimeoutError: (httpx2.codes.GATEWAY_TIMEOUT, "Operation timed out"),
+    NotImplementedError: (httpx2.codes.NOT_IMPLEMENTED, "Not implemented"),
+    AuthenticationRequiredError: (httpx2.codes.UNAUTHORIZED, "Authentication required"),
 }
 
-# For deserialization by class name (used by testing/exception_utils.py)
+# For deserialization by class name (used by testing/exception_utils.py).
+# httpx.ConnectError and httpx2.ConnectError share the simple name
+# "ConnectError"; the dict comprehension keeps the last insertion, so the
+# httpx (v1) class intentionally wins. That preserves pre-migration replay
+# behavior, since recordings only ever stored "ConnectError" for httpx
+# exceptions before httpx2 existed. Reordering EXCEPTION_MAP would silently
+# flip which class deserializes, so keep httpx.ConnectError last among the
+# shared-name entries.
 EXCEPTION_TYPES_BY_NAME: dict[str, type[Exception]] = {cls.__name__: cls for cls in EXCEPTION_MAP}
 
 

@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_basic[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_basic[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is 2+2? Reply with just the number."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-93573496dd802718",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay, the user is asking, \"What is 2+2? Reply with just the number.\" So first, I need to figure out the answer. The question is straightforward: adding 2 and 2. Let me do that math. 2 plus 2 equals 4. So the answer should be 4. The user wants just the number, so I don't need to explain anything else. Just state the number, which is 4. I should make sure there's no typo and that the response is clear. Alright, that should do it.\n",
+          "signature": "13cbc1a7af5740d08aeb35757f80d5d9"
+        },
+        {
+          "type": "text",
+          "text": "\n\n4"
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 21,
+        "output_tokens": 122
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

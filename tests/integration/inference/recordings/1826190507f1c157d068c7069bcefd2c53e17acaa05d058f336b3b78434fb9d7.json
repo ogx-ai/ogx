@@ -1,0 +1,56 @@
+{
+  "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_choice[judge=vllm/togethercomputer/Tev1-0.8B-experimental]",
+  "request": {
+    "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_choice[judge=vllm/togethercomputer/Tev1-0.8B-experimental]",
+    "url": "http://localhost:8000/v1/systemone",
+    "method": "POST",
+    "payload": {
+      "state": "The caller is shouting and using profanity.",
+      "model": "togethercomputer/Tev1-0.8B-experimental",
+      "questions": {
+        "tone": {
+          "type": "choice",
+          "instructions": "What is the tone of the caller?",
+          "criteria": {
+            "calm": "Level and measured",
+            "angry": "Loud and hostile",
+            "neutral": null
+          }
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "decision-a3d91114ffb74a41",
+      "object": "structured_decision",
+      "created": 1792769753,
+      "model": "togethercomputer/Tev1-0.8B-experimental",
+      "answers": {
+        "tone": {
+          "type": "choice",
+          "choice": "angry",
+          "probabilities": {
+            "calm": 0.047217584904178135,
+            "angry": 0.9483904955541985,
+            "neutral": 0.004391919541623265
+          },
+          "confidence": 0.9476978295639065
+        }
+      },
+      "usage": {
+        "input_tokens": 62,
+        "output_tokens": 1
+      },
+      "diagnostics": {
+        "tone": {
+          "label_mass": 0.9992696405188168,
+          "argmax_is_label": true
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

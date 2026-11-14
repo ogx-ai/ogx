@@ -1,0 +1,57 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_create_and_retrieve[txt=anthropic/claude-haiku-5-5]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_create_and_retrieve[txt=anthropic/claude-haiku-5-5]",
+    "url": "https://api.anthropic.com/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "claude-haiku-5-5",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is 2+2? Reply with just the number."
+        }
+      ],
+      "max_tokens": 32,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "claude-haiku-5-5",
+      "id": "msg_011Cg5w7nbUVxte3PBnnfMff",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "4"
+        }
+      ],
+      "container": null,
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 23,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 3,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      },
+      "diagnostics": null
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

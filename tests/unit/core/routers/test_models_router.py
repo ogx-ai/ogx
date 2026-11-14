@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import FastAPI
 
-from ogx_api import ListModelsResponse, Model, Models, ModelType
+from ogx_api import ListModelsResponse, Model, Models, ModelType, TypeSafeListModelsResponse, TypeSafeModelInfo
 from ogx_api.models import GetModelRequest
 from ogx_api.models.fastapi_routes import create_router
 
@@ -132,3 +132,60 @@ async def test_google_get_model_rejects_ambiguous_provider_resource_id():
             x_goog_api_client=None,
         )
     impl.get_model.assert_not_called()
+
+
+async def test_list_models_serves_typesafe_shape_when_sdk_header_present():
+    """The X-TypeSafe-SDK header switches GET /v1/models to the TypeSafe shape.
+
+    The typesafe SDK tags every request with X-TypeSafe-SDK; the route should call
+    typesafe_list_models (SystemOne judgment models) and return the TypeSafe wire shape.
+    """
+    impl = AsyncMock(spec=Models)
+    impl.typesafe_list_models.return_value = TypeSafeListModelsResponse(
+        models=[TypeSafeModelInfo(name="typesafe/jev-latest", description="Jev", release_date="2026-09-15")]
+    )
+
+    app = FastAPI()
+    router = create_router(impl)
+    app.include_router(router)
+
+    list_endpoint = _get_endpoint(router, "/v1/models", "GET")
+    response = await list_endpoint(
+        before_id=None,
+        after_id=None,
+        limit=None,
+        anthropic_version=None,
+        x_goog_api_key=None,
+        x_goog_user_project=None,
+        x_goog_api_client=None,
+        x_typesafe_sdk="typesafe-sdk/0.7.2",
+    )
+
+    impl.typesafe_list_models.assert_awaited_once()
+    assert response.status_code == 200
+    payload = json.loads(response.body)
+    assert payload == {"models": [{"name": "typesafe/jev-latest", "description": "Jev", "release_date": "2026-09-15"}]}
+
+
+async def test_list_models_defaults_to_openai_without_sdk_header():
+    """Without any SDK-detection header, GET /v1/models returns the OpenAI shape."""
+    impl = AsyncMock(spec=Models)
+
+    app = FastAPI()
+    router = create_router(impl)
+    app.include_router(router)
+
+    list_endpoint = _get_endpoint(router, "/v1/models", "GET")
+    await list_endpoint(
+        before_id=None,
+        after_id=None,
+        limit=None,
+        anthropic_version=None,
+        x_goog_api_key=None,
+        x_goog_user_project=None,
+        x_goog_api_client=None,
+        x_typesafe_sdk=None,
+    )
+
+    impl.openai_list_models.assert_awaited_once()
+    impl.typesafe_list_models.assert_not_awaited()

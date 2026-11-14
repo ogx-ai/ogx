@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from zipfile import ZIP_DEFLATED, ZipFile
 
-import httpx
+import httpx2
 import pytest
 from docling.datamodel.service.chunking import HybridChunkerOptions
 from docling.datamodel.service.options import ConvertDocumentsOptions
@@ -32,12 +32,12 @@ from ogx_api.vector_io import (
 )
 
 
-def _make_httpx_response(json_body: dict, status_code: int = 200) -> httpx.Response:
-    """Build a minimal httpx.Response from a JSON dict."""
-    return httpx.Response(
+def _make_httpx_response(json_body: dict, status_code: int = 200) -> httpx2.Response:
+    """Build a minimal httpx2.Response from a JSON dict."""
+    return httpx2.Response(
         status_code=status_code,
         json=json_body,
-        request=httpx.Request("POST", "http://test"),
+        request=httpx2.Request("POST", "http://test"),
     )
 
 
@@ -48,12 +48,12 @@ def _make_chunk_archive(chunks: list[dict]) -> bytes:
     return buffer.getvalue()
 
 
-def _make_httpx_chunk_response(chunks: list[dict], status_code: int = 200) -> httpx.Response:
-    return httpx.Response(
+def _make_httpx_chunk_response(chunks: list[dict], status_code: int = 200) -> httpx2.Response:
+    return httpx2.Response(
         status_code=status_code,
         content=_make_chunk_archive(chunks),
         headers={"content-type": "application/zip"},
-        request=httpx.Request("POST", "http://test"),
+        request=httpx2.Request("POST", "http://test"),
     )
 
 
@@ -147,7 +147,7 @@ class TestDoclingServeFileProcessor:
         request = ProcessFileRequest()
         mock_response = _make_httpx_response(CONVERT_RESPONSE)
 
-        with patch("httpx.AsyncClient.post", return_value=mock_response) as mock_post:
+        with patch("httpx2.AsyncClient.post", return_value=mock_response) as mock_post:
             response = await processor.process_file(request, file=upload_file)
 
         mock_post.assert_called_once()
@@ -169,7 +169,7 @@ class TestDoclingServeFileProcessor:
         request = ProcessFileRequest()
         empty_response = {"document": {"md_content": "   "}}
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(empty_response)):
+        with patch("httpx2.AsyncClient.post", return_value=_make_httpx_response(empty_response)):
             response = await processor.process_file(request, file=upload_file)
 
         assert len(response.chunks) == 0
@@ -181,7 +181,7 @@ class TestDoclingServeFileProcessor:
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
         mock_response = _make_httpx_chunk_response(CHUNK_RESPONSE)
 
-        with patch("httpx.AsyncClient.post", return_value=mock_response) as mock_post:
+        with patch("httpx2.AsyncClient.post", return_value=mock_response) as mock_post:
             response = await processor.process_file(request, file=upload_file)
 
         call_kwargs = mock_post.call_args
@@ -202,7 +202,7 @@ class TestDoclingServeFileProcessor:
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyStatic(static=static_config))
         mock_response = _make_httpx_chunk_response(CHUNK_RESPONSE)
 
-        with patch("httpx.AsyncClient.post", return_value=mock_response) as mock_post:
+        with patch("httpx2.AsyncClient.post", return_value=mock_response) as mock_post:
             response = await processor.process_file(request, file=upload_file)
 
         call_kwargs = mock_post.call_args
@@ -221,7 +221,7 @@ class TestDoclingServeFileProcessor:
             options={"use_markdown_tables": True},
         )
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)) as mock_post:
+        with patch("httpx2.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)) as mock_post:
             await processor.process_file(request, file=upload_file)
 
         chunking_options = json.loads(mock_post.call_args.kwargs["data"]["chunking_options"])
@@ -241,7 +241,7 @@ class TestDoclingServeFileProcessor:
     async def test_chunking_empty_response(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response([])):
+        with patch("httpx2.AsyncClient.post", return_value=_make_httpx_chunk_response([])):
             response = await processor.process_file(request, file=upload_file)
 
         assert len(response.chunks) == 0
@@ -254,7 +254,7 @@ class TestDoclingServeFileProcessor:
             {"filename": "test.pdf", "chunk_index": 2, "text": "", "doc_items": []},
         ]
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(body)):
+        with patch("httpx2.AsyncClient.post", return_value=_make_httpx_chunk_response(body)):
             response = await processor.process_file(request, file=upload_file)
 
         assert len(response.chunks) == 1
@@ -279,7 +279,7 @@ class TestDoclingServeFileProcessor:
             }
         ]
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(body)):
+        with patch("httpx2.AsyncClient.post", return_value=_make_httpx_chunk_response(body)):
             response = await processor.process_file(request, file=upload_file)
 
         assert response.chunks[0].chunk_metadata.content_token_count == expected
@@ -289,7 +289,7 @@ class TestDoclingServeFileProcessor:
     async def test_chunk_metadata_fields(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest()
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(CONVERT_RESPONSE)):
+        with patch("httpx2.AsyncClient.post", return_value=_make_httpx_response(CONVERT_RESPONSE)):
             response = await processor.process_file(request, file=upload_file)
 
         chunk = response.chunks[0]
@@ -303,7 +303,7 @@ class TestDoclingServeFileProcessor:
     async def test_chunk_id_uniqueness(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)):
+        with patch("httpx2.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)):
             response = await processor.process_file(request, file=upload_file)
 
         ids = [c.chunk_id for c in response.chunks]
@@ -312,7 +312,7 @@ class TestDoclingServeFileProcessor:
     async def test_structural_metadata_propagated(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)):
+        with patch("httpx2.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)):
             response = await processor.process_file(request, file=upload_file)
 
         assert response.chunks[0].metadata["headings"] == "Introduction"
@@ -325,7 +325,7 @@ class TestDoclingServeFileProcessor:
     async def test_chunk_window_set(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)):
+        with patch("httpx2.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)):
             response = await processor.process_file(request, file=upload_file)
 
         for i, chunk in enumerate(response.chunks):
@@ -341,7 +341,7 @@ class TestDoclingServeFileProcessor:
         processor = DoclingServeFileProcessor(config, files_api=files_api)
         request = ProcessFileRequest(file_id="file-abc")
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(CONVERT_RESPONSE)):
+        with patch("httpx2.AsyncClient.post", return_value=_make_httpx_response(CONVERT_RESPONSE)):
             response = await processor.process_file(request)
 
         files_api.openai_retrieve_file.assert_awaited_once()
@@ -359,7 +359,7 @@ class TestDoclingServeFileProcessor:
         request = ProcessFileRequest()
         upload = UploadFile(file=io.BytesIO(b"data"), filename="doc.pdf")
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(CONVERT_RESPONSE)) as mock_post:
+        with patch("httpx2.AsyncClient.post", return_value=_make_httpx_response(CONVERT_RESPONSE)) as mock_post:
             await processor.process_file(request, file=upload)
 
         headers = mock_post.call_args.kwargs["headers"]
@@ -368,7 +368,7 @@ class TestDoclingServeFileProcessor:
     async def test_no_api_key_header_when_unset(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest()
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(CONVERT_RESPONSE)) as mock_post:
+        with patch("httpx2.AsyncClient.post", return_value=_make_httpx_response(CONVERT_RESPONSE)) as mock_post:
             await processor.process_file(request, file=upload_file)
 
         headers = mock_post.call_args.kwargs["headers"]
@@ -386,7 +386,7 @@ class TestDoclingServeFileProcessor:
             ("test.png", "image/png"),
         ]:
             upload = UploadFile(file=io.BytesIO(b"data"), filename=filename)
-            with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(CONVERT_RESPONSE)) as mock_post:
+            with patch("httpx2.AsyncClient.post", return_value=_make_httpx_response(CONVERT_RESPONSE)) as mock_post:
                 await processor.process_file(request, file=upload)
 
             sent_files = mock_post.call_args.kwargs["files"]["files"]
@@ -396,7 +396,7 @@ class TestDoclingServeFileProcessor:
         request = ProcessFileRequest()
         upload = UploadFile(file=io.BytesIO(b"data"), filename="test.xyz")
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(CONVERT_RESPONSE)) as mock_post:
+        with patch("httpx2.AsyncClient.post", return_value=_make_httpx_response(CONVERT_RESPONSE)) as mock_post:
             await processor.process_file(request, file=upload)
 
         sent_files = mock_post.call_args.kwargs["files"]["files"]
@@ -416,7 +416,7 @@ class TestDoclingServeFileProcessor:
 
         # Mock SDK to raise network exception
         mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+        mock_client.__aenter__ = AsyncMock(side_effect=httpx2.ConnectError("Connection refused"))
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
         sync_response = _make_httpx_response(CONVERT_RESPONSE)
@@ -426,7 +426,7 @@ class TestDoclingServeFileProcessor:
                 "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient",
                 return_value=mock_client,
             ),
-            patch("httpx.AsyncClient.post", return_value=sync_response) as mock_post,
+            patch("httpx2.AsyncClient.post", return_value=sync_response) as mock_post,
         ):
             response = await processor.process_file(request, file=upload_file)
 
@@ -503,7 +503,7 @@ class TestIBMSaaSCompatibility:
             # Mock submit() raising 405 (Method Not Allowed)
             mock_response = AsyncMock()
             mock_response.status_code = 405
-            mock_error = httpx.HTTPStatusError("Method Not Allowed", request=AsyncMock(), response=mock_response)
+            mock_error = httpx2.HTTPStatusError("Method Not Allowed", request=AsyncMock(), response=mock_response)
             mock_instance.submit.side_effect = mock_error
 
             with pytest.raises(InvalidParameterError) as exc_info:
@@ -540,8 +540,8 @@ class TestIBMSaaSCompatibility:
             )
             mock_job.result.return_value = mock_result
 
-            # Mock httpx download of presigned URL
-            with patch("httpx.AsyncClient") as mock_http:
+            # Mock httpx2 download of presigned URL
+            with patch("httpx2.AsyncClient") as mock_http:
                 mock_http_instance = AsyncMock()
                 mock_http.return_value.__aenter__.return_value = mock_http_instance
 

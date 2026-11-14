@@ -4,13 +4,20 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import asyncio
 import heapq
 import os
 from typing import Any
 
 from numpy.typing import NDArray
-from pymilvus import AnnSearchRequest, DataType, Function, FunctionType, MilvusClient, RRFRanker, WeightedRanker
+from pymilvus import (
+    AnnSearchRequest,
+    AsyncMilvusClient,
+    DataType,
+    Function,
+    FunctionType,
+    RRFRanker,
+    WeightedRanker,
+)
 
 from ogx.core.storage.kvstore import kvstore_impl
 from ogx.log import get_logger
@@ -75,7 +82,7 @@ class MilvusIndex(EmbeddingIndex):
 
     def __init__(
         self,
-        client: MilvusClient,
+        client: AsyncMilvusClient,
         vector_store: VectorStore,
         consistency_level: str = "Strong",
         kvstore: KVStore | None = None,
@@ -89,7 +96,7 @@ class MilvusIndex(EmbeddingIndex):
         self.dimension = vector_store.embedding_dimension
 
     async def initialize(self):
-        if await asyncio.to_thread(self.client.has_collection, self.collection_name):
+        if await self.client.has_collection(self.collection_name):
             return
 
         # Create schema for vector search
@@ -120,8 +127,7 @@ class MilvusIndex(EmbeddingIndex):
         schema.add_function(bm25_function)
 
         logger.info("Creating Milvus collection", collection_name=self.collection_name)
-        await asyncio.to_thread(
-            self.client.create_collection,
+        await self.client.create_collection(
             self.collection_name,
             schema=schema,
             index_params=index_params,
@@ -129,7 +135,7 @@ class MilvusIndex(EmbeddingIndex):
         )
 
     async def delete(self):
-        await asyncio.to_thread(self.client.drop_collection, collection_name=self.collection_name)
+        await self.client.drop_collection(collection_name=self.collection_name)
 
     async def add_chunks(self, chunks: list[EmbeddedChunk]):
         if not chunks:
@@ -147,7 +153,7 @@ class MilvusIndex(EmbeddingIndex):
                 }
             )
         try:
-            await asyncio.to_thread(self.client.upsert, self.collection_name, data=data)
+            await self.client.upsert(self.collection_name, data=data)
         except Exception as e:
             logger.error(
                 "Failed to upsert chunks into Milvus collection", collection_name=self.collection_name, error=str(e)
@@ -239,7 +245,7 @@ class MilvusIndex(EmbeddingIndex):
         if filter_expr:
             search_kwargs["filter"] = filter_expr
 
-        search_res = await asyncio.to_thread(self.client.search, **search_kwargs)
+        search_res = await self.client.search(**search_kwargs)
         chunks = [load_embedded_chunk_with_backward_compat(res["entity"]["chunk_content"]) for res in search_res[0]]
         scores = [res["distance"] for res in search_res[0]]
         return QueryChunksResponse(chunks=chunks, scores=scores)
@@ -271,7 +277,7 @@ class MilvusIndex(EmbeddingIndex):
                 search_kwargs["filter"] = filter_expr
 
             # Use Milvus's built-in BM25 search
-            search_res = await asyncio.to_thread(self.client.search, **search_kwargs)
+            search_res = await self.client.search(**search_kwargs)
 
             chunks = []
             scores = []
@@ -296,8 +302,7 @@ class MilvusIndex(EmbeddingIndex):
         Fallback to simple text search when BM25 search is not available.
         """
         # Simple text search using content field
-        search_res = await asyncio.to_thread(
-            self.client.query,
+        search_res = await self.client.query(
             collection_name=self.collection_name,
             filter='content like "%{content}%"',
             filter_params={"content": query_string},
@@ -380,7 +385,7 @@ class MilvusIndex(EmbeddingIndex):
         if filter_expr:
             search_kwargs["filter"] = filter_expr
 
-        search_res = await asyncio.to_thread(self.client.hybrid_search, **search_kwargs)
+        search_res = await self.client.hybrid_search(**search_kwargs)
 
         chunks = []
         scores = []
@@ -446,9 +451,7 @@ class MilvusIndex(EmbeddingIndex):
         try:
             # Use IN clause with square brackets and single quotes for VARCHAR field
             chunk_ids_str = ", ".join(f"'{chunk_id}'" for chunk_id in chunk_ids)
-            await asyncio.to_thread(
-                self.client.delete, collection_name=self.collection_name, filter=f"chunk_id in [{chunk_ids_str}]"
-            )
+            await self.client.delete(collection_name=self.collection_name, filter=f"chunk_id in [{chunk_ids_str}]")
         except Exception as e:
             logger.error(
                 "Error deleting chunks from Milvus collection", collection_name=self.collection_name, error=str(e)
@@ -471,8 +474,8 @@ class MilvusVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
             inference_api=inference_api, files_api=files_api, kvstore=None, file_processor_api=file_processor_api
         )
         self.config = config
-        self.cache = {}
-        self.client = None
+        self.cache: dict[str, VectorStoreWithIndex] = {}
+        self.client: AsyncMilvusClient | None = None
         self.vector_store_table = None
         self.metadata_collection_name = "openai_vector_stores_metadata"
         self._policy = policy or []
@@ -487,13 +490,13 @@ class MilvusVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
 
         if isinstance(self.config, RemoteMilvusVectorIOConfig):
             logger.info("Connecting to Milvus server at", uri=self.config.uri)
-            self.client = MilvusClient(
+            self.client = AsyncMilvusClient(
                 **self.config.model_dump(exclude_none=True, exclude={"persistence", "metadata_store"})
             )
         else:
             logger.info("Connecting to Milvus Lite at", db_path=self.config.db_path)
             uri = os.path.expanduser(self.config.db_path)
-            self.client = MilvusClient(uri=uri)
+            self.client = AsyncMilvusClient(uri=uri)
 
         start_key = VECTOR_DBS_PREFIX
         end_key = f"{VECTOR_DBS_PREFIX}\xff"
@@ -519,7 +522,7 @@ class MilvusVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         await self.initialize_openai_vector_stores()
 
     async def shutdown(self) -> None:
-        self.client.close()
+        await self.client.close()
         # Clean up mixin resources (file batch tasks)
         await super().shutdown()
 

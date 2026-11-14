@@ -1,0 +1,132 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestChatCompletionWithTools::test_tool_with_complex_schema[txt=llama-cpp-server/qwen3-0.6b]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Book a flight from SFO to JFK for John Doe"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "book_flight",
+            "description": "Book a flight",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "flight": {
+                  "$ref": "#/$defs/FlightInfo"
+                },
+                "passenger": {
+                  "$ref": "#/$defs/Passenger"
+                }
+              },
+              "required": [
+                "flight",
+                "passenger"
+              ],
+              "$defs": {
+                "FlightInfo": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "date": {
+                      "type": "string",
+                      "format": "date"
+                    }
+                  }
+                },
+                "Passenger": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "age": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.17.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-55a79012dfd6",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "The flight booking requires a date. Please provide the date of your trip.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user wants to book a flight from SFO to JFK for John Doe. Let me check the available tools. There's a function called book_flight that requires flight and passenger details. The flight parameters need from, to, and date. The passenger includes name and age. The user provided only the departure cities, name, and maybe age? Wait, the user didn't specify date or age. Oh, the initial message says \"Book a flight from SFO to JFK for John Doe\". So maybe the date is not provided, but perhaps the function expects a date. Since the user didn't mention the date, maybe I should ask for it. But wait, the function's parameters include date as a required field. So if the user doesn't provide it, maybe I need to make an assumption or prompt them. However, the tools provided don't include a date parameter, but the function's parameters have a date. Hmm, the user didn't specify the date. So maybe I should inform them that the date is missing and ask for it. But the user's query only mentions departure cities and name. Wait, maybe the date is implied? Or maybe there's a missing parameter. Since the function requires all three fields, and the user only provided two, I need to ask for the third. So the answer should include the name (John Doe) and the date, but the date isn't mentioned. Therefore, I can't proceed without the date. But maybe the user expects me to assume a date? Or perhaps there's a mistake. Wait, the function's parameters include date, so maybe the user's message has a date. Let me check again: the user wrote \"Book a flight from SFO to JFK for John Doe\". No date mentioned. So perhaps the function requires a date, but the user didn't include it. Therefore, I can't call the function. But the user's question is in the context of the tools provided. Wait, maybe the date is part of the flight info in the tool's definition. Looking back at the tool's definition, the flight parameters include date as a string in date format. So the flight info has from, to, date. But the user only provided from and to, not date. So without the date, the function can't be called. Therefore, the correct response would be to inform the user that the date is missing and ask for it. However, the assistant is supposed to use the provided tools. Since the user's query doesn't include the date, maybe there's an error. Alternatively, perhaps the date is assumed to be the current date? But that's not standard. So the answer should state that the date is required and ask for it. But according to the instructions, if the function can't be called, respond without tool calls. So in this case, the function can't be called because the date is missing. Therefore, the assistant should respond that the date is required and ask for it.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11147-fee39dd92",
+        "usage": {
+          "completion_tokens": 626,
+          "prompt_tokens": 261,
+          "total_tokens": 887,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 51,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 51,
+          "prompt_n": 210,
+          "prompt_ms": 1498.733,
+          "prompt_per_token_ms": 7.1368238095238095,
+          "prompt_per_second": 140.11835330242278,
+          "predicted_n": 626,
+          "predicted_ms": 21014.524,
+          "predicted_per_token_ms": 33.623238400000005,
+          "predicted_per_second": 29.74133508805624
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

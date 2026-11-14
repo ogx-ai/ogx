@@ -5,6 +5,8 @@
 # the root directory of this source tree.
 
 # we want the mcp server to be authenticated OR not, depends
+import ast
+import inspect
 from collections.abc import Callable
 from contextlib import contextmanager
 
@@ -14,9 +16,45 @@ from contextlib import contextmanager
 MCP_TOOLGROUP_ID = "mcp::localmcp"
 
 
+def _stable_tool_description(fn: Callable) -> str:
+    """fn's docstring exactly as written in source, independent of the Python
+    interpreter's __doc__ dedenting behavior.
+
+    CPython 3.13 strips each docstring's common leading whitespace when storing it in
+    __doc__ (https://docs.python.org/3.13/whatsnew/3.13.html#other-language-changes);
+    3.12 and earlier store it byte-for-byte as written. The mcp SDK's server.tool()
+    uses fn.__doc__ as the tool's description when none is given explicitly, and that
+    description is embedded in every chat completion request sent while the tool is
+    available -- so under 3.13, the exact same test produces a different request body,
+    and integration-test recordings (all captured under 3.12) stop matching by hash
+    (see #6859). Reading the docstring from a fresh parse of the source file instead
+    of from the already-compiled __doc__ sidesteps the dedenting entirely: it isn't
+    applied at parse time, only when a docstring is later stored into __doc__.
+    """
+    try:
+        source_file = inspect.getsourcefile(fn)
+        if source_file is None:
+            return fn.__doc__ or ""
+        with open(source_file) as f:
+            tree = ast.parse(f.read(), filename=source_file)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+                and node.name == fn.__name__
+                and node.lineno == fn.__code__.co_firstlineno
+            ):
+                return ast.get_docstring(node, clean=False) or ""
+    except OSError:
+        pass
+    # Fell through: couldn't find or read the source. Fall back to __doc__ rather than
+    # failing the whole test server setup -- this only matters for interpreter version
+    # independence, not correctness.
+    return fn.__doc__ or ""
+
+
 def default_tools():
     """Default tools for backward compatibility."""
-    from mcp.server.fastmcp import Context
+    from mcp.server.mcpserver import Context
 
     async def greet_everyone(url: str, ctx: Context) -> str:
         return "Hello, world!"
@@ -42,7 +80,7 @@ def default_tools():
 
 def dependency_tools():
     """Tools with natural dependencies for multi-turn testing."""
-    from mcp.server.fastmcp import Context
+    from mcp.server.mcpserver import Context
 
     async def get_user_id(username: str, ctx: Context) -> str:
         """
@@ -165,15 +203,12 @@ def make_mcp_server(
     import time
 
     import uvicorn
-    from mcp.server.fastmcp import FastMCP
-    from mcp.server.sse import SseServerTransport
-    from starlette.applications import Starlette
+    from mcp.server.mcpserver import MCPServer
     from starlette.responses import Response
-    from starlette.routing import Mount, Route
 
     from ogx.log import get_logger
 
-    server = FastMCP("FastMCP Test Server", log_level="WARNING")
+    server = MCPServer("FastMCP Test Server", log_level="WARNING")
 
     # Silence verbose MCP server logs
     import logging  # allow-direct-logging
@@ -182,37 +217,31 @@ def make_mcp_server(
 
     tools = tools or default_tools()
 
-    # Register all tools with the server
+    # Register all tools with the server. description is passed explicitly (see
+    # _stable_tool_description) so the tool description in the live tools/list
+    # response -- and therefore in every chat completion request made while the tool
+    # is available -- is stable across Python versions, not just across runs.
     for tool_func in tools.values():
-        server.tool()(tool_func)
+        server.tool(description=_stable_tool_description(tool_func))(tool_func)
 
-    sse = SseServerTransport("/messages/")
+    # host="0.0.0.0" avoids the auto-enabled DNS rebinding protection, which would
+    # reject non-localhost hosts (e.g. host.docker.internal in docker test mode)
+    app = server.sse_app(host="0.0.0.0")
 
-    async def handle_sse(request):
-        from starlette.exceptions import HTTPException
+    if required_auth_token:
+        from starlette.middleware.base import BaseHTTPMiddleware
 
-        auth_header: str | None = request.headers.get("Authorization")
-        auth_token = None
-        if auth_header and auth_header.startswith("Bearer "):
-            auth_token = auth_header.split(" ")[1]
+        async def require_bearer_token(request, call_next):
+            if request.url.path == "/sse":
+                auth_header = request.headers.get("Authorization")
+                auth_token = None
+                if auth_header and auth_header.startswith("Bearer "):
+                    auth_token = auth_header.split(" ")[1]
+                if auth_token != required_auth_token:
+                    return Response(status_code=401, content="Unauthorized")
+            return await call_next(request)
 
-        if required_auth_token and auth_token != required_auth_token:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-
-        async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
-            await server._mcp_server.run(
-                streams[0],
-                streams[1],
-                server._mcp_server.create_initialization_options(),
-            )
-            return Response()
-
-    app = Starlette(
-        routes=[
-            Route("/sse", endpoint=handle_sse),
-            Mount("/messages/", app=sse.handle_post_message),
-        ],
-    )
+        app.add_middleware(BaseHTTPMiddleware, dispatch=require_bearer_token)
 
     def get_open_port():
         import socket

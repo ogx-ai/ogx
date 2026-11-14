@@ -169,12 +169,7 @@ export function getFileExtension(filename: string): string {
  */
 export function formatPurpose(
   purpose:
-    | "fine-tune"
-    | "assistants"
-    | "user_data"
-    | "batch"
-    | "vision"
-    | "evals"
+    "fine-tune" | "assistants" | "user_data" | "batch" | "vision" | "evals"
 ): string {
   switch (purpose) {
     case "fine-tune":
@@ -199,12 +194,7 @@ export function formatPurpose(
  */
 export function getPurposeDescription(
   purpose:
-    | "fine-tune"
-    | "assistants"
-    | "user_data"
-    | "batch"
-    | "vision"
-    | "evals"
+    "fine-tune" | "assistants" | "user_data" | "batch" | "vision" | "evals"
 ): string {
   switch (purpose) {
     case "fine-tune":

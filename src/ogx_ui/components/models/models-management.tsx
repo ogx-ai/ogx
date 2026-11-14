@@ -58,8 +58,8 @@ export function ModelsManagement() {
         ? response
         : response &&
             typeof response === "object" &&
-            "data" in (response as Record<string, unknown>)
-          ? ((response as Record<string, unknown>).data as Record<
+            "data" in (response as unknown as Record<string, unknown>)
+          ? ((response as unknown as Record<string, unknown>).data as Record<
               string,
               unknown
             >[])
@@ -92,10 +92,18 @@ export function ModelsManagement() {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
-      (model.identifier ?? model.id ?? "").toLowerCase().includes(term) ||
-      (model.model_type ?? "").toLowerCase().includes(term) ||
-      (model.provider_id ?? "").toLowerCase().includes(term) ||
-      (model.provider_resource_id ?? "").toLowerCase().includes(term)
+      String(model.identifier ?? model.id ?? "")
+        .toLowerCase()
+        .includes(term) ||
+      String(model.model_type ?? "")
+        .toLowerCase()
+        .includes(term) ||
+      String(model.provider_id ?? "")
+        .toLowerCase()
+        .includes(term) ||
+      String(model.provider_resource_id ?? "")
+        .toLowerCase()
+        .includes(term)
     );
   });
 
@@ -148,13 +156,17 @@ export function ModelsManagement() {
             </TableHeader>
             <TableBody>
               {filteredModels.map(model => {
-                const modelId = model.identifier ?? model.id ?? "unknown";
-                const modelType = model.model_type ?? "unknown";
-                const providerId = model.provider_id ?? "-";
-                const providerResourceId =
+                const modelId = String(
+                  model.identifier ?? model.id ?? "unknown"
+                );
+                const modelType = String(model.model_type ?? "unknown");
+                const providerId = String(model.provider_id ?? "-");
+                const providerResourceId = String(
                   model.provider_resource_id ??
-                  model.metadata?.provider_resource_id ??
-                  "-";
+                    (model.metadata as Record<string, unknown> | undefined)
+                      ?.provider_resource_id ??
+                    "-"
+                );
 
                 return (
                   <TableRow key={modelId}>

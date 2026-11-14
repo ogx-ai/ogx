@@ -36,7 +36,6 @@ def app_with_middleware():
 def test_mode_env(monkeypatch):
     """Set environment variables required for test context extraction."""
     monkeypatch.setenv("OGX_TEST_INFERENCE_MODE", "replay")
-    monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "server")
 
 
 def test_middleware_returns_none_without_header(app_with_middleware, test_mode_env):
@@ -90,9 +89,8 @@ def test_middleware_handles_invalid_json(app_with_middleware, test_mode_env):
 
 def test_middleware_noop_without_test_mode(app_with_middleware):
     """Without test mode env vars, middleware should not extract test context."""
-    # Ensure env vars are not set
+    # Ensure the env var is not set
     os.environ.pop("OGX_TEST_INFERENCE_MODE", None)
-    os.environ.pop("OGX_TEST_STACK_CONFIG_TYPE", None)
 
     client = TestClient(app_with_middleware)
 

@@ -14,6 +14,6 @@ from .config import FileSearchToolRuntimeConfig
 async def get_provider_impl(config: FileSearchToolRuntimeConfig, deps: dict[Api, Any]):
     from .file_search import FileSearchToolRuntimeImpl
 
-    impl = FileSearchToolRuntimeImpl(config, deps[Api.vector_io], deps[Api.inference], deps[Api.files])
+    impl = FileSearchToolRuntimeImpl(config, deps[Api.vector_io], deps[Api.inference])
     await impl.initialize()
     return impl

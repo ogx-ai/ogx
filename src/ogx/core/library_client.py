@@ -7,6 +7,7 @@
 import asyncio
 import atexit
 import concurrent.futures
+import contextlib
 import inspect
 import json
 import logging  # allow-direct-logging
@@ -21,14 +22,14 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, TypeVar, Union, get_args, get_origin
 
-import httpx
+import httpx  # allow-direct-httpx: builds httpx responses consumed by the generated (httpx-based) ogx-client SDK
 import yaml
 from fastapi import Response as FastAPIResponse
 
 from ogx.core.utils.type_inspection import is_body_param, is_unwrapped_body_param
 
 try:
-    from ogx_open_client import (
+    from ogx_client import (
         NOT_GIVEN,
         APIResponse,
         AsyncAPIResponse,
@@ -36,20 +37,8 @@ try:
         AsyncStream,
         OgxClient,
     )
-except ImportError:
-    try:
-        from ogx_client import (  # type: ignore[import-not-found,assignment,no-redef]
-            NOT_GIVEN,
-            APIResponse,
-            AsyncAPIResponse,
-            AsyncOgxClient,
-            AsyncStream,
-            OgxClient,
-        )
-    except ImportError as e:
-        raise ImportError(
-            "ogx-open-client is not installed. Please install it with `uv pip install ogx[openclient]` or `uv pip install ogx[client]`."
-        ) from e
+except ImportError as e:
+    raise ImportError("ogx-client is not installed. Please install it with `uv pip install ogx[client]`.") from e
 
 from pydantic import BaseModel, TypeAdapter
 from rich.console import Console
@@ -57,10 +46,11 @@ from termcolor import cprint
 
 from ogx.core.build import print_pip_install_help
 from ogx.core.configure import parse_and_maybe_upgrade_config
-from ogx.core.request_headers import PROVIDER_DATA_VAR, request_provider_data_context
+from ogx.core.request_headers import PROVIDER_DATA_VAR, request_provider_data_context, stamp_test_id_into_headers
 from ogx.core.resolver import ProviderRegistry
 from ogx.core.server.routes import RouteImpls, find_matching_route, initialize_route_impls
 from ogx.core.stack import Stack, get_stack_run_config_from_distro, replace_env_vars
+from ogx.core.testing_context import TEST_CONTEXT, reset_test_context, sync_test_context_from_provider_data
 from ogx.core.utils.config import redact_sensitive_fields
 from ogx.core.utils.context import preserve_contexts_async_generator
 from ogx.core.utils.exec import in_notebook
@@ -135,6 +125,19 @@ def convert_to_pydantic(annotation: Any, value: Any) -> Any:
         return TypeAdapter(annotation).validate_python(value)
 
     except Exception as e:
+        # Multipart form fields arrive as JSON strings over HTTP (e.g. expires_after);
+        # the in-process client must parse them into the model the way the server's form
+        # dependencies do.
+        if isinstance(value, str):
+            try:
+                return TypeAdapter(annotation).validate_python(json.loads(value))
+            except Exception as json_error:
+                logger.debug(
+                    "JSON string form field did not validate against annotation",
+                    value=value,
+                    annotation=annotation,
+                    error=str(json_error),
+                )
         # TODO: this is workardound for having Union[str, AgentToolGroup] in API schema.
         # We should get rid of any non-discriminated unions in the API schema.
         if origin is Union:
@@ -197,6 +200,23 @@ class _SSEAsyncByteStream(httpx.AsyncByteStream):
             await self._body_iterator.aclose()
 
 
+@contextlib.contextmanager
+def _test_context_from_header_scope() -> Generator[None, None, None]:
+    """Derive TEST_CONTEXT from the request's provider data for the duration of the context.
+
+    Uses the same sync_test_context_from_provider_data() the server middleware uses (see
+    ProviderDataMiddleware in server.py), so both stack modes populate TEST_CONTEXT from the
+    request the same way. Must be entered after request_provider_data_context, since it reads
+    PROVIDER_DATA_VAR.
+    """
+    token = sync_test_context_from_provider_data()
+    try:
+        yield
+    finally:
+        if token is not None:
+            reset_test_context(token)
+
+
 async def _route_call_in_process(
     *,
     method: str,
@@ -233,11 +253,7 @@ async def _route_call_in_process(
     from urllib.parse import parse_qs, urlparse
 
     from fastapi.responses import StreamingResponse
-
-    try:
-        from ogx_open_client.rest import RESTResponse
-    except ImportError:
-        from ogx_client.rest import RESTResponse  # type: ignore[import-not-found,assignment,no-redef]
+    from ogx_client.rest import RESTResponse
 
     # Extract path from full URL (strip http://localhost:port prefix)
     parsed = urlparse(url)
@@ -250,8 +266,9 @@ async def _route_call_in_process(
         keys = ["X-OGX-Provider-Data", "x-ogx-provider-data"]
         if all(key not in request_headers for key in keys):
             request_headers["X-OGX-Provider-Data"] = json.dumps(provider_data)
+    stamp_test_id_into_headers(request_headers)
 
-    with request_provider_data_context(request_headers):
+    with request_provider_data_context(request_headers), _test_context_from_header_scope():
         # Build the body dict from JSON body and/or post_params
         request_body: Any = {}
         if body and isinstance(body, dict):
@@ -324,10 +341,16 @@ async def _route_call_in_process(
 
             if async_streaming:
                 # Wrap the body_iterator as an AsyncByteStream for lazy async
-                # iteration, preserving time-to-first-token benefits.
+                # iteration, preserving time-to-first-token benefits. The stream
+                # is consumed after the request_provider_data_context above
+                # exits, so preserve the captured context across iterations.
                 mock_response = httpx.Response(
                     status_code=result.status_code,
-                    stream=_SSEAsyncByteStream(result.body_iterator),
+                    stream=_SSEAsyncByteStream(
+                        preserve_contexts_async_generator(
+                            aiter(result.body_iterator), [PROVIDER_DATA_VAR, TEST_CONTEXT]
+                        )
+                    ),
                     headers={"Content-Type": content_type},
                     request=httpx.Request(method=method, url=url),
                 )
@@ -336,7 +359,7 @@ async def _route_call_in_process(
                 # client cannot lazily consume an async iterator from its
                 # synchronous call_api path (Stream.iter_bytes() requires a
                 # SyncByteStream). The sync client already has a separate lazy
-                # streaming path via _stream_request() for the stainless SDK.
+                # streaming path via _stream_request().
                 chunks: list[bytes] = []
                 async for chunk in result.body_iterator:
                     if isinstance(chunk, str):
@@ -425,7 +448,7 @@ class OGXAsLibraryClient(OgxClient):
         # Patch api_client.call_api to route requests in-process instead of over HTTP.
         # The generated SDK's call chain is: API method → api_client.call_api() → rest.request() → httpx.
         # We intercept at call_api so the request never reaches httpx/network.
-        # Only applies to ogx_open_client; the stainless SDK uses a request() override instead.
+        # Applies to the OpenAPI-generated ogx_client, which exposes api_client.call_api.
         if hasattr(self, "api_client") and hasattr(self.api_client, "call_api"):
             self._original_call_api = self.api_client.call_api
             self.api_client.call_api = self._in_process_call_api  # type: ignore[method-assign]
@@ -708,7 +731,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
             else:
                 prefix = "!" if in_notebook() else ""  # type: ignore[no-untyped-call]
                 cprint(
-                    f"Please run:\n\n{prefix}ogx list-deps {self.config_path_or_distro_name} | xargs -L1 uv pip install\n\n",
+                    f"Please run:\n\n{prefix}ogx stack list-deps {self.config_path_or_distro_name} | xargs -L1 uv pip install\n\n",
                     "yellow",
                     file=sys.stderr,
                 )
@@ -733,7 +756,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
         # The generated async SDK's call chain is:
         #   Async*Api method → await api_client.call_api() → httpx.AsyncClient → network
         # We intercept at call_api so the request never reaches the network.
-        # Only applies to ogx_open_client; the stainless SDK uses a request() override instead.
+        # Applies to the OpenAPI-generated ogx_client, which exposes api_client.call_api.
         if hasattr(self, "api_client") and hasattr(self.api_client, "call_api"):
             self.api_client.call_api = self._in_process_call_api  # type: ignore[method-assign]
 
@@ -824,9 +847,10 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
             keys = ["X-OGX-Provider-Data", "x-ogx-provider-data"]
             if all(key not in request_headers for key in keys):
                 request_headers["X-OGX-Provider-Data"] = json.dumps(self.provider_data)
+        stamp_test_id_into_headers(request_headers)
 
         # Use context manager for provider data
-        with request_provider_data_context(request_headers):
+        with request_provider_data_context(request_headers), _test_context_from_header_scope():
             if stream:
                 response = await self._call_streaming(
                     cast_to=cast_to,
@@ -1017,7 +1041,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
                     sse_event = f"data: {data}\n\n"
                     yield sse_event.encode("utf-8")
 
-        wrapped_gen = preserve_contexts_async_generator(gen(), [PROVIDER_DATA_VAR])
+        wrapped_gen = preserve_contexts_async_generator(gen(), [PROVIDER_DATA_VAR, TEST_CONTEXT])
 
         mock_response = httpx.Response(
             status_code=httpx.codes.OK,

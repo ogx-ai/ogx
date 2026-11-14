@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
+from pydantic import ValidationError
 
 from ogx.core.storage.datatypes import KVStoreReference
 from ogx.providers.remote.vector_io.neo4j.config import Neo4jVectorIOConfig
@@ -159,8 +160,8 @@ def test_neo4j_translate_compound_filter() -> None:
 
 
 def test_neo4j_translate_rejects_unsafe_metadata_key() -> None:
-    with pytest.raises(ValueError, match="Failed to translate Neo4j metadata filter"):
-        _translate_filters(ComparisonFilter(type="eq", key="topic.name", value="programming"))
+    with pytest.raises(ValidationError, match="Failed to validate metadata filter key"):
+        ComparisonFilter(type="eq", key="topic.name", value="programming")
 
 
 def test_neo4j_translate_rejects_unsupported_filter_type() -> None:

@@ -226,15 +226,18 @@ class AuthorizedSqlStore:
         current_user = get_authenticated_user()
         await self._check_access_for_rows(table, where, action, current_user)
 
-    def _build_tenant_filter(self, current_user: User | None) -> tuple[str, dict[str, Any]]:
+    def _build_tenant_filter(
+        self, current_user: User | None, *, table: str | None = None
+    ) -> tuple[str, dict[str, Any]]:
         """Non-bypassable tenant partition filter. Applied before ABAC."""
+        tenant_column = f'"{table}"."tenant_id"' if table is not None else "tenant_id"
         if self.tenancy_mode == TenancyMode.DISABLED:
             return "1=1", {}
         if not current_user or not current_user.tenant_id:
             if self.tenancy_mode == TenancyMode.SINGLE and self.default_tenant_id:
-                return "tenant_id = :_tenant_id_filter", {"_tenant_id_filter": self.default_tenant_id}
+                return f"{tenant_column} = :_tenant_id_filter", {"_tenant_id_filter": self.default_tenant_id}
             return "1=0", {}
-        return "tenant_id = :_tenant_id_filter", {"_tenant_id_filter": current_user.tenant_id}
+        return f"{tenant_column} = :_tenant_id_filter", {"_tenant_id_filter": current_user.tenant_id}
 
     def _tenant_id_for_current_context(self, current_user: User | None) -> str | None:
         if self.tenancy_mode == TenancyMode.DISABLED:
@@ -333,7 +336,7 @@ class AuthorizedSqlStore:
         else:
             update_columns = [c for c in enhanced_data.keys() if c not in conflict_columns and c not in frozen_fields]
 
-        tenant_update_where, tenant_update_params = self._build_tenant_filter(current_user)
+        tenant_update_where, tenant_update_params = self._build_tenant_filter(current_user, table=table)
 
         await self.sql_store.upsert(
             table=table,
@@ -508,23 +511,40 @@ class AuthorizedSqlStore:
         for operation in operations:
             await self._check_access_for_rows(operation.table, operation.where, Action.DELETE, current_user)
 
+        tenant_where, tenant_params = self._build_tenant_filter(current_user)
+
         if self._can_apply_sql_policy_filter_for_mutations(current_user):
             access_where, access_params = self._build_access_control_where_clause(self.policy)
-            filtered_operations = [
-                DeleteOperation(
-                    table=operation.table,
-                    where=operation.where,
-                    where_sql=(
-                        access_where if operation.where_sql is None else f"({operation.where_sql}) AND ({access_where})"
-                    ),
-                    where_sql_params={**(operation.where_sql_params or {}), **access_params},
-                )
-                for operation in operations
-            ]
-            await self.sql_store.delete_many(filtered_operations)
+            combined_where, combined_params = self._combine_where_clauses(
+                (access_where, access_params),
+                (tenant_where, tenant_params),
+            )
+            await self.sql_store.delete_many(self._apply_extra_where(operations, combined_where, combined_params))
+            return
+
+        if tenant_where != "1=1":
+            await self.sql_store.delete_many(self._apply_extra_where(operations, tenant_where, tenant_params))
             return
 
         await self.sql_store.delete_many(operations)
+
+    @staticmethod
+    def _apply_extra_where(
+        operations: Sequence[DeleteOperation], extra_where: str, extra_params: Mapping[str, Any]
+    ) -> list[DeleteOperation]:
+        """AND `extra_where` onto each operation's existing where_sql, per operation (each may
+        already carry its own where_sql and target a different table)."""
+        return [
+            DeleteOperation(
+                table=operation.table,
+                where=operation.where,
+                where_sql=(
+                    extra_where if operation.where_sql is None else f"({operation.where_sql}) AND ({extra_where})"
+                ),
+                where_sql_params={**(operation.where_sql_params or {}), **extra_params},
+            )
+            for operation in operations
+        ]
 
     async def _check_access_for_rows(
         self,

@@ -123,3 +123,42 @@ class TestIdOverwriting:
         received = [c async for c in result]
         assert received[0].id == "orig-1"
         assert received[1].id == "orig-2"
+
+
+class TrackingMockAsyncStream:
+    """AsyncStream-like object with close() that records whether it was called."""
+
+    def __init__(self, chunks):
+        self.chunks = chunks
+        self._iter = iter(chunks)
+        self.closed = False
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._iter)
+        except StopIteration as e:
+            raise StopAsyncIteration from e
+
+    async def close(self):
+        self.closed = True
+
+
+class TestStreamClosure:
+    async def test_stream_closed_after_full_consumption(self, mixin):
+        stream = TrackingMockAsyncStream([MockChunk("1"), MockChunk("2")])
+        result = await mixin._postprocess_chunk(stream, stream=True)
+
+        received = [c async for c in result]
+        assert len(received) == 2
+        assert stream.closed
+
+    async def test_stream_closed_when_consumer_abandons_mid_stream(self, mixin):
+        stream = TrackingMockAsyncStream([MockChunk("1"), MockChunk("2")])
+        result = await mixin._postprocess_chunk(stream, stream=True)
+
+        assert (await result.__anext__()).content == "test"
+        await result.aclose()
+        assert stream.closed

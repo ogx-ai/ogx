@@ -4,12 +4,14 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
-from pydantic import SecretStr
+from pydantic import HttpUrl, SecretStr, ValidationError
 
+from ogx.core.stack import replace_env_vars
 from ogx.providers.remote.tool_runtime.brave_search.brave_search import BraveSearchToolRuntimeImpl
 from ogx.providers.remote.tool_runtime.brave_search.config import BraveSearchToolConfig
 
@@ -21,7 +23,7 @@ def brave_search():
 
 @pytest.fixture
 def mock_brave_response():
-    return httpx.Response(
+    return httpx2.Response(
         200,
         json={
             "mixed": {
@@ -42,13 +44,13 @@ def mock_brave_response():
                 ]
             },
         },
-        request=httpx.Request("GET", "https://api.search.brave.com/res/v1/web/search"),
+        request=httpx2.Request("GET", "https://api.search.brave.com/res/v1/web/search"),
     )
 
 
 async def test_invoke_with_allowed_domains(brave_search, mock_brave_response):
     with patch.object(brave_search, "get_request_provider_data", return_value=None):
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+        with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
             await brave_search.invoke_tool(
                 "web_search",
                 {
@@ -65,7 +67,7 @@ async def test_invoke_with_allowed_domains(brave_search, mock_brave_response):
 
 async def test_invoke_with_user_location_country(brave_search, mock_brave_response):
     with patch.object(brave_search, "get_request_provider_data", return_value=None):
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+        with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
             await brave_search.invoke_tool(
                 "web_search",
                 {
@@ -79,7 +81,7 @@ async def test_invoke_with_user_location_country(brave_search, mock_brave_respon
 
 async def test_invoke_with_user_location_no_country(brave_search, mock_brave_response):
     with patch.object(brave_search, "get_request_provider_data", return_value=None):
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+        with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
             await brave_search.invoke_tool(
                 "web_search",
                 {
@@ -93,7 +95,7 @@ async def test_invoke_with_user_location_no_country(brave_search, mock_brave_res
 
 async def test_invoke_with_search_context_size(brave_search, mock_brave_response):
     with patch.object(brave_search, "get_request_provider_data", return_value=None):
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+        with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
             await brave_search.invoke_tool(
                 "web_search",
                 {
@@ -106,7 +108,7 @@ async def test_invoke_with_search_context_size(brave_search, mock_brave_response
 
 
 async def test_invoke_with_search_context_size_updates_result_limit(brave_search):
-    multi_result_response = httpx.Response(
+    multi_result_response = httpx2.Response(
         200,
         json={
             "mixed": {
@@ -163,10 +165,10 @@ async def test_invoke_with_search_context_size_updates_result_limit(brave_search
                 ]
             },
         },
-        request=httpx.Request("GET", "https://api.search.brave.com/res/v1/web/search"),
+        request=httpx2.Request("GET", "https://api.search.brave.com/res/v1/web/search"),
     )
     with patch.object(brave_search, "get_request_provider_data", return_value=None):
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=multi_result_response) as mock_get:
+        with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=multi_result_response) as mock_get:
             result = await brave_search.invoke_tool(
                 "web_search",
                 {
@@ -185,7 +187,7 @@ async def test_invoke_with_search_context_size_updates_result_limit(brave_search
 
 async def test_invoke_without_extra_params(brave_search, mock_brave_response):
     with patch.object(brave_search, "get_request_provider_data", return_value=None):
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+        with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
             await brave_search.invoke_tool(
                 "web_search",
                 {"query": "test query"},
@@ -199,7 +201,7 @@ async def test_invoke_without_extra_params(brave_search, mock_brave_response):
 
 async def test_invoke_with_empty_allowed_domains(brave_search, mock_brave_response):
     with patch.object(brave_search, "get_request_provider_data", return_value=None):
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+        with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
             await brave_search.invoke_tool(
                 "web_search",
                 {
@@ -214,7 +216,7 @@ async def test_invoke_with_empty_allowed_domains(brave_search, mock_brave_respon
 async def test_invoke_returns_source_metadata(brave_search, mock_brave_response):
     """Test that invoke_tool returns source URLs in metadata."""
     with patch.object(brave_search, "get_request_provider_data", return_value=None):
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response):
+        with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response):
             result = await brave_search.invoke_tool(tool_name="web_search", kwargs={"query": "test query"})
             assert result.metadata is not None
             assert "sources" in result.metadata
@@ -231,7 +233,7 @@ class TestProviderDataApiKeyOverride:
             "get_request_provider_data",
             return_value=MagicMock(brave_search_api_key=SecretStr("provider-data-key")),
         ):
-            with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+            with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
                 await brave_search.invoke_tool(
                     "web_search",
                     {"query": "test query"},
@@ -242,7 +244,7 @@ class TestProviderDataApiKeyOverride:
     async def test_config_api_key_used_when_no_provider_data(self, brave_search, mock_brave_response):
         """Config API key should be used when no provider data is provided."""
         with patch.object(brave_search, "get_request_provider_data", return_value=None):
-            with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+            with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
                 await brave_search.invoke_tool(
                     "web_search",
                     {"query": "test query"},
@@ -257,7 +259,7 @@ class TestProviderDataApiKeyOverride:
             "get_request_provider_data",
             return_value=MagicMock(brave_search_api_key=None),
         ):
-            with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+            with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
                 await brave_search.invoke_tool(
                     "web_search",
                     {"query": "test query"},
@@ -275,7 +277,42 @@ class TestProviderDataApiKeyOverride:
         """Request should not include X-Subscription-Token header when no key is available."""
         impl = BraveSearchToolRuntimeImpl(BraveSearchToolConfig(max_results=3))
         with patch.object(impl, "get_request_provider_data", return_value=None):
-            with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+            with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
                 await impl.invoke_tool("web_search", {"query": "test query"})
                 headers = mock_get.call_args.kwargs["headers"]
                 assert "X-Subscription-Token" not in headers
+
+
+class TestBaseUrl:
+    async def test_default_base_url(self, brave_search, mock_brave_response):
+        """Requests go to the public Brave endpoint when no base URL is configured."""
+        with patch.object(brave_search, "get_request_provider_data", return_value=None):
+            with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+                await brave_search.invoke_tool("web_search", {"query": "test query"})
+                assert mock_get.call_args.kwargs["url"] == "https://api.search.brave.com/res/v1/web/search"
+
+    @pytest.mark.parametrize("base_url", ["http://brave-proxy:8080/brave", "http://brave-proxy:8080/brave/"])
+    async def test_custom_base_url(self, base_url, mock_brave_response):
+        """A configured base URL, with or without a trailing slash, keeps its path prefix."""
+        impl = BraveSearchToolRuntimeImpl(BraveSearchToolConfig(base_url=base_url))
+        with patch.object(impl, "get_request_provider_data", return_value=None):
+            with patch("httpx2.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
+                await impl.invoke_tool("web_search", {"query": "test query"})
+                assert mock_get.call_args.kwargs["url"] == "http://brave-proxy:8080/brave/res/v1/web/search"
+
+    @patch.dict(os.environ, {"BRAVE_SEARCH_BASE_URL": "http://brave-proxy:8080"})
+    def test_sample_run_config_reads_base_url_from_environment(self):
+        config_data = replace_env_vars(BraveSearchToolConfig.sample_run_config(__distro_dir__=""))
+        assert BraveSearchToolConfig.model_validate(config_data).base_url == HttpUrl("http://brave-proxy:8080")
+
+    def test_sample_run_config_defaults_to_public_endpoint(self):
+        with patch.dict(os.environ):
+            os.environ.pop("BRAVE_SEARCH_BASE_URL", None)
+            config_data = replace_env_vars(BraveSearchToolConfig.sample_run_config(__distro_dir__=""))
+        assert BraveSearchToolConfig.model_validate(config_data).base_url == HttpUrl("https://api.search.brave.com")
+
+    @pytest.mark.parametrize("base_url", ["", "not a url", "brave-proxy:8080"])
+    def test_invalid_base_url_fails_at_config_load(self, base_url):
+        """A bad BRAVE_SEARCH_BASE_URL is rejected up front, not as an opaque error at request time."""
+        with pytest.raises(ValidationError):
+            BraveSearchToolConfig(base_url=base_url)

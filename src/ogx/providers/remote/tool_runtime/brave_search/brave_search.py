@@ -6,7 +6,7 @@
 
 from typing import Any
 
-import httpx
+import httpx2
 
 from ogx.core.request_headers import NeedsRequestProviderData
 from ogx_api import (
@@ -77,7 +77,7 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
         self, tool_name: str, kwargs: dict[str, Any], authorization: str | None = None
     ) -> ToolInvocationResult:
         api_key = self._get_api_key()
-        url = "https://api.search.brave.com/res/v1/web/search"
+        url = f"{str(self.config.base_url).rstrip('/')}/res/v1/web/search"
         headers: dict[str, str] = {
             "Accept-Encoding": "gzip",
             "Accept": "application/json",
@@ -104,7 +104,7 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
             result_limit = self._CONTEXT_SIZE_TO_COUNT[search_context_size]
             payload["count"] = result_limit
 
-        async with httpx.AsyncClient(timeout=self.config.to_httpx_timeout()) as client:
+        async with httpx2.AsyncClient(timeout=self.config.to_httpx_timeout()) as client:
             response = await client.get(
                 url=url,
                 params=payload,

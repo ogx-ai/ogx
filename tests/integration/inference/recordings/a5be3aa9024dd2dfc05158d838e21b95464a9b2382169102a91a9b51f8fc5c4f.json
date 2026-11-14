@@ -1,0 +1,54 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_completion_non_streaming[txt=ollama/qwen3.5:0.8b-inference:completion:sanity]",
+  "request": {
+    "method": "POST",
+    "url": "http://0.0.0.0:11434/v1/v1/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3.5:0.8b",
+      "prompt": "Respond to this question and explain your answer. Complete the sentence using one word: Roses are red, violets are ",
+      "max_tokens": 8192,
+      "stream": false
+    },
+    "endpoint": "/v1/completions",
+    "model": "qwen3.5:0.8b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.completion.Completion",
+      "__data__": {
+        "id": "rec-a5be3aa9024d",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "text": "violets are purple."
+          }
+        ],
+        "created": 0,
+        "model": "qwen3.5:0.8b",
+        "object": "text_completion",
+        "system_fingerprint": "fp_ollama",
+        "usage": {
+          "completion_tokens": 5983,
+          "prompt_tokens": 33,
+          "total_tokens": 6016,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -8,7 +8,7 @@ import heapq
 import json
 from typing import Any
 
-import httpx
+import httpx2
 from numpy.typing import NDArray
 
 from ogx.core.storage.kvstore import kvstore_impl
@@ -54,7 +54,7 @@ class InfinispanIndex(EmbeddingIndex):
 
     def __init__(
         self,
-        client: httpx.AsyncClient,
+        client: httpx2.AsyncClient,
         cache_name: str,
         base_url: str,
         embedding_dimension: int,
@@ -554,7 +554,7 @@ class InfinispanIndex(EmbeddingIndex):
 class InfinispanVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtocolPrivate):
     """
     Infinispan adapter for vector store operations.
-    Uses httpx.AsyncClient for HTTP REST API communication with Infinispan server.
+    Uses httpx2.AsyncClient for HTTP REST API communication with Infinispan server.
     """
 
     def __init__(
@@ -570,7 +570,7 @@ class InfinispanVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresPr
         )
         log.info(f"Initializing InfinispanVectorIOAdapter with config: {config}")
         self.config = config
-        self.client: httpx.AsyncClient | None = None
+        self.client: httpx2.AsyncClient | None = None
         self.cache: dict[str, VectorStoreWithIndex] = {}
         self.vector_store_table = None
         self._policy = policy or []
@@ -591,22 +591,22 @@ class InfinispanVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresPr
             self.metadata_store = await authorized_sqlstore(self.config.metadata_store, self._policy)
 
         # Setup HTTP client with authentication
-        auth: httpx.BasicAuth | httpx.DigestAuth | None = None
+        auth: httpx2.BasicAuth | httpx2.DigestAuth | None = None
         if self.config.username and self.config.password:
             # Extract password from SecretStr if needed
             password = self.config.password.get_secret_value() if self.config.password else None
             if password:
                 if self.config.auth_mechanism == "basic":
-                    auth = httpx.BasicAuth(username=self.config.username, password=password)
+                    auth = httpx2.BasicAuth(username=self.config.username, password=password)
                 elif self.config.auth_mechanism == "digest":
-                    auth = httpx.DigestAuth(username=self.config.username, password=password)
+                    auth = httpx2.DigestAuth(username=self.config.username, password=password)
                 else:
                     log.warning(f"Unknown auth mechanism: {self.config.auth_mechanism}, using BasicAuth")
-                    auth = httpx.BasicAuth(username=self.config.username, password=password)
+                    auth = httpx2.BasicAuth(username=self.config.username, password=password)
 
         # Create async HTTP client
         verify_tls = self.config.verify_tls if self.config.use_https else False
-        self.client = httpx.AsyncClient(
+        self.client = httpx2.AsyncClient(
             auth=auth,
             verify=verify_tls,
             timeout=30.0,

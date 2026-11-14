@@ -17,7 +17,7 @@ These tests verify:
 import importlib.util
 from unittest.mock import MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 
 HAS_BOTO3 = importlib.util.find_spec("boto3") is not None
@@ -90,10 +90,10 @@ class TestBedrockOpenAISDKIntegration:
 
         captured_request = None
 
-        def capture_request(request: httpx.Request) -> httpx.Response:
+        def capture_request(request: httpx2.Request) -> httpx2.Response:
             nonlocal captured_request
             captured_request = request
-            return httpx.Response(200, json={"status": "ok"})
+            return httpx2.Response(200, json={"status": "ok"})
 
         mock_frozen_creds = MagicMock()
         mock_frozen_creds.access_key = "AKIAIOSFODNN7EXAMPLE"
@@ -107,9 +107,9 @@ class TestBedrockOpenAISDKIntegration:
 
             # Use "bedrock" signing name (correct)
             auth = BedrockSigV4Auth(region="us-west-2", service="bedrock")
-            transport = httpx.MockTransport(capture_request)
+            transport = httpx2.MockTransport(capture_request)
 
-            with httpx.Client(auth=auth, transport=transport) as client:
+            with httpx2.Client(auth=auth, transport=transport) as client:
                 client.post(
                     "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/chat/completions",
                     json={"model": "test"},
@@ -139,7 +139,7 @@ class TestBedrockOpenAISDKIntegration:
             # Use "bedrock" signing name (correct)
             auth = BedrockSigV4Auth(region="us-west-2", service="bedrock")
 
-            request = httpx.Request(
+            request = httpx2.Request(
                 method="POST",
                 url="https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/chat/completions",
                 headers={"content-type": "application/json"},
