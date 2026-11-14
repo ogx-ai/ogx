@@ -83,7 +83,7 @@ Methods:
 
 :::warning DEPRECATED API
 
-**The Agents API is deprecated. Use the [Responses API](/docs/building_applications/responses) instead.**
+**The Agents API is deprecated. Use the [Responses API](/docs/building_applications/responses_vs_agents) instead.**
 
 The Responses API provides equivalent functionality with an OpenAI-compatible interface. New applications should use `client.responses.create()` rather than the agents workflow below.
 

@@ -1,0 +1,71 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_with_tool_definitions[txt=deepseek/deepseek-chat]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_with_tool_definitions[txt=deepseek/deepseek-chat]",
+    "url": "https://api.deepseek.com/anthropic/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "deepseek-chat",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What's the weather in San Francisco?"
+        }
+      ],
+      "max_tokens": 256,
+      "tools": [
+        {
+          "name": "get_weather",
+          "description": "Get the current weather in a given location",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string",
+                "description": "The city and state, e.g. San Francisco, CA"
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
+        }
+      ],
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "da5d63f0-1d6d-46db-877b-7acda4f84bc3",
+      "type": "message",
+      "role": "assistant",
+      "model": "deepseek-chat",
+      "content": [
+        {
+          "type": "text",
+          "text": "I'll check the current weather in San Francisco for you."
+        },
+        {
+          "type": "tool_use",
+          "id": "call_00_8DMbvethrMh93wDn52p89902",
+          "name": "get_weather",
+          "input": {
+            "location": "San Francisco, CA"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 164,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 128,
+        "output_tokens": 52,
+        "service_tier": "standard"
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

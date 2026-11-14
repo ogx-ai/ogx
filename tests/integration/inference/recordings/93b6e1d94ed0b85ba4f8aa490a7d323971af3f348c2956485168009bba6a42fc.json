@@ -1,0 +1,36 @@
+{
+  "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_is_replayed[judge=typesafe/jev-latest]",
+  "request": {
+    "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_is_replayed[judge=typesafe/jev-latest]",
+    "url": "https://api.typesafe.ai/v1/systemone",
+    "method": "POST",
+    "payload": {
+      "state": "I was charged twice. Please help.",
+      "model": "jev-latest",
+      "questions": {
+        "billing": {
+          "type": "noul",
+          "instructions": "Is this about billing?"
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "jev-1.13.0",
+      "answers": {
+        "billing": {
+          "type": "noul",
+          "noul": 0.98
+        }
+      },
+      "usage": {
+        "input_tokens": 279,
+        "output_tokens": 20
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

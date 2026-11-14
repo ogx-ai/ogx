@@ -110,7 +110,13 @@ def create_router(impl: Models) -> APIRouter:
         x_goog_api_key: Annotated[str | None, Header(alias="x-goog-api-key")] = None,
         x_goog_user_project: Annotated[str | None, Header(alias="x-goog-user-project")] = None,
         x_goog_api_client: Annotated[str | None, Header(alias="x-goog-api-client")] = None,
+        x_typesafe_sdk: Annotated[str | None, Header(alias="x-typesafe-sdk")] = None,
     ) -> OpenAIListModelsResponse | Response:
+        if x_typesafe_sdk:
+            # The typesafe SDK tags every request with X-TypeSafe-SDK; serve its
+            # GET /v1/models shape (SystemOne judgment models only).
+            typesafe_result = await impl.typesafe_list_models()
+            return JSONResponse(content=typesafe_result.model_dump(exclude_none=True))
         if anthropic_version:
             anthropic_result = await impl.anthropic_list_models(before_id=before_id, after_id=after_id, limit=limit)
             return JSONResponse(

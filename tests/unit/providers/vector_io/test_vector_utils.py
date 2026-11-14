@@ -24,9 +24,9 @@ from ogx_api import Chunk, ChunkMetadata, VectorStoreFileObject
 
 def test_generate_chunk_id():
     """Test that generate_chunk_id produces expected hashes."""
-    chunk_id1 = generate_chunk_id("doc-1", "test")
-    chunk_id2 = generate_chunk_id("doc-1", "test ")
-    chunk_id3 = generate_chunk_id("doc-1", "test 3")
+    chunk_id1 = generate_chunk_id(document_id="doc-1", chunk_text="test")
+    chunk_id2 = generate_chunk_id(document_id="doc-1", chunk_text="test ")
+    chunk_id3 = generate_chunk_id(document_id="doc-1", chunk_text="test 3")
 
     chunk_ids = sorted([chunk_id1, chunk_id2, chunk_id3])
     assert chunk_ids == [
@@ -51,8 +51,8 @@ def test_generate_chunk_id_with_window():
             content_token_count=1,
         ),
     )
-    chunk_id1 = generate_chunk_id("doc-1", chunk, chunk_window="0-1")
-    chunk_id2 = generate_chunk_id("doc-1", chunk, chunk_window="1-2")
+    chunk_id1 = generate_chunk_id(document_id="doc-1", chunk_text=chunk, chunk_window="0-1")
+    chunk_id2 = generate_chunk_id(document_id="doc-1", chunk_text=chunk, chunk_window="1-2")
     # Verify that different windows produce different IDs
     assert chunk_id1 != chunk_id2
     assert len(chunk_id1) == 36  # Valid UUID format
@@ -61,7 +61,7 @@ def test_generate_chunk_id_with_window():
 
 def test_chunk_creation_with_explicit_id():
     """Test that chunks can be created with explicit chunk_id."""
-    chunk_id = generate_chunk_id("doc-1", "test")
+    chunk_id = generate_chunk_id(document_id="doc-1", chunk_text="test")
     chunk = Chunk(
         content="test",
         chunk_id=chunk_id,

@@ -6,7 +6,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 from pydantic import SecretStr
 
@@ -21,13 +21,13 @@ def bing_search():
 
 @pytest.fixture
 def bing_search_client(bing_search):
-    bing_search._client = MagicMock(spec=httpx.AsyncClient)
+    bing_search._client = MagicMock(spec=httpx2.AsyncClient)
     return bing_search
 
 
 @pytest.fixture
 def mock_bing_response():
-    return httpx.Response(
+    return httpx2.Response(
         200,
         json={
             "queryContext": {"originalQuery": "test query"},
@@ -41,7 +41,7 @@ def mock_bing_response():
                 ]
             },
         },
-        request=httpx.Request("GET", "https://api.bing.microsoft.com/v7.0/search"),
+        request=httpx2.Request("GET", "https://api.bing.microsoft.com/v7.0/search"),
     )
 
 
@@ -184,7 +184,7 @@ class TestProviderDataApiKeyOverride:
     async def test_api_key_header_omitted_when_no_key_available(self, mock_bing_response):
         """Request should not include Ocp-Apim-Subscription-Key header when no key is available."""
         impl = BingSearchToolRuntimeImpl(BingSearchToolConfig(top_k=3))
-        impl._client = MagicMock(spec=httpx.AsyncClient)
+        impl._client = MagicMock(spec=httpx2.AsyncClient)
         impl._client.get = AsyncMock(return_value=mock_bing_response)
         with patch.object(impl, "get_request_provider_data", return_value=None):
             await impl.invoke_tool("web_search", {"query": "test query"})

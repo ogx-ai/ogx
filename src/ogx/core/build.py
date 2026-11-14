@@ -23,6 +23,7 @@ SERVER_DEPENDENCIES = [
     "fastapi",
     "fire",
     "httpx",
+    "httpx2",
     "uvicorn",
     "opentelemetry-sdk",
     "opentelemetry-exporter-otlp-proto-http",

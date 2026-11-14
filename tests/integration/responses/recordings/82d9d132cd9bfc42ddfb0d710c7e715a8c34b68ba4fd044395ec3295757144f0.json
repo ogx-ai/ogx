@@ -1,0 +1,165 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_chain_through_compaction[openai_client-txt=openai/gpt-5-nano]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-5-nano",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Remember: the secret word is 'banana'."
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": "Another language model started to solve this problem and produced a summary of its thinking process. You also have access to the state of the tools that were used by that language model. Use this to build on the work that has already been done and avoid duplicating work. Here is the summary produced by the other language model, use the information in this summary to assist with your own analysis:\nHandoff Summary: CONTEXT CHECKPOINT COMPACTION\n\nCurrent Progress\n- Task initiated: MEMORIZE and preserve the secret word provided by the user.\n- Confirmation given: acknowledged that the secret word is banana.\n- No additional actions taken beyond acknowledgment in this session.\n\nKey Decisions\n- Store the provided secret word in the current session context to support seamless continuation within this chat.\n- Do not expose or misuse the secret word beyond user-initiated prompts.\n- Note: Persistent memory beyond this session is not assumed unless the platform supports it and the user explicitly enables it.\n\nImportant Context, Constraints, and User Preferences\n- Secret word: banana\n- Preference for concise, structured, and task-focused responses.\n- Primary goal: Maintain and correctly recall the secret word for any future prompts in this session, and apply it if the user requests related actions.\n\nWhat Remains to be Done (Next Steps)\n- Maintain the memory of the secret word across subsequent interactions in this session.\n- When prompted, recall and apply the secret word as required by the user (e.g., verification, prompts referring to the word).\n- If a persistent memory is needed beyond this session, verify the platform capabilities and obtain user consent.\n\nCritical Data, Examples, or References Needed to Continue\n- The exact secret word: banana\n- Example guidance (optional for future use): If asked \u201cWhat is the secret word?\u201d, respond with banana.\n- Any future user-specific rules about how to use or reveal the word (to be provided by user if needed).\n\nAssumptions and Limitations\n- Memory is session-based; cannot guarantee persistence across sessions unless the platform supports persistent memory and user opt-in is provided.\n- Maintain confidentiality and do not reveal the word outside requested prompts.\n\nHandoff Instructions for the Next LLM\n- Maintain the secret word: banana, and treat it as a memory-bearing token within this session.\n- If prompted about the secret word, respond with banana unless given a different instruction by the user.\n- Ensure consistent, concise communication; do not introduce unrelated changes or assumptions.\n- If you suspect a platform capability for persistent memory, seek explicit user permission before enabling.\n\nEnd of Handoff."
+        },
+        {
+          "role": "user",
+          "content": "What was the secret word?"
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      }
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-5-nano",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-82d9d132cd9b",
+          "choices": [
+            {
+              "delta": {
+                "audio": null,
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": null
+              },
+              "index": 0,
+              "finish_reason": null,
+              "logprobs": null
+            }
+          ],
+          "created": 0,
+          "model": "gpt-5-nano-2025-08-07",
+          "object": "chat.completion.chunk",
+          "moderation": null,
+          "obfuscation": "AWRRb",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-82d9d132cd9b",
+          "choices": [
+            {
+              "delta": {
+                "audio": null,
+                "content": "banana",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "index": 0,
+              "finish_reason": null,
+              "logprobs": null
+            }
+          ],
+          "created": 0,
+          "model": "gpt-5-nano-2025-08-07",
+          "object": "chat.completion.chunk",
+          "moderation": null,
+          "obfuscation": "W",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-82d9d132cd9b",
+          "choices": [
+            {
+              "delta": {
+                "audio": null,
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "index": 0,
+              "finish_reason": "stop",
+              "logprobs": null
+            }
+          ],
+          "created": 0,
+          "model": "gpt-5-nano-2025-08-07",
+          "object": "chat.completion.chunk",
+          "moderation": null,
+          "obfuscation": "2",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-82d9d132cd9b",
+          "choices": [],
+          "created": 0,
+          "model": "gpt-5-nano-2025-08-07",
+          "object": "chat.completion.chunk",
+          "moderation": null,
+          "obfuscation": "0",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 202,
+            "prompt_tokens": 547,
+            "total_tokens": 749,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 192,
+              "rejected_prediction_tokens": 0,
+              "text_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cache_write_tokens": null,
+              "cached_tokens": 0,
+              "image_tokens": null,
+              "text_tokens": null
+            }
+          }
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

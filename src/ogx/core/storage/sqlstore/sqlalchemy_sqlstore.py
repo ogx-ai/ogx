@@ -19,13 +19,17 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    and_,
     event,
+    exists,
     inspect,
+    or_,
     select,
     text,
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
@@ -152,6 +156,8 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             engine_kwargs["max_overflow"] = self.config.max_overflow
             if self.config.pool_recycle >= 0:
                 engine_kwargs["pool_recycle"] = self.config.pool_recycle
+            if self.config.connection_string is not None:
+                connect_args["dsn"] = self.config.connection_string.get_secret_value()
             ssl_context = self._build_ssl()
             if ssl_context is not None:
                 connect_args["ssl"] = ssl_context
@@ -280,6 +286,20 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             await session.execute(stmt)
             await session.commit()
 
+    async def insert_do_nothing(self, table: str, data: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None:
+        """Insert rows, skipping any that would violate a unique constraint.
+
+        Unlike insert, a conflicting row is dropped silently instead of raising, so it is safe
+        when several workers race to write the same row (e.g. a one-time migration flag).
+        """
+        await self._ensure_engine()  # Lazy init in current event loop
+        assert self.async_session is not None  # _ensure_engine guarantees this
+        table_obj = self.metadata.tables[table]
+        stmt = self._get_dialect_insert(table_obj).values(data).on_conflict_do_nothing()
+        async with self.async_session() as session:
+            await session.execute(stmt)
+            await session.commit()
+
     async def fetch_all(
         self,
         table: str,
@@ -330,8 +350,12 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                     raise ValueError(f"Cursor key column '{cursor_key_column}' not found in table '{table}'")
 
                 # Get cursor value for the order column, scoped by the same
-                # access filters as the main query to prevent cross-tenant leaks
+                # filters as the main query so the cursor row is the one this page
+                # would return (the key column need not be unique across filters)
                 cursor_query = select(table_obj.c[order_column]).where(table_obj.c[cursor_key_column] == cursor_id)
+                if where:
+                    for key, value in where.items():
+                        cursor_query = cursor_query.where(_build_where_expr(table_obj.c[key], value))
                 if where_sql:
                     cursor_clause = text(where_sql)
                     if where_sql_params:
@@ -345,11 +369,29 @@ class SqlAlchemySqlStoreImpl(SqlStore):
 
                 cursor_value = cursor_row[0]
 
-                # Apply cursor condition based on sort direction
+                # Apply cursor condition based on sort direction. Break ties on the
+                # unique cursor key so rows that share the cursor row's order value
+                # are not skipped across pages.
                 if order_direction == "desc":
-                    query = query.where(table_obj.c[order_column] < cursor_value)
+                    query = query.where(
+                        or_(
+                            table_obj.c[order_column] < cursor_value,
+                            and_(
+                                table_obj.c[order_column] == cursor_value,
+                                table_obj.c[cursor_key_column] > cursor_id,
+                            ),
+                        )
+                    )
                 else:
-                    query = query.where(table_obj.c[order_column] > cursor_value)
+                    query = query.where(
+                        or_(
+                            table_obj.c[order_column] > cursor_value,
+                            and_(
+                                table_obj.c[order_column] == cursor_value,
+                                table_obj.c[cursor_key_column] > cursor_id,
+                            ),
+                        )
+                    )
 
             # Apply ordering
             if order_by:
@@ -371,6 +413,23 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                         query = query.order_by(table_obj.c[name].desc())
                     else:
                         raise ValueError(f"Invalid order '{order_type}' for column '{name}'")
+
+            # Append a unique tiebreaker to the ORDER BY so rows that share the
+            # primary order value have a stable total order across pages. On cursor
+            # pages this is the cursor key; otherwise the table's primary key.
+            tiebreaker_column = None
+            if cursor:
+                tiebreaker_column = cursor[0]
+            else:
+                primary_key_columns = list(table_obj.primary_key.columns)
+                if len(primary_key_columns) == 1:
+                    tiebreaker_column = primary_key_columns[0].name
+            if (
+                tiebreaker_column is not None
+                and order_by
+                and tiebreaker_column not in [column_name for column_name, _ in order_by]
+            ):
+                query = query.order_by(table_obj.c[tiebreaker_column].asc())
 
             # Fetch limit + 1 to determine has_more
             fetch_limit = limit
@@ -557,6 +616,89 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                 logger.debug("Column already exists, skipping", table=table, column=column_name)
             else:
                 raise RuntimeError(f"Failed to add column {column_name} to {table}") from e
+
+    async def table_exists(self, table: str) -> bool:
+        """Return whether ``table`` is present in the database, registered with this store or not."""
+        await self._ensure_engine()  # Lazy init in current event loop
+        assert self._engine is not None  # _ensure_engine guarantees this
+        async with self._engine.connect() as conn:
+            return bool(await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table(table)))
+
+    async def primary_key_columns(self, table: str) -> list[str] | None:
+        """Return the primary key columns of ``table`` as the database has them, or None if it is absent."""
+        await self._ensure_engine()  # Lazy init in current event loop
+        assert self._engine is not None  # _ensure_engine guarantees this
+
+        def read_primary_key(sync_conn: Any) -> list[str] | None:
+            inspector = inspect(sync_conn)
+            if not inspector.has_table(table):
+                return None
+            try:
+                return list(inspector.get_pk_constraint(table)["constrained_columns"])
+            except NoSuchTableError:
+                # The table was renamed or dropped between the existence check and this read.
+                return None
+
+        async with self._engine.connect() as conn:
+            primary_key: list[str] | None = await conn.run_sync(read_primary_key)
+            return primary_key
+
+    async def rename_table(self, table: str, new_name: str) -> None:
+        """Rename ``table`` to ``new_name`` in its own transaction, freeing the old name for a replacement.
+
+        Any registration of ``table`` with this store is dropped so that ``create_table`` can
+        register a table of a different shape under the old name afterwards.
+        """
+        await self._ensure_engine()  # Lazy init in current event loop
+        assert self._engine is not None  # _ensure_engine guarantees this
+        quote = self._engine.dialect.identifier_preparer.quote
+        async with self._engine.begin() as conn:
+            await conn.execute(text(f"ALTER TABLE {quote(table)} RENAME TO {quote(new_name)}"))
+        if table in self.metadata.tables:
+            self.metadata.remove(self.metadata.tables[table])
+
+    async def copy_missing_rows(self, source_table: str, target_table: str, key_columns: Sequence[str]) -> int:
+        """Insert every row of ``source_table`` whose key is absent from ``target_table``.
+
+        Only columns present in both tables are copied, so the tables may differ in
+        shape. Returns the number of rows inserted, or 0 when ``source_table`` does
+        not exist. Safe to run on every startup, which makes it usable for carrying
+        data over to a replacement table.
+        """
+        await self._ensure_engine()  # Lazy init in current event loop
+        assert self._engine is not None  # _ensure_engine guarantees this
+        target = self.metadata.tables[target_table]
+
+        async with self._engine.begin() as conn:
+
+            def reflect_source(sync_conn: Any) -> Table | None:
+                inspector = inspect(sync_conn)
+                if source_table not in inspector.get_table_names():
+                    return None
+                return Table(source_table, MetaData(), autoload_with=sync_conn)
+
+            source = await conn.run_sync(reflect_source)
+            if source is None:
+                return 0
+
+            columns = [column.name for column in source.columns if column.name in target.c]
+            missing_keys = [key for key in key_columns if key not in columns]
+            if missing_keys:
+                raise ValueError(
+                    f"Failed to copy rows from {source_table} to {target_table}: key columns {missing_keys} "
+                    "are not present in both tables"
+                )
+
+            already_present = exists().where(and_(*(target.c[key] == source.c[key] for key in key_columns)))
+            select_missing = select(*(source.c[name] for name in columns)).where(~already_present)
+            # ON CONFLICT DO NOTHING makes the copy safe under concurrent workers that start
+            # migrating the same database at once: a row a sibling inserts first is skipped,
+            # not an error.
+            insert_missing = (
+                self._get_dialect_insert(target).from_select(columns, select_missing).on_conflict_do_nothing()
+            )
+            result = await conn.execute(insert_missing)
+            return int(result.rowcount or 0)
 
     def _get_dialect_insert(self, table: Table) -> Any:
         if self._is_sqlite_backend:

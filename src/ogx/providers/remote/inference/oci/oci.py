@@ -8,7 +8,7 @@
 from collections.abc import Iterable
 from typing import Any
 
-import httpx
+import httpx2
 import oci
 from oci.generative_ai.generative_ai_client import GenerativeAiClient
 from oci.generative_ai.models import ModelCollection
@@ -90,7 +90,7 @@ class OCIInferenceAdapter(OpenAIMixin):
 
         return config
 
-    def _get_auth(self) -> httpx.Auth:
+    def _get_auth(self) -> httpx2.Auth:
         if self.config.oci_auth_type == OCI_AUTH_TYPE_INSTANCE_PRINCIPAL:
             return OciInstancePrincipalAuth()
         elif self.config.oci_auth_type == OCI_AUTH_TYPE_CONFIG_FILE:

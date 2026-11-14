@@ -5,8 +5,8 @@
 # the root directory of this source tree.
 
 import pytest
-from ogx_open_client.lib.agents.agent import Agent
-from ogx_open_client.lib.agents.turn_events import StepCompleted, StepProgress, ToolCallIssuedDelta
+from ogx_client.lib.agents.agent import Agent
+from ogx_client.lib.agents.turn_events import StepCompleted, StepProgress, ToolCallIssuedDelta
 
 AUTH_TOKEN = "test-token"
 
@@ -19,6 +19,13 @@ def mcp_server():
         yield mcp_server_info
 
 
+@pytest.mark.skip(
+    reason="Caller-supplied MCP server_url is now SSRF-guarded (#6291): the guard "
+    "rejects endpoints that resolve to non-public addresses, and the local mock MCP "
+    "server only has a loopback URL. Re-enable once the test can reach the mock "
+    "through a publicly resolvable endpoint (e.g. an ngrok/localtunnel tunnel) or "
+    "via the trusted-connector pattern."
+)
 def test_mcp_invocation(ogx_client, text_model_id, mcp_server):
     """Test MCP tool invocation through the Responses/Agent API.
 

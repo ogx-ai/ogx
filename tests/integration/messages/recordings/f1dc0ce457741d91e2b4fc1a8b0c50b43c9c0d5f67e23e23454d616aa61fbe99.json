@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_results[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_results[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say 'world' and nothing else."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-b0ead93005188ceb",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay, the user wants me to say 'world' and nothing else. Let me think about how to respond. Since they just asked for 'world', I should confirm that with a simple and direct response. I need to make sure it's clear and not too verbose. Maybe start with 'world' and then say nothing else. Let me check if there's any other part to the question. No, the instruction is straightforward. Alright, I'll just say 'world' and end it there.\n",
+          "signature": "6c552c0986e7471a8c255c6c60c8f1ea"
+        },
+        {
+          "type": "text",
+          "text": "\n\nworld"
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 16,
+        "output_tokens": 107
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

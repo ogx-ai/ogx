@@ -1,0 +1,85 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_with_tool_choice_none[txt=llama-cpp-server/qwen3-0.6b-inference:chat_completion:tool_calling]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Pretend you are a weather assistant."
+        },
+        {
+          "role": "user",
+          "content": "What's the weather like in San Francisco, CA?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.17.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-f31371f46da9",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "The current weather in San Francisco, CA, is generally mild with temperatures ranging from **60\u00b0F to 85\u00b0F**. You may experience light rain, especially in the afternoon and evening, though it's not common during the peak of the summer. The city is known for its dry season and frequent rain in the afternoon, so it's advisable to check the forecast for the latest updates.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user is asking about the weather in San Francisco, CA. I need to provide accurate information. Let me start by recalling the current weather conditions. San Francisco is known for its rainy days, especially in the afternoon and evening. The temperature ranges from about 60 to 85 degrees Fahrenheit. I should mention the possibility of rain, maybe even mention the likelihood of rain in the afternoon. It's important to note that the weather can change, so checking the forecast is recommended. Also, San Francisco has a significant temperature difference between day and night, so I should highlight that. I should keep the response clear and helpful, making sure the user knows the current conditions and any potential changes.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11147-fee39dd92",
+        "usage": {
+          "completion_tokens": 227,
+          "prompt_tokens": 33,
+          "total_tokens": 260,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 11,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 11,
+          "prompt_n": 22,
+          "prompt_ms": 164.543,
+          "prompt_per_token_ms": 7.479227272727273,
+          "prompt_per_second": 133.70365193292938,
+          "predicted_n": 227,
+          "predicted_ms": 6063.157,
+          "predicted_per_token_ms": 26.82812831858407,
+          "predicted_per_second": 37.27431105610493
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

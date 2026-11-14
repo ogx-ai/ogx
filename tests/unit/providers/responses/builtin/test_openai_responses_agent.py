@@ -16,6 +16,7 @@ from openai.types.chat.chat_completion_chunk import (
 )
 
 from ogx_api import (
+    ContextLengthExceededError,
     InternalServerError,
     OpenAISystemMessageParam,
 )
@@ -130,6 +131,45 @@ async def test_failed_stream_raises_internal_server_error_in_non_streaming_mode(
     # structured and may be actionable (e.g. context window, invalid prompt).
     # This is consistent with streaming mode where the same message is visible.
     assert provider_error_message in str(exc_info.value)
+
+
+async def test_context_length_failure_raises_a_400_in_non_streaming_mode(openai_responses_impl):
+    """A response that failed because the prompt exceeds the model's window is a client error.
+
+    Retrying the same request can never succeed, so it must not surface as a 500.
+    """
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+    message = "The conversation exceeds the model's context window and could not be reduced further by truncation."
+
+    failed_response = OpenAIResponseObject(
+        created_at=1,
+        id="resp_context_length_nonstream",
+        model=model,
+        output=[],
+        status="failed",
+        error=OpenAIResponseError(code="context_length_exceeded", message=message),
+        store=False,
+    )
+
+    class FakeOrchestrator:
+        def __init__(self, *, ctx, **_kwargs):
+            self.ctx = ctx
+            self.final_messages = None
+
+        async def create_response(self):
+            yield OpenAIResponseObjectStreamResponseFailed(response=failed_response, sequence_number=0)
+
+    with patch(
+        "ogx.providers.inline.responses.builtin.responses.openai_responses.StreamingResponseOrchestrator",
+        FakeOrchestrator,
+    ):
+        with pytest.raises(ContextLengthExceededError) as exc_info:
+            await openai_responses_impl.create_openai_response(
+                CreateResponseRequest(input="Hello", model=model, stream=False, store=False)
+            )
+
+    assert str(exc_info.value) == message
+    assert exc_info.value.status_code == 400
 
 
 def test_response_object_incomplete_details_null_when_completed():

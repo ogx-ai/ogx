@@ -1,0 +1,93 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_with_previous_response_id[openai_client-txt=openai/gpt-5-nano]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-5-nano",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "What is the capital of France?"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Paris."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-5-nano",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-811c03549fc2",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Context Checkpoint Handoff Summary\n\n- Current progress\n  - User asked: \"What is the capital of France?\"\n  - Answer provided: \"Paris.\"\n  - No follow-up tasks yet; task status: initial Q&A completed.\n\n- Key decisions made\n  - Return direct factual answer with no extra exposition.\n  - Keep the response concise and self-contained for reuse by another LLM.\n\n- Important context / constraints / user preferences\n  - Preference for concise, exact answers.\n  - Task scope appears to be a simple factual QA; no need to expand beyond the question.\n  - If resuming, preserve only essential Q/A data and minimal metadata.\n\n- What remains to be done (next steps)\n  - If a new question is provided, answer similarly concisely.\n  - If this session is part of a larger context checkpoint, continue capturing Q/A pairs in the same minimal format.\n\n- Critical data, examples, references needed to continue\n  - Example entry to reference:\n    - Q: What is the capital of France?\n    - A: Paris\n  - No external references required for this fact; Paris is the widely accepted capital of France.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-5-nano-2025-08-07",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": "default",
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 1270,
+          "prompt_tokens": 114,
+          "total_tokens": 1384,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 1024,
+            "rejected_prediction_tokens": 0,
+            "text_tokens": null
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

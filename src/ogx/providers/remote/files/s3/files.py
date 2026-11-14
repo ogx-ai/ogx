@@ -152,6 +152,10 @@ class S3FilesImpl(Files):
         self._client: S3Client | None = None
         self._sql_store: AuthorizedSqlStore | None = None
 
+    def _object_key(self, file_id: str) -> str:
+        """Return the S3 object key for a file id, under the configured key prefix."""
+        return f"{self._config.key_prefix}{file_id}"
+
     def _now(self) -> int:
         """Return current UTC timestamp as int seconds."""
         return int(datetime.now(UTC).timestamp())
@@ -172,7 +176,7 @@ class S3FilesImpl(Files):
             await asyncio.to_thread(
                 self.client.delete_object,
                 Bucket=self._config.bucket_name,
-                Key=file_id,
+                Key=self._object_key(file_id),
             )
         except ClientError as e:
             if e.response["Error"]["Code"] != "NoSuchKey":
@@ -260,7 +264,7 @@ class S3FilesImpl(Files):
             await asyncio.to_thread(
                 self.client.put_object,
                 Bucket=self._config.bucket_name,
-                Key=file_id,
+                Key=self._object_key(file_id),
                 Body=content,
                 # TODO: enable server-side encryption
             )
@@ -329,7 +333,7 @@ class S3FilesImpl(Files):
             s3_response = await asyncio.to_thread(
                 self.client.get_object,
                 Bucket=self._config.bucket_name,
-                Key=row["id"],
+                Key=self._object_key(row["id"]),
             )
         except ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchKey":

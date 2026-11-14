@@ -18,8 +18,8 @@ interface PaginationResponse<T> {
   data: T[];
   has_more: boolean;
   last_id: string;
-  first_id: string;
-  object: "list";
+  first_id?: string;
+  object?: "list";
 }
 
 export interface PaginationReturn<T> {

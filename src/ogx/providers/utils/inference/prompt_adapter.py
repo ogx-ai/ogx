@@ -8,7 +8,7 @@ import base64
 import re
 from typing import Any
 
-import httpx
+import httpx2
 
 from ogx.log import get_logger
 from ogx.providers.utils.common.url_validation import validate_url_not_private
@@ -68,7 +68,7 @@ async def localize_image_content(uri: str) -> tuple[bytes, str] | None:
     """
     if uri.startswith("http"):
         validate_url_not_private(uri)
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+        async with httpx2.AsyncClient(timeout=httpx2.Timeout(30.0, connect=10.0)) as client:
             r = await client.get(uri)
             content = r.content
             content_type = r.headers.get("content-type")

@@ -168,6 +168,10 @@ async def resolve_impls(
         run_config, provider_registry, routing_table_apis, router_apis
     )
 
+    # `apis:` gates the HTTP surface (see ogx.core.server.server.apis_to_serve), not what
+    # gets wired in-process: providers depend on each other's impls regardless of which
+    # ones are reachable over HTTP. An empty list therefore resolves everything, the same
+    # as an absent one.
     apis_to_serve = run_config.apis or set(
         list(providers_with_specs.keys()) + [x.value for x in routing_table_apis] + [x.value for x in router_apis]
     )
@@ -462,6 +466,9 @@ async def instantiate_provider(
         args = [config, deps]
         if "policy" in inspect.signature(getattr(module, method)).parameters:
             args.append(policy)
+        if "route_policy" in inspect.signature(getattr(module, method)).parameters:
+            route_policy = run_config.server.auth.route_policy if run_config.server.auth else []
+            args.append(route_policy)
     if isinstance(provider_spec, InlineProviderSpec) and getattr(provider_spec, "execution_mode", "inline") == "worker":
         impl = _instantiate_worker_proxy(provider, provider_spec, config, deps, policy)
     else:

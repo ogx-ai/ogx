@@ -144,6 +144,7 @@ class RunConfigSettings(BaseModel):
     default_connectors: list[ConnectorInput] | None = None
     vector_stores_config: VectorStoresConfig | None = None
     auth_config: dict[str, Any] | None = None
+    tenancy_config: dict[str, Any] | None = None
     storage_backends: dict[str, Any] | None = None
     storage_stores: dict[str, Any] | None = None
 
@@ -246,6 +247,9 @@ class RunConfigSettings(BaseModel):
 
         if self.auth_config:
             config["server"]["auth"] = self.auth_config
+
+        if self.tenancy_config:
+            config["server"]["tenancy"] = self.tenancy_config
 
         if self.vector_stores_config:
             config["vector_stores"] = self.vector_stores_config.model_dump(exclude_none=True)

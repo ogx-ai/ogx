@@ -155,7 +155,7 @@ If you've set up your local development environment, you can also install the di
 
 ```bash
 INFERENCE_MODEL=meta-llama/Llama-3.1-8B-Instruct
-ogx list-deps nvidia | xargs -L1 uv pip install
+ogx stack list-deps nvidia | xargs -L1 uv pip install
 NVIDIA_API_KEY=$NVIDIA_API_KEY \
 INFERENCE_MODEL=$INFERENCE_MODEL \
 ogx stack run ./config.yaml \

@@ -10,11 +10,13 @@ import argparse
 import json
 from unittest.mock import MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 from openai import APIConnectionError, APIStatusError
 
 from ogx.cli.connect.opencode import ConnectOpenCode
+
+from .connect_helpers import make_untrusted_certificate_error, parse_group_args
 
 
 @pytest.fixture
@@ -39,41 +41,46 @@ def _make_mock_client(models: list[MagicMock]) -> MagicMock:
 
 
 class TestArguments:
-    def test_defaults(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args([])
-        assert args.port == 8321
-        assert args.host == "localhost"
+    def test_defaults(self, connect_opencode: ConnectOpenCode, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OGX_BASE_URL", raising=False)
+        args = parse_group_args(["opencode"])
         assert args.model is None
+        assert args.connect_url == "https://localhost:8321/v1"
 
-    def test_port_override(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args(["--port", "9000"])
-        assert args.port == 9000
+    def test_group_url_is_used(self) -> None:
+        args = parse_group_args(["--url", "https://group.example.com/v1", "opencode"])
+        assert args.connect_url == "https://group.example.com/v1"
 
-    def test_host_override(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args(["--host", "0.0.0.0"])
-        assert args.host == "0.0.0.0"
+    def test_agent_level_host_port_flags_removed(self, connect_opencode: ConnectOpenCode) -> None:
+        with pytest.raises(SystemExit):
+            parse_group_args(["opencode", "--host", "0.0.0.0"])
+        with pytest.raises(SystemExit):
+            parse_group_args(["opencode", "--port", "9000"])
 
     def test_model_override(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args(["--model", "gpt-4o"])
+        args = parse_group_args(["opencode", "--model", "gpt-4o"])
         assert args.model == "gpt-4o"
 
     def test_port_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OGX_BASE_URL", raising=False)
         monkeypatch.setenv("OGX_PORT", "9999")
-        subparsers = argparse.ArgumentParser().add_subparsers()
-        instance = ConnectOpenCode(subparsers)
-        args = instance.parser.parse_args([])
-        assert args.port == 9999
+        args = parse_group_args(["opencode"])
+        assert args.connect_url == "https://localhost:9999/v1"
 
 
 class TestOpenCodeDetection:
     def test_exits_when_opencode_not_in_path(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args([])
+        args = parse_group_args(
+            [
+                "opencode",
+            ]
+        )
         with patch("ogx.cli.connect.opencode.shutil.which", return_value=None):
             with pytest.raises(SystemExit):
                 connect_opencode._run_connect_opencode_cmd(args)
 
     def test_continues_when_opencode_found(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args(["--model", "gpt-4o"])
+        args = parse_group_args(["opencode", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (
@@ -85,39 +92,75 @@ class TestOpenCodeDetection:
             with pytest.raises(SystemExit) as exc_info:
                 connect_opencode._run_connect_opencode_cmd(args)
             assert exc_info.value.code == 0
+            assert mock_run.call_args.args[0] == ["opencode"]
+
+    def test_forwards_opencode_args(self, connect_opencode: ConnectOpenCode) -> None:
+        args = parse_group_args(["opencode", "--model", "gpt-4o", "--", "run", "What is 2+2?"])
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+
+        with (
+            patch("ogx.cli.connect.opencode.shutil.which", return_value="/usr/bin/opencode"),
+            patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client),
+            patch("ogx.cli.connect.opencode.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0)
+            with pytest.raises(SystemExit):
+                connect_opencode._run_connect_opencode_cmd(args)
+            assert mock_run.call_args.args[0] == ["opencode", "run", "What is 2+2?"]
 
 
 class TestServerProbe:
     def test_exits_when_server_unreachable(self, connect_opencode: ConnectOpenCode) -> None:
         mock_client = MagicMock()
-        mock_client.models.list.side_effect = APIConnectionError(request=httpx.Request("GET", "http://localhost"))
+        mock_client.models.list.side_effect = APIConnectionError(request=httpx2.Request("GET", "http://localhost"))
 
         with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
-                connect_opencode._fetch_models("http://localhost:8321/v1")
+                connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
 
     def test_exits_on_timeout(self, connect_opencode: ConnectOpenCode) -> None:
         mock_client = MagicMock()
-        mock_client.models.list.side_effect = APIConnectionError(request=httpx.Request("GET", "http://localhost"))
+        mock_client.models.list.side_effect = APIConnectionError(request=httpx2.Request("GET", "http://localhost"))
 
         with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
-                connect_opencode._fetch_models("http://localhost:8321/v1")
+                connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
 
     def test_exits_on_server_error(self, connect_opencode: ConnectOpenCode) -> None:
         mock_client = MagicMock()
-        mock_response = httpx.Response(500, request=httpx.Request("GET", "http://localhost"))
+        mock_response = httpx2.Response(500, request=httpx2.Request("GET", "http://localhost"))
         mock_client.models.list.side_effect = APIStatusError("server error", response=mock_response, body=None)
 
         with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
-                connect_opencode._fetch_models("http://localhost:8321/v1")
+                connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
+
+    def test_exits_with_auth_message_on_401(
+        self, connect_opencode: ConnectOpenCode, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        mock_client = MagicMock()
+        mock_response = httpx2.Response(401, request=httpx2.Request("GET", "http://localhost"))
+        mock_client.models.list.side_effect = APIStatusError("unauthorized", response=mock_response, body=None)
+
+        with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
+            with pytest.raises(SystemExit):
+                connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
+        output = capsys.readouterr().err
+        assert "Failed to authenticate" in output
+        assert "--api-key" in output
+
+    def test_probe_forwards_api_key(self, connect_opencode: ConnectOpenCode) -> None:
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+
+        with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client) as mock_openai:
+            connect_opencode._fetch_models("http://localhost:8321/v1", "ogk_123", False)
+        assert mock_openai.call_args.kwargs["api_key"] == "ogk_123"
 
     def test_returns_models_on_success(self, connect_opencode: ConnectOpenCode) -> None:
         mock_client = _make_mock_client([_make_model("gpt-4o"), _make_model("llama-3.1-8b")])
 
         with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
-            models = connect_opencode._fetch_models("http://localhost:8321/v1")
+            models, _ = connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
         assert models == ["gpt-4o", "llama-3.1-8b"]
 
 
@@ -143,7 +186,7 @@ class TestModelSelection:
         )
 
         with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
-            models = connect_opencode._fetch_models("http://localhost:8321/v1")
+            models, _ = connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
         assert "text-embedding-3-small" not in models
         assert "gpt-4o" in models
 
@@ -155,7 +198,7 @@ class TestModelSelection:
         )
 
         with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
-            models = connect_opencode._fetch_models("http://localhost:8321/v1")
+            models, _ = connect_opencode._fetch_models("http://localhost:8321/v1", "", False)
         assert models == []
 
 
@@ -189,6 +232,16 @@ class TestConfigGeneration:
         assert config["provider"]["ogx"]["options"]["baseURL"] == "http://myhost:9000/v1"
         assert "llama-3.1-8b" in config["provider"]["ogx"]["models"]
 
+    def test_config_includes_api_key_when_provided(self, connect_opencode: ConnectOpenCode) -> None:
+        config = connect_opencode._build_opencode_config(
+            "http://myhost:9000/v1", ["llama-3.1-8b"], "llama-3.1-8b", api_key="ogk_123"
+        )
+        assert config["provider"]["ogx"]["options"]["apiKey"] == "ogk_123"
+
+    def test_config_omits_api_key_when_not_provided(self, connect_opencode: ConnectOpenCode) -> None:
+        config = connect_opencode._build_opencode_config("http://myhost:9000/v1", ["gpt-4o"], "gpt-4o")
+        assert "apiKey" not in config["provider"]["ogx"]["options"]
+
     def test_config_is_valid_json(self, connect_opencode: ConnectOpenCode) -> None:
         config = connect_opencode._build_opencode_config("http://localhost:8321/v1", ["gpt-4o"], "gpt-4o")
         serialized = json.dumps(config)
@@ -196,9 +249,56 @@ class TestConfigGeneration:
         assert parsed == config
 
 
+class TestSelfSignedTLS:
+    def test_untrusted_cert_without_insecure_exits_with_hint(
+        self, connect_opencode: ConnectOpenCode, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        mock_client = MagicMock()
+        mock_client.models.list.side_effect = make_untrusted_certificate_error()
+
+        with patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client):
+            with pytest.raises(SystemExit):
+                connect_opencode._fetch_models("https://ogx.example.com/v1", "", False)
+        output = capsys.readouterr().err
+        assert "TLS certificate is not trusted" in output
+        assert "--insecure" in output
+
+    def test_self_signed_exports_tls_env_for_launched_process(self, connect_opencode: ConnectOpenCode) -> None:
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+        mock_client.models.list.side_effect = [make_untrusted_certificate_error(), mock_client.models.list.return_value]
+        args = parse_group_args(["-k", "opencode"])
+
+        with (
+            patch("ogx.cli.connect.opencode.shutil.which", return_value="/usr/bin/opencode"),
+            patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client),
+            patch("ogx.cli.connect.opencode.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0)
+            with pytest.raises(SystemExit):
+                connect_opencode._run_connect_opencode_cmd(args)
+
+            call_env = mock_run.call_args.kwargs["env"]
+            assert call_env["NODE_TLS_REJECT_UNAUTHORIZED"] == "0"
+
+    def test_trusted_server_does_not_export_tls_env(self, connect_opencode: ConnectOpenCode) -> None:
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+        args = parse_group_args(["opencode"])
+
+        with (
+            patch("ogx.cli.connect.opencode.shutil.which", return_value="/usr/bin/opencode"),
+            patch("ogx.cli.connect.opencode.OpenAI", return_value=mock_client),
+            patch("ogx.cli.connect.opencode.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0)
+            with pytest.raises(SystemExit):
+                connect_opencode._run_connect_opencode_cmd(args)
+
+            assert "NODE_TLS_REJECT_UNAUTHORIZED" not in mock_run.call_args.kwargs["env"]
+
+
 class TestConnect:
     def test_connects_opencode_with_config_env(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args(["--model", "gpt-4o"])
+        args = parse_group_args(["opencode", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (
@@ -214,10 +314,10 @@ class TestConnect:
             call_env = mock_run.call_args.kwargs["env"]
             assert "OPENCODE_CONFIG_CONTENT" in call_env
             config = json.loads(call_env["OPENCODE_CONFIG_CONTENT"])
-            assert config["provider"]["ogx"]["options"]["baseURL"] == "http://localhost:8321/v1"
+            assert config["provider"]["ogx"]["options"]["baseURL"] == "https://localhost:8321/v1"
 
     def test_propagates_exit_code(self, connect_opencode: ConnectOpenCode) -> None:
-        args = connect_opencode.parser.parse_args(["--model", "gpt-4o"])
+        args = parse_group_args(["opencode", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (

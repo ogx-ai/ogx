@@ -23,7 +23,7 @@ if "pymilvus" not in sys.modules:
     )
     pymilvus.Function = object
     pymilvus.FunctionType = SimpleNamespace(BM25="BM25")
-    pymilvus.MilvusClient = object
+    pymilvus.AsyncMilvusClient = object
     pymilvus.RRFRanker = object
     pymilvus.WeightedRanker = object
     sys.modules["pymilvus"] = pymilvus
@@ -39,6 +39,13 @@ if "weaviate" not in sys.modules:
     sys.modules["weaviate.classes"] = weaviate.classes
     sys.modules["weaviate.classes.init"] = weaviate.classes.init
     sys.modules["weaviate.classes.query"] = weaviate.classes.query
+    # Pre-create the attributes that tests monkeypatch, so they live in the mock's
+    # instance __dict__ (auto-created children live in _mock_children instead).
+    # pytest >= 9.2 reads the original value from __dict__ (pytest-dev/pytest#10644)
+    # and its undo() delattrs whatever it cannot find there; the delattr marks the
+    # auto-created slot as deleted, so later getattr raises AttributeError.
+    weaviate.classes.data.DataObject = MagicMock(name="DataObject")
+    weaviate.classes.config.Property = MagicMock(name="Property")
 
 from ogx.providers.inline.vector_io.milvus import MilvusVectorIOConfig as InlineMilvusVectorIOConfig
 from ogx.providers.remote.vector_io.chroma import chroma as chroma_module
@@ -63,8 +70,20 @@ def _vector_store(store_id: str) -> VectorStore:
 
 async def _make_milvus_adapter(kvstore_config, tmp_path, monkeypatch):
     fake_client = MagicMock()
+    for method in (
+        "has_collection",
+        "create_collection",
+        "drop_collection",
+        "upsert",
+        "search",
+        "hybrid_search",
+        "query",
+        "delete",
+        "close",
+    ):
+        setattr(fake_client, method, AsyncMock())
     fake_client.has_collection.return_value = True
-    monkeypatch.setattr(milvus_module, "MilvusClient", lambda **kwargs: fake_client)
+    monkeypatch.setattr(milvus_module, "AsyncMilvusClient", lambda **kwargs: fake_client)
     config = InlineMilvusVectorIOConfig(
         db_path=str(tmp_path / "milvus.db"),
         persistence=kvstore_config,

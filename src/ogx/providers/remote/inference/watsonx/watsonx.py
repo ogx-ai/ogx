@@ -9,7 +9,7 @@ import time
 from collections.abc import AsyncIterator, Iterable
 from typing import Any
 
-import httpx
+import httpx2
 from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 
 from ogx.log import get_logger
@@ -57,7 +57,7 @@ class WatsonXInferenceAdapter(OpenAIMixin):
     def get_extra_client_params(self) -> dict[str, Any]:
         return {
             "default_query": {"version": WATSONX_API_VERSION},
-            "timeout": httpx.Timeout(self.config.timeout),
+            "timeout": httpx2.Timeout(self.config.timeout),
         }
 
     async def _refresh_iam_token(self, api_key: str) -> str:
@@ -106,7 +106,7 @@ class WatsonXInferenceAdapter(OpenAIMixin):
 
     async def _exchange_iam_token(self, api_key: str) -> str:
         try:
-            async with httpx.AsyncClient(**build_network_client_kwargs(self.config.network)) as http_client:
+            async with httpx2.AsyncClient(**build_network_client_kwargs(self.config.network)) as http_client:
                 resp = await http_client.post(
                     "https://iam.cloud.ibm.com/identity/token",
                     headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -241,7 +241,7 @@ class WatsonXInferenceAdapter(OpenAIMixin):
     async def _fetch_model_specs(self) -> list[dict[str, Any]]:
         """Retrieve foundation model specifications from the WatsonX API."""
         url = f"{str(self.config.base_url)}/ml/v1/foundation_model_specs?version={WATSONX_API_VERSION}"
-        async with httpx.AsyncClient(**build_network_client_kwargs(self.config.network)) as http_client:
+        async with httpx2.AsyncClient(**build_network_client_kwargs(self.config.network)) as http_client:
             response = await http_client.get(url, headers={"Content-Type": "application/json"}, timeout=30)
             response.raise_for_status()
             data = response.json()

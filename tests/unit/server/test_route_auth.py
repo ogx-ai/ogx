@@ -10,6 +10,7 @@ import pytest
 from fastapi import FastAPI
 
 from ogx.core.access_control.datatypes import RouteAccessRule, RouteScope
+from ogx.core.access_control.route_access import _route_matches, is_route_allowed
 from ogx.core.datatypes import (
     AuthenticationConfig,
     AuthProviderType,
@@ -148,49 +149,34 @@ async def test_no_route_policy_allows_all(regular_user):
 
 async def test_exact_path_match(developer_user):
     """Test exact path matching"""
-    route_policy = [
-        RouteAccessRule(
-            permit=RouteScope(paths="/v1/chat/completions"),
-            when="user with developer in roles",
-        )
-    ]
-
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # Should match
-    assert middleware._route_matches("/v1/chat/completions", "/v1/chat/completions")
+    assert _route_matches("/v1/chat/completions", "/v1/chat/completions")
 
     # Should not match
-    assert not middleware._route_matches("/v1/chat/completions/stream", "/v1/chat/completions")
-    assert not middleware._route_matches("/v1/models/list", "/v1/chat/completions")
+    assert not _route_matches("/v1/chat/completions/stream", "/v1/chat/completions")
+    assert not _route_matches("/v1/models/list", "/v1/chat/completions")
 
 
 async def test_wildcard_prefix_match():
     """Test wildcard prefix matching"""
-    route_policy = []
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # Test prefix wildcard
-    assert middleware._route_matches("/v1/files/upload", "/v1/files*")
-    assert middleware._route_matches("/v1/files/delete", "/v1/files*")
-    assert middleware._route_matches("/v1/files/list/all", "/v1/files*")
+    assert _route_matches("/v1/files/upload", "/v1/files*")
+    assert _route_matches("/v1/files/delete", "/v1/files*")
+    assert _route_matches("/v1/files/list/all", "/v1/files*")
     # Should also match the exact prefix
-    assert middleware._route_matches("/v1/files", "/v1/files*")
+    assert _route_matches("/v1/files", "/v1/files*")
 
     # Should not match different prefix
-    assert not middleware._route_matches("/v1/models/list", "/v1/files*")
+    assert not _route_matches("/v1/models/list", "/v1/files*")
 
 
 async def test_full_wildcard_match():
     """Test full wildcard matching"""
-    route_policy = []
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # Full wildcard should match everything
-    assert middleware._route_matches("/v1/chat/completions", "*")
-    assert middleware._route_matches("/v1/files/upload", "*")
-    assert middleware._route_matches("/admin/reset", "*")
-    assert middleware._route_matches("/anything/goes", "*")
+    assert _route_matches("/v1/chat/completions", "*")
+    assert _route_matches("/v1/files/upload", "*")
+    assert _route_matches("/admin/reset", "*")
+    assert _route_matches("/anything/goes", "*")
 
 
 async def test_multiple_paths_in_rule(regular_user):
@@ -202,14 +188,12 @@ async def test_multiple_paths_in_rule(regular_user):
         )
     ]
 
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # Test that the policy allows these paths for regular_user
-    assert middleware._is_route_allowed("/v1/files/upload", regular_user)
-    assert middleware._is_route_allowed("/v1/models/list", regular_user)
+    assert is_route_allowed("/v1/files/upload", regular_user, route_policy)
+    assert is_route_allowed("/v1/models/list", regular_user, route_policy)
 
     # Should not match other paths
-    assert not middleware._is_route_allowed("/v1/chat/completions", regular_user)
+    assert not is_route_allowed("/v1/chat/completions", regular_user, route_policy)
 
 
 async def test_condition_evaluation_with_roles(developer_user, regular_user):
@@ -221,13 +205,11 @@ async def test_condition_evaluation_with_roles(developer_user, regular_user):
         )
     ]
 
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # Developer should pass
-    assert middleware._is_route_allowed("/v1/chat/completions", developer_user)
+    assert is_route_allowed("/v1/chat/completions", developer_user, route_policy)
 
     # Regular user should not pass
-    assert not middleware._is_route_allowed("/v1/chat/completions", regular_user)
+    assert not is_route_allowed("/v1/chat/completions", regular_user, route_policy)
 
 
 async def test_admin_full_wildcard_access(admin_user, developer_user):
@@ -243,16 +225,14 @@ async def test_admin_full_wildcard_access(admin_user, developer_user):
         ),
     ]
 
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # Admin should access everything
-    assert middleware._is_route_allowed("/v1/chat/completions", admin_user)
-    assert middleware._is_route_allowed("/v1/files/upload", admin_user)
-    assert middleware._is_route_allowed("/v1/admin/reset", admin_user)
+    assert is_route_allowed("/v1/chat/completions", admin_user, route_policy)
+    assert is_route_allowed("/v1/files/upload", admin_user, route_policy)
+    assert is_route_allowed("/v1/admin/reset", admin_user, route_policy)
 
     # Developer should only access chat completions
-    assert middleware._is_route_allowed("/v1/chat/completions", developer_user)
-    assert not middleware._is_route_allowed("/v1/files/upload", developer_user)
+    assert is_route_allowed("/v1/chat/completions", developer_user, route_policy)
+    assert not is_route_allowed("/v1/files/upload", developer_user, route_policy)
 
 
 async def test_forbid_rule(admin_user, developer_user):
@@ -274,16 +254,14 @@ async def test_forbid_rule(admin_user, developer_user):
         ),
     ]
 
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # Developer is forbidden from admin routes by the first forbid rule
-    assert not middleware._is_route_allowed("/v1/admin/reset", developer_user)
+    assert not is_route_allowed("/v1/admin/reset", developer_user, route_policy)
 
     # Admin bypasses the forbid rule (due to 'unless' condition) and matches the permit rule
-    assert middleware._is_route_allowed("/v1/admin/reset", admin_user)
+    assert is_route_allowed("/v1/admin/reset", admin_user, route_policy)
 
     # Developer can access non-admin routes
-    assert middleware._is_route_allowed("/v1/chat/completions", developer_user)
+    assert is_route_allowed("/v1/chat/completions", developer_user, route_policy)
 
 
 async def test_no_matching_rule_denies_access(regular_user):
@@ -295,13 +273,11 @@ async def test_no_matching_rule_denies_access(regular_user):
         )
     ]
 
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # Regular user should be denied (doesn't have developer role)
-    assert not middleware._is_route_allowed("/v1/chat/completions", regular_user)
+    assert not is_route_allowed("/v1/chat/completions", regular_user, route_policy)
 
     # Any user should be denied for non-matching path
-    assert not middleware._is_route_allowed("/v1/models/list", regular_user)
+    assert not is_route_allowed("/v1/models/list", regular_user, route_policy)
 
 
 async def test_multiple_conditions(admin_user):
@@ -313,10 +289,8 @@ async def test_multiple_conditions(admin_user):
         )
     ]
 
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # Admin with platform team should pass
-    assert middleware._is_route_allowed("/v1/anything", admin_user)
+    assert is_route_allowed("/v1/anything", admin_user, route_policy)
 
 
 async def test_rule_order_matters(developer_user):
@@ -334,13 +308,11 @@ async def test_rule_order_matters(developer_user):
         ),
     ]
 
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # First matching rule should win
-    assert middleware._is_route_allowed("/v1/chat/completions", developer_user)
+    assert is_route_allowed("/v1/chat/completions", developer_user, route_policy)
 
     # Second rule should match for other paths
-    assert not middleware._is_route_allowed("/v1/models/list", developer_user)
+    assert not is_route_allowed("/v1/models/list", developer_user, route_policy)
 
 
 async def test_websocket_route_authorization():
@@ -397,21 +369,18 @@ async def test_route_blocking_without_auth():
         # All other routes denied by default (no matching rule)
     ]
 
-    app = FastAPI()
-    middleware = RouteAuthorizationMiddleware(app, route_policy)
-
     # No user (no authentication)
     user = None
 
     # Should allow health check
-    assert middleware._is_route_allowed("/v1/health", user)
+    assert is_route_allowed("/v1/health", user, route_policy)
 
     # Should allow model routes
-    assert middleware._is_route_allowed("/v1/models/list", user)
+    assert is_route_allowed("/v1/models/list", user, route_policy)
 
     # Should deny other routes (no matching rule)
-    assert not middleware._is_route_allowed("/v1/chat/completions", user)
-    assert not middleware._is_route_allowed("/v1/admin/reset", user)
+    assert not is_route_allowed("/v1/chat/completions", user, route_policy)
+    assert not is_route_allowed("/v1/admin/reset", user, route_policy)
 
 
 async def test_forbid_rule_without_auth():
@@ -427,18 +396,16 @@ async def test_forbid_rule_without_auth():
         ),
     ]
 
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # No user (no authentication)
     user = None
 
     # Should forbid admin routes
-    assert not middleware._is_route_allowed("/v1/admin/reset", user)
-    assert not middleware._is_route_allowed("/v1/admin/users", user)
+    assert not is_route_allowed("/v1/admin/reset", user, route_policy)
+    assert not is_route_allowed("/v1/admin/users", user, route_policy)
 
     # Should allow other routes
-    assert middleware._is_route_allowed("/v1/chat/completions", user)
-    assert middleware._is_route_allowed("/v1/models/list", user)
+    assert is_route_allowed("/v1/chat/completions", user, route_policy)
+    assert is_route_allowed("/v1/models/list", user, route_policy)
 
 
 async def test_rule_with_condition_requires_user():
@@ -450,13 +417,11 @@ async def test_rule_with_condition_requires_user():
         )
     ]
 
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # No user (no authentication)
     user = None
 
     # Should be denied because rule has condition but no user available
-    assert not middleware._is_route_allowed("/v1/chat/completions", user)
+    assert not is_route_allowed("/v1/chat/completions", user, route_policy)
 
 
 async def test_mixed_rules_with_and_without_conditions(admin_user, regular_user):
@@ -476,51 +441,46 @@ async def test_mixed_rules_with_and_without_conditions(admin_user, regular_user)
         # Default: deny everything else
     ]
 
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # No user can access public routes
-    assert middleware._is_route_allowed("/v1/health", None)
-    assert middleware._is_route_allowed("/v1/version", None)
+    assert is_route_allowed("/v1/health", None, route_policy)
+    assert is_route_allowed("/v1/version", None, route_policy)
 
     # No user cannot access admin routes (condition requires user)
-    assert not middleware._is_route_allowed("/v1/admin/reset", None)
+    assert not is_route_allowed("/v1/admin/reset", None, route_policy)
 
     # Admin can access admin routes
-    assert middleware._is_route_allowed("/v1/admin/reset", admin_user)
+    assert is_route_allowed("/v1/admin/reset", admin_user, route_policy)
 
     # Regular user cannot access admin routes (lacks admin role)
-    assert not middleware._is_route_allowed("/v1/admin/reset", regular_user)
+    assert not is_route_allowed("/v1/admin/reset", regular_user, route_policy)
 
     # No one can access other routes (no matching rule)
-    assert not middleware._is_route_allowed("/v1/chat/completions", None)
-    assert not middleware._is_route_allowed("/v1/chat/completions", admin_user)
-    assert not middleware._is_route_allowed("/v1/chat/completions", regular_user)
+    assert not is_route_allowed("/v1/chat/completions", None, route_policy)
+    assert not is_route_allowed("/v1/chat/completions", admin_user, route_policy)
+    assert not is_route_allowed("/v1/chat/completions", regular_user, route_policy)
 
 
 async def test_regex_path_matching():
     """Test regex pattern matching for routes"""
-    route_policy = []
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # Test exact match (backward compatibility)
-    assert middleware._route_matches("/v1/chat/completions", "/v1/chat/completions")
+    assert _route_matches("/v1/chat/completions", "/v1/chat/completions")
 
     # Test wildcard (backward compatibility)
-    assert middleware._route_matches("/v1/files/upload", "/v1/files*")
-    assert middleware._route_matches("/anything", "*")
+    assert _route_matches("/v1/files/upload", "/v1/files*")
+    assert _route_matches("/anything", "*")
 
     # Test regex patterns
-    assert middleware._route_matches("/v1/chat/completions", "regex:/v1/(chat|inference)/.*")
-    assert middleware._route_matches("/v1/inference/run", "regex:/v1/(chat|inference)/.*")
-    assert middleware._route_matches("/v1/models/list", "regex:/v1/models/.*")
-    assert middleware._route_matches("/v1/files/123", r"regex:/v1/files/\d+")
+    assert _route_matches("/v1/chat/completions", "regex:/v1/(chat|inference)/.*")
+    assert _route_matches("/v1/inference/run", "regex:/v1/(chat|inference)/.*")
+    assert _route_matches("/v1/models/list", "regex:/v1/models/.*")
+    assert _route_matches("/v1/files/123", r"regex:/v1/files/\d+")
 
     # Test that regex doesn't match when it shouldn't
-    assert not middleware._route_matches("/v1/other/endpoint", "regex:/v1/(chat|inference)/.*")
-    assert not middleware._route_matches("/v2/chat/completions", "regex:/v1/chat/.*")
+    assert not _route_matches("/v1/other/endpoint", "regex:/v1/(chat|inference)/.*")
+    assert not _route_matches("/v2/chat/completions", "regex:/v1/chat/.*")
 
     # Test list of patterns including regex
-    assert middleware._route_matches("/v1/chat/completions", ["/v1/models*", "regex:/v1/(chat|inference)/.*"])
+    assert _route_matches("/v1/chat/completions", ["/v1/models*", "regex:/v1/(chat|inference)/.*"])
 
 
 async def test_route_policy_with_regex(developer_user, regular_user):
@@ -538,32 +498,27 @@ async def test_route_policy_with_regex(developer_user, regular_user):
         ),
     ]
 
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
-
     # Developer can access chat and inference endpoints
-    assert middleware._is_route_allowed("/v1/chat/completions", developer_user)
-    assert middleware._is_route_allowed("/v1/inference/run", developer_user)
+    assert is_route_allowed("/v1/chat/completions", developer_user, route_policy)
+    assert is_route_allowed("/v1/inference/run", developer_user, route_policy)
 
     # Developer cannot access file endpoints (not in their policy)
-    assert not middleware._is_route_allowed("/v1/files/123", developer_user)
+    assert not is_route_allowed("/v1/files/123", developer_user, route_policy)
 
     # Regular user can access numbered file IDs
-    assert middleware._is_route_allowed("/v1/files/123", regular_user)
-    assert middleware._is_route_allowed("/v1/files/456", regular_user)
+    assert is_route_allowed("/v1/files/123", regular_user, route_policy)
+    assert is_route_allowed("/v1/files/456", regular_user, route_policy)
 
     # Regular user cannot access non-numeric file paths
-    assert not middleware._is_route_allowed("/v1/files/upload", regular_user)
+    assert not is_route_allowed("/v1/files/upload", regular_user, route_policy)
 
     # Regular user cannot access chat endpoints
-    assert not middleware._is_route_allowed("/v1/chat/completions", regular_user)
+    assert not is_route_allowed("/v1/chat/completions", regular_user, route_policy)
 
 
 async def test_invalid_regex_pattern_logs_warning(caplog):
     """Test that invalid regex patterns log a warning and don't crash"""
     import logging  # allow-direct-logging
-
-    route_policy = []
-    middleware = RouteAuthorizationMiddleware(None, route_policy)
 
     # Test various invalid regex patterns
     invalid_patterns = [
@@ -575,7 +530,7 @@ async def test_invalid_regex_pattern_logs_warning(caplog):
     with caplog.at_level(logging.WARNING):
         for pattern in invalid_patterns:
             # Should not crash, should return False (no match)
-            result = middleware._route_matches("/v1/chat/completions", pattern)
+            result = _route_matches("/v1/chat/completions", pattern)
             assert result is False
 
     # Check that warnings were logged

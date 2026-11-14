@@ -1,0 +1,77 @@
+{
+  "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_mixed_questions[judge=typesafe/jev-latest]",
+  "request": {
+    "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_mixed_questions[judge=typesafe/jev-latest]",
+    "url": "https://api.typesafe.ai/v1/systemone",
+    "method": "POST",
+    "payload": {
+      "state": "I was charged twice and the agent was rude about it.",
+      "model": "jev-latest",
+      "questions": {
+        "billing": {
+          "type": "noul",
+          "instructions": "Is this about billing?"
+        },
+        "tone": {
+          "type": "choice",
+          "instructions": "What is the tone?",
+          "criteria": {
+            "calm": null,
+            "angry": null
+          }
+        },
+        "quality": {
+          "type": "score",
+          "instructions": "Rate the interaction.",
+          "criteria": [
+            "Bad",
+            "Ok",
+            "Good"
+          ]
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "jev-1.13.0",
+      "answers": {
+        "billing": {
+          "type": "noul",
+          "noul": 0.97
+        },
+        "tone": {
+          "type": "choice",
+          "choice": "angry",
+          "confidence": 0.98,
+          "probabilities": {
+            "calm": 0.01,
+            "angry": 0.99
+          }
+        },
+        "quality": {
+          "type": "score",
+          "score": 0.0,
+          "confidence": 1.0,
+          "legend": {
+            "0": "Bad",
+            "1": "Ok",
+            "2": "Good"
+          },
+          "probabilities": {
+            "0": 1.0,
+            "1": 0.0,
+            "2": 0.0
+          }
+        }
+      },
+      "usage": {
+        "input_tokens": 348,
+        "output_tokens": 64
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

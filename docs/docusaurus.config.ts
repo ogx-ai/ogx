@@ -11,7 +11,8 @@ const config: Config = {
   tagline: 'The open-source framework for building generative AI applications',
   url: 'https://ogx-ai.github.io',
   baseUrl: '/',
-  onBrokenLinks: "warn",
+  onBrokenLinks: "throw",
+  onBrokenAnchors: "throw",
   favicon: "img/favicon.ico",
 
   // Enhanced favicon and meta configuration
@@ -399,7 +400,7 @@ const config: Config = {
     mermaid: true,
     format: 'detect',
     hooks: {
-      onBrokenMarkdownLinks: 'warn',
+      onBrokenMarkdownLinks: 'throw',
     },
   },
 };

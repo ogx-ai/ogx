@@ -213,7 +213,6 @@ class TurnEventSynthesizer:
         server_side_tools = {
             "file_search",
             "file_search_call",
-            "knowledge_search",
             "web_search",
             "web_search_call",
             "query_from_memory",
@@ -223,7 +222,7 @@ class TurnEventSynthesizer:
         }
 
         if tool_name in server_side_tools:
-            if tool_name in {"file_search_call", "knowledge_search"}:
+            if tool_name == "file_search_call":
                 return "file_search"
             if tool_name == "web_search_call":
                 return "web_search"

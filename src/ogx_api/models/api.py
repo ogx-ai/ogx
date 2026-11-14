@@ -21,6 +21,7 @@ from .models import (
     Model,
     OpenAIListModelsResponse,
     RegisterModelRequest,
+    TypeSafeListModelsResponse,
     UnregisterModelRequest,
 )
 
@@ -42,6 +43,8 @@ class Models(Protocol):
     ) -> AnthropicListModelsResponse: ...
 
     async def google_list_models(self) -> GoogleListModelsResponse: ...
+
+    async def typesafe_list_models(self) -> TypeSafeListModelsResponse: ...
 
     async def get_model(self, request: GetModelRequest) -> Model: ...
 

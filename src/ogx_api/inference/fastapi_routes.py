@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 from ogx_api.common.errors import OpenAIErrorResponse
 from ogx_api.common.responses import Order
 from ogx_api.router_utils import create_path_dependency, create_query_dependency, standard_responses
-from ogx_api.utils import _preserve_context_for_sse, create_sse_event, sse_stream
+from ogx_api.utils import create_sse_event, get_sse_error_message, sse_stream
 from ogx_api.version import OGX_API_V1, OGX_API_V1ALPHA
 
 from .api import Inference
@@ -42,6 +42,7 @@ from .models import (
     RerankRequest,
     RerankResponse,
 )
+from .systemone import SystemOneRequest, SystemOneResponse
 
 logger = logging.LoggerAdapter(logging.getLogger(__name__), {"category": "inference"})
 
@@ -50,7 +51,9 @@ def _format_inference_sse_error_event(e: Exception) -> str:
     """Log and format an SSE stream error as an OpenAI error event."""
     logger.exception("Error in inference SSE generator")
     exc = _http_exception_from_sse_error(e)
-    return create_sse_event(OpenAIErrorResponse.from_message(exc.detail, code=str(exc.status_code)).to_dict())
+    return create_sse_event(
+        OpenAIErrorResponse.from_message(get_sse_error_message(e), code=str(exc.status_code)).to_dict()
+    )
 
 
 def _http_exception_from_value_error(exc: ValueError) -> HTTPException:
@@ -130,7 +133,7 @@ def create_router(impl: Inference) -> APIRouter:
         result = await impl.openai_chat_completion(params)
         if isinstance(result, AsyncIterator):
             return StreamingResponse(
-                _preserve_context_for_sse(sse_stream(result, create_sse_event, _format_inference_sse_error_event)),
+                sse_stream(result, create_sse_event, _format_inference_sse_error_event),
                 media_type="text/event-stream",
             )
         return result
@@ -208,7 +211,7 @@ def create_router(impl: Inference) -> APIRouter:
         result = await impl.openai_completion(params)
         if isinstance(result, AsyncIterator):
             return StreamingResponse(
-                _preserve_context_for_sse(sse_stream(result, create_sse_event, _format_inference_sse_error_event)),
+                sse_stream(result, create_sse_event, _format_inference_sse_error_event),
                 media_type="text/event-stream",
             )
         return result
@@ -240,5 +243,19 @@ def create_router(impl: Inference) -> APIRouter:
         request: Annotated[RerankRequest, Body(...)],
     ) -> RerankResponse:
         return await impl.rerank(request)
+
+    @router.post(
+        f"/{OGX_API_V1}/systemone",
+        response_model=SystemOneResponse,
+        summary="Answer SystemOne judgment questions about a piece of state.",
+        description="Run a decision model's questions against `state` and return calibrated answers.",
+        responses={
+            200: {"description": "SystemOneResponse with one answer per question."},
+        },
+    )
+    async def systemone(
+        request: Annotated[SystemOneRequest, Body(...)],
+    ) -> SystemOneResponse:
+        return await impl.judge(request)
 
     return router

@@ -93,7 +93,6 @@ def make_run_config(**overrides) -> StackConfig:
     )
     defaults = dict(
         distro_name="test_image",
-        apis=[],
         providers={},
         storage=storage,
     )

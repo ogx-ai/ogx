@@ -50,7 +50,7 @@ class MockDistRegistry:
     def __init__(self):
         self.dist = None
 
-    def get_cached(self, type_name: str, identifier: str):
+    async def get(self, type_name: str, identifier: str):
         return None
 
     async def register(self, obj):

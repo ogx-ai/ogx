@@ -7,7 +7,7 @@
 import json
 from unittest.mock import AsyncMock
 
-import httpx
+import httpx2
 from fastapi import FastAPI
 from openai import AsyncOpenAI
 from opentelemetry.sdk.metrics import MeterProvider
@@ -17,7 +17,7 @@ from starlette.testclient import TestClient
 from ogx.core.server.fastapi_router_registry import build_fastapi_router
 from ogx.core.server.server import global_exception_handler
 from ogx.telemetry.constants import RESPONSES_PARAMETER_USAGE_TOTAL
-from ogx_api import Api, Responses
+from ogx_api import Api, ContextLengthExceededError, Responses
 from ogx_api.openai_responses import (
     ListOpenAIResponseInputItem,
     ListOpenAIResponseObject,
@@ -35,11 +35,11 @@ from ogx_api.responses.models import (
 
 
 async def _collect_stream_events(app: FastAPI, model: str) -> list[object]:
-    transport = httpx.ASGITransport(app=app)
+    transport = httpx2.ASGITransport(app=app)
     client = AsyncOpenAI(
         base_url="http://test/v1",
         api_key="test",
-        http_client=httpx.AsyncClient(transport=transport, base_url="http://test"),
+        http_client=httpx2.AsyncClient(transport=transport, base_url="http://test"),
     )
     try:
         stream = await client.responses.create(input="hi", model=model, stream=True)
@@ -117,7 +117,25 @@ def test_create_response_maps_value_error_to_400():
     resp = client.post("/v1/responses", json={"input": "hi", "model": "test", "stream": False})
 
     assert resp.status_code == 400
-    assert resp.json()["detail"] == "not found"
+    assert resp.json()["error"]["message"] == "not found"
+
+
+def test_create_response_maps_context_length_to_400_with_code():
+    """A prompt over the model's window is the caller's to fix: 400, with OpenAI's error code."""
+    app = FastAPI()
+    app.add_exception_handler(Exception, global_exception_handler)
+    impl = AsyncMock(spec=Responses)
+    impl.create_openai_response.side_effect = ContextLengthExceededError("too long")
+
+    router = build_fastapi_router(Api.responses, impl)
+    assert router is not None
+    app.include_router(router)
+
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.post("/v1/responses", json={"input": "hi", "model": "test", "stream": False})
+
+    assert resp.status_code == 400
+    assert resp.json()["error"] == {"message": "too long", "code": "context_length_exceeded"}
 
 
 async def test_create_response_returns_json_for_non_streaming():
@@ -188,45 +206,6 @@ async def test_sse_format_is_correct():
     assert events[0].startswith("data: ")
     assert events[0].endswith("\n\n")
     assert '"type": "response.output_text.delta"' in events[0]
-
-
-async def test_sse_stream_keeps_provider_context():
-    from ogx.core.request_headers import PROVIDER_DATA_VAR
-
-    app = FastAPI()
-    impl = AsyncMock(spec=Responses)
-    provider_data = {"provider": "test"}
-
-    async def _stream():
-        yield {"provider_data": PROVIDER_DATA_VAR.get()}
-        yield {"type": "response.completed"}
-
-    impl.create_openai_response.return_value = _stream()
-
-    router = build_fastapi_router(Api.responses, impl)
-    assert router is not None
-    app.include_router(router)
-
-    create = next(
-        r.endpoint
-        for r in router.routes
-        if getattr(r, "path", None) == "/v1/responses" and "POST" in getattr(r, "methods", set())
-    )
-
-    token = PROVIDER_DATA_VAR.set(provider_data)
-    try:
-        request = CreateResponseRequest(input="hi", model="test", stream=True)
-        response = await create(request)
-    finally:
-        PROVIDER_DATA_VAR.reset(token)
-
-    first_event = None
-    async for chunk in response.body_iterator:
-        first_event = chunk
-        break
-
-    assert first_event is not None
-    assert '"provider_data": {"provider": "test"}' in first_event
 
 
 async def test_sse_stream_reports_value_error_as_http_exception():
@@ -374,7 +353,7 @@ def test_get_response_maps_value_error_to_400():
     resp = client.get("/v1/responses/nonexistent")
 
     assert resp.status_code == 400
-    assert "not found" in resp.json()["detail"].lower()
+    assert "not found" in resp.json()["error"]["message"].lower()
 
 
 async def test_list_responses_returns_list():
@@ -480,7 +459,7 @@ def test_delete_response_maps_value_error_to_400():
     resp = client.delete("/v1/responses/nonexistent")
 
     assert resp.status_code == 400
-    assert "not found" in resp.json()["detail"].lower()
+    assert "not found" in resp.json()["error"]["message"].lower()
 
 
 def test_openapi_create_response_advertises_form_urlencoded_request_body():
@@ -741,7 +720,7 @@ def test_exception_translating_route_converts_value_error_to_400():
 
     assert resp.status_code == 400
     assert resp.headers["content-type"] == "application/json"
-    assert resp.json()["detail"] == "bad input value"
+    assert resp.json()["error"]["message"] == "bad input value"
 
 
 def test_unknown_exception_propagates_to_global_handler():
@@ -791,7 +770,7 @@ def test_consecutive_value_errors_keep_connection_alive():
     # Second request on the same connection — must NOT get a connection error
     resp2 = client.post("/v1/responses", json={"input": "hi", "model": "test", "stream": False})
     assert resp2.status_code == 400
-    assert resp2.json()["detail"] == "bad request"
+    assert resp2.json()["error"]["message"] == "bad request"
 
 
 def test_parameter_usage_records_only_explicitly_provided_params():

@@ -8,7 +8,7 @@ import ssl
 import tempfile
 from pathlib import Path
 
-import httpx
+import httpx2
 import pytest
 
 from ogx.providers.utils.inference.http_client import (
@@ -218,10 +218,10 @@ class TestTimeoutConfig:
 
 
 class TestLimitsConfig:
-    """Tests for LimitsConfig model, matching httpx.Limits defaults."""
+    """Tests for LimitsConfig model, matching httpx2.Limits defaults."""
 
     def test_default_values_match_httpx_defaults(self):
-        """Test LimitsConfig defaults match httpx.Limits defaults."""
+        """Test LimitsConfig defaults match httpx2.Limits defaults."""
         config = LimitsConfig()
         assert config.max_connections == 100
         assert config.max_keepalive_connections == 20
@@ -231,12 +231,12 @@ class TestLimitsConfig:
         """Test LimitsConfig with a custom max_connections."""
         config = LimitsConfig(max_connections=500)
         assert config.max_connections == 500
-        # Unset fields keep httpx's own defaults, not None/unlimited.
+        # Unset fields keep httpx2's own defaults, not None/unlimited.
         assert config.max_keepalive_connections == 20
         assert config.keepalive_expiry == 5.0
 
     def test_none_disables_limit(self):
-        """Test that None means no limit, per httpx.Limits semantics."""
+        """Test that None means no limit, per httpx2.Limits semantics."""
         config = LimitsConfig(max_connections=None, max_keepalive_connections=None, keepalive_expiry=None)
         assert config.max_connections is None
         assert config.max_keepalive_connections is None
@@ -327,7 +327,7 @@ class TestBuildSSLContext:
         assert result is False
 
     def test_verify_with_path(self):
-        """Test SSL context with CA path returns a string (httpx requires str, not Path)."""
+        """Test SSL context with CA path returns a string (httpx2 requires str, not Path)."""
         with tempfile.NamedTemporaryFile(suffix=".crt", delete=False) as f:
             f.write(b"fake cert")
             cert_path = f.name
@@ -403,7 +403,7 @@ class TestBuildProxyMounts:
         if system_ca_bundle and Path(system_ca_bundle).exists():
             cert_path = system_ca_bundle
         else:
-            # Create a dummy file - httpx will try to load it but we'll catch the error
+            # Create a dummy file - httpx2 will try to load it but we'll catch the error
             with tempfile.NamedTemporaryFile(mode="wb", suffix=".crt", delete=False) as f:
                 f.write(b"dummy cert for testing")
                 cert_path = f.name
@@ -419,7 +419,7 @@ class TestBuildProxyMounts:
                 assert result is not None
                 assert "http://" in result
                 assert "https://" in result
-                assert isinstance(result["http://"], httpx.AsyncHTTPTransport)
+                assert isinstance(result["http://"], httpx2.AsyncHTTPTransport)
             except ssl.SSLError:
                 # Expected for dummy cert files - the important part is that the config was accepted
                 pass
@@ -453,12 +453,12 @@ class TestBuildProxyMounts:
                 assert result is not None
                 assert "http://" in result
                 assert "https://" in result
-                assert isinstance(result["http://"], httpx.AsyncHTTPTransport)
+                assert isinstance(result["http://"], httpx2.AsyncHTTPTransport)
             except ssl.SSLError:
                 # Expected for dummy cert files - the important part is that the config was accepted
                 pass
             if result is not None:
-                assert isinstance(result["https://"], httpx.AsyncHTTPTransport)
+                assert isinstance(result["https://"], httpx2.AsyncHTTPTransport)
         finally:
             if not (system_ca_bundle and Path(system_ca_bundle).exists()):
                 if Path(cert_path).exists():
@@ -484,18 +484,18 @@ class TestBuildHttpClient:
         config = NetworkConfig(tls=TLSConfig(verify=False))
         result = build_http_client(config)
         assert "http_client" in result
-        assert isinstance(result["http_client"], httpx.AsyncClient)
+        assert isinstance(result["http_client"], httpx2.AsyncClient)
 
     def test_with_timeout_float(self):
         """Test http client with timeout as float."""
         config = NetworkConfig(timeout=30.0)
         result = build_http_client(config)
         assert "http_client" in result
-        assert isinstance(result["http_client"], httpx.AsyncClient)
+        assert isinstance(result["http_client"], httpx2.AsyncClient)
         # Verify timeout is set
         client_kwargs = _build_network_client_kwargs(config)
         assert "timeout" in client_kwargs
-        assert isinstance(client_kwargs["timeout"], httpx.Timeout)
+        assert isinstance(client_kwargs["timeout"], httpx2.Timeout)
 
     def test_with_timeout_config(self):
         """Test http client with TimeoutConfig."""
@@ -503,12 +503,12 @@ class TestBuildHttpClient:
         config = NetworkConfig(timeout=timeout_config)
         result = build_http_client(config)
         assert "http_client" in result
-        assert isinstance(result["http_client"], httpx.AsyncClient)
+        assert isinstance(result["http_client"], httpx2.AsyncClient)
         # Verify timeout is set with both connect and read
         client_kwargs = _build_network_client_kwargs(config)
         assert "timeout" in client_kwargs
         timeout = client_kwargs["timeout"]
-        assert isinstance(timeout, httpx.Timeout)
+        assert isinstance(timeout, httpx2.Timeout)
         assert timeout.connect == 5.0
         assert timeout.read == 30.0
 
@@ -519,7 +519,7 @@ class TestBuildHttpClient:
         client_kwargs = _build_network_client_kwargs(config)
         assert "timeout" in client_kwargs
         timeout = client_kwargs["timeout"]
-        assert isinstance(timeout, httpx.Timeout)
+        assert isinstance(timeout, httpx2.Timeout)
         assert timeout.connect == 5.0
 
     def test_with_timeout_config_read_only(self):
@@ -529,7 +529,7 @@ class TestBuildHttpClient:
         client_kwargs = _build_network_client_kwargs(config)
         assert "timeout" in client_kwargs
         timeout = client_kwargs["timeout"]
-        assert isinstance(timeout, httpx.Timeout)
+        assert isinstance(timeout, httpx2.Timeout)
         assert timeout.read == 30.0
 
     def test_with_proxy(self):
@@ -537,25 +537,25 @@ class TestBuildHttpClient:
         config = NetworkConfig(proxy=ProxyConfig(url="http://proxy:8080"))
         result = build_http_client(config)
         assert "http_client" in result
-        assert isinstance(result["http_client"], httpx.AsyncClient)
+        assert isinstance(result["http_client"], httpx2.AsyncClient)
 
     def test_with_limits(self):
         """Test http client with connection pool limits."""
         config = NetworkConfig(limits=LimitsConfig(max_connections=500, max_keepalive_connections=100))
         result = build_http_client(config)
         assert "http_client" in result
-        assert isinstance(result["http_client"], httpx.AsyncClient)
+        assert isinstance(result["http_client"], httpx2.AsyncClient)
 
         client_kwargs = _build_network_client_kwargs(config)
         assert "limits" in client_kwargs
         limits = client_kwargs["limits"]
-        assert isinstance(limits, httpx.Limits)
+        assert isinstance(limits, httpx2.Limits)
         assert limits.max_connections == 500
         assert limits.max_keepalive_connections == 100
         assert limits.keepalive_expiry == 5.0
 
     def test_without_limits_omits_limits_kwarg(self):
-        """Test that leaving limits unset doesn't add a limits kwarg, preserving httpx defaults."""
+        """Test that leaving limits unset doesn't add a limits kwarg, preserving httpx2 defaults."""
         config = NetworkConfig(timeout=30.0)
         client_kwargs = _build_network_client_kwargs(config)
         assert "limits" not in client_kwargs
@@ -565,16 +565,16 @@ class TestBuildLimits:
     """Tests for _build_limits function."""
 
     def test_builds_httpx_limits_from_config(self):
-        """Test that _build_limits converts LimitsConfig to httpx.Limits faithfully."""
+        """Test that _build_limits converts LimitsConfig to httpx2.Limits faithfully."""
         config = LimitsConfig(max_connections=250, max_keepalive_connections=30, keepalive_expiry=10.0)
         limits = _build_limits(config)
-        assert isinstance(limits, httpx.Limits)
+        assert isinstance(limits, httpx2.Limits)
         assert limits.max_connections == 250
         assert limits.max_keepalive_connections == 30
         assert limits.keepalive_expiry == 10.0
 
     def test_none_fields_pass_through_as_unlimited(self):
-        """Test that None fields in LimitsConfig map to unlimited/no-expiry in httpx.Limits."""
+        """Test that None fields in LimitsConfig map to unlimited/no-expiry in httpx2.Limits."""
         config = LimitsConfig(max_connections=None, max_keepalive_connections=None, keepalive_expiry=None)
         limits = _build_limits(config)
         assert limits.max_connections is None
@@ -656,11 +656,11 @@ class TestVLLMBackwardCompatibility:
 
 
 class TestOpenAIMixinConnectionLimits:
-    """End-to-end tests that configured connection pool limits reach the real httpx pool
+    """End-to-end tests that configured connection pool limits reach the real httpx2 pool
     used by OpenAIMixin-based remote inference providers."""
 
     def test_configured_limits_reach_httpx_connection_pool(self):
-        """Test that NetworkConfig.limits ends up on the actual httpx connection pool."""
+        """Test that NetworkConfig.limits ends up on the actual httpx2 connection pool."""
         config = RemoteInferenceProviderConfig(
             network=NetworkConfig(limits=LimitsConfig(max_connections=333, max_keepalive_connections=42))
         )
@@ -671,7 +671,7 @@ class TestOpenAIMixinConnectionLimits:
         assert pool._max_keepalive_connections == 42
 
     def test_partial_limits_config_falls_back_to_httpx_defaults_for_unset_fields(self):
-        """Test that overriding only one limits field leaves the others at httpx's defaults,
+        """Test that overriding only one limits field leaves the others at httpx2's defaults,
         rather than leaving them unbounded."""
         config = RemoteInferenceProviderConfig(network=NetworkConfig(limits=LimitsConfig(max_connections=500)))
         mixin = OpenAIMixinImpl(config=config)
@@ -679,3 +679,105 @@ class TestOpenAIMixinConnectionLimits:
         pool = mixin.client._client._transport._pool
         assert pool._max_connections == 500
         assert pool._max_keepalive_connections == 20
+
+
+class TestOpenAIMixinAdhocClientKwargs:
+    """_build_httpx_client_kwargs() feeds the standalone httpx2 clients used for health checks,
+    Anthropic passthrough and rerank, so they honour config.network like the primary client."""
+
+    def test_falls_back_to_shared_ssl_context_without_network_config(self):
+        mixin = OpenAIMixinImpl(config=RemoteInferenceProviderConfig())
+
+        kwargs = mixin._build_httpx_client_kwargs()
+
+        assert kwargs == {"verify": mixin.shared_ssl_context}
+
+    @pytest.mark.parametrize(
+        "network,setting",
+        [
+            (NetworkConfig(proxy=ProxyConfig(url="http://proxy.example.com:3128")), "mounts"),
+            (NetworkConfig(timeout=12.0), "timeout"),
+            (NetworkConfig(headers={"X-Route": "team-a"}), "headers"),
+            (NetworkConfig(limits=LimitsConfig(max_connections=7)), "limits"),
+        ],
+        ids=["proxy-only", "timeout-only", "headers-only", "limits-only"],
+    )
+    def test_network_config_without_tls_keeps_the_shared_ssl_context(self, network, setting):
+        """Only setting something other than tls used to drop `verify`, so httpx2 silently fell back
+        to its own default CA bundle instead of the shared SSL context."""
+        mixin = OpenAIMixinImpl(config=RemoteInferenceProviderConfig(network=network))
+
+        kwargs = mixin._build_httpx_client_kwargs()
+
+        assert kwargs["verify"] is mixin.shared_ssl_context
+        assert setting in kwargs
+
+    def test_configured_tls_takes_precedence_over_the_shared_ssl_context(self):
+        config = RemoteInferenceProviderConfig(network=NetworkConfig(tls=TLSConfig(verify=False)))
+        mixin = OpenAIMixinImpl(config=config)
+
+        assert mixin._build_httpx_client_kwargs()["verify"] is False
+
+    def test_configured_tls_context_is_not_replaced_by_the_shared_one(self):
+        config = RemoteInferenceProviderConfig(network=NetworkConfig(tls=TLSConfig(verify=True, min_version="TLSv1.3")))
+        mixin = OpenAIMixinImpl(config=config)
+
+        verify = mixin._build_httpx_client_kwargs()["verify"]
+
+        assert isinstance(verify, ssl.SSLContext)
+        assert verify is not mixin.shared_ssl_context
+        assert verify.minimum_version == ssl.TLSVersion.TLSv1_3
+
+    def test_applies_every_network_setting(self):
+        config = RemoteInferenceProviderConfig(
+            network=NetworkConfig(
+                tls=TLSConfig(verify=False),
+                proxy=ProxyConfig(url="http://proxy.example.com:3128"),
+                headers={"X-Route": "team-a"},
+                timeout=12.0,
+                limits=LimitsConfig(max_connections=7),
+            )
+        )
+        mixin = OpenAIMixinImpl(config=config)
+
+        kwargs = mixin._build_httpx_client_kwargs()
+
+        assert kwargs["verify"] is False
+        assert set(kwargs["mounts"]) == {"http://", "https://"}
+        assert kwargs["headers"] == {"X-Route": "team-a"}
+        assert kwargs["timeout"] == httpx2.Timeout(12.0)
+        assert kwargs["limits"].max_connections == 7
+
+    def test_default_timeout_applies_when_network_timeout_is_unset(self):
+        mixin = OpenAIMixinImpl(config=RemoteInferenceProviderConfig())
+
+        assert mixin._build_httpx_client_kwargs(default_timeout=30.0)["timeout"] == httpx2.Timeout(30.0)
+
+    def test_default_timeout_applies_alongside_other_network_settings(self):
+        config = RemoteInferenceProviderConfig(network=NetworkConfig(tls=TLSConfig(verify=False)))
+        mixin = OpenAIMixinImpl(config=config)
+
+        kwargs = mixin._build_httpx_client_kwargs(default_timeout=300.0)
+
+        assert kwargs["verify"] is False
+        assert kwargs["timeout"] == httpx2.Timeout(300.0)
+
+    def test_configured_network_timeout_takes_precedence_over_default(self):
+        config = RemoteInferenceProviderConfig(network=NetworkConfig(timeout=12.0))
+        mixin = OpenAIMixinImpl(config=config)
+
+        assert mixin._build_httpx_client_kwargs(default_timeout=300.0)["timeout"] == httpx2.Timeout(12.0)
+
+    def test_no_timeout_is_set_without_a_default_or_network_timeout(self):
+        mixin = OpenAIMixinImpl(config=RemoteInferenceProviderConfig())
+
+        assert "timeout" not in mixin._build_httpx_client_kwargs()
+
+    def test_kwargs_construct_a_real_client(self):
+        """A network timeout plus a per-call default must not collide as duplicate arguments."""
+        config = RemoteInferenceProviderConfig(network=NetworkConfig(timeout=12.0))
+        mixin = OpenAIMixinImpl(config=config)
+
+        client = httpx2.AsyncClient(**mixin._build_httpx_client_kwargs(default_timeout=300.0))
+
+        assert client.timeout == httpx2.Timeout(12.0)

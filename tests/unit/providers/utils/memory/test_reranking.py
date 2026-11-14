@@ -4,12 +4,13 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import pytest
 
-from ogx.core.datatypes import VectorStoresConfig
+from ogx.core.datatypes import ChunkRetrievalParams, VectorStoresConfig
 from ogx.providers.utils.memory.openai_vector_store_mixin import OpenAIVectorStoreMixin
 from ogx.providers.utils.memory.vector_store import RERANKER_TYPE_RRF, RERANKER_TYPE_WEIGHTED
 from ogx.providers.utils.vector_io.vector_utils import WeightedInMemoryAggregator
-from ogx_api.vector_io import SearchRankingOptions
+from ogx_api.vector_io import HybridSearchOptions, SearchRankingOptions
 
 
 class TestNormalizeScores:
@@ -254,6 +255,27 @@ class TestCombineSearchResults:
         assert keyword_only["keyword-doc"] > keyword_only["vector-doc"]
         assert vector_only != keyword_only
 
+    def test_combine_search_results_rrf_weights_leave_out_zero_weighted_matches(self):
+        """Test weighted RRF leaves out documents that only a zero-weighted search found."""
+        vector_scores = {"both-doc": 0.9, "vector-doc": 0.8}
+        keyword_scores = {"both-doc": 0.5, "keyword-doc": 0.7}
+
+        vector_only = WeightedInMemoryAggregator.combine_search_results(
+            vector_scores,
+            keyword_scores,
+            reranker_type=RERANKER_TYPE_RRF,
+            reranker_params={"impact_factor": 60.0, "weights": {"vector": 1.0, "keyword": 0.0}},
+        )
+        keyword_only = WeightedInMemoryAggregator.combine_search_results(
+            vector_scores,
+            keyword_scores,
+            reranker_type=RERANKER_TYPE_RRF,
+            reranker_params={"impact_factor": 60.0, "weights": {"vector": 0.0, "keyword": 1.0}},
+        )
+
+        assert set(vector_only) == {"both-doc", "vector-doc"}
+        assert set(keyword_only) == {"both-doc", "keyword-doc"}
+
     def test_combine_search_results_unknown_type(self):
         """Test combining with unknown reranker type defaults to RRF."""
         vector_scores = {"doc1": 0.9}
@@ -308,3 +330,35 @@ class TestBuildRerankerParams:
 
         assert params["reranker_type"] == RERANKER_TYPE_RRF
         assert params["reranker_params"]["weights"] == weights
+
+    @pytest.mark.parametrize("ranker", [None, "auto", "default-2024-11-15", "rrf"])
+    def test_build_reranker_params_maps_hybrid_search_to_weighted_rrf(self, ranker):
+        """Test OpenAI hybrid_search weights become normalized RRF weights, whatever OpenAI ranker is sent."""
+        params = OpenAIVectorStoreMixin._build_reranker_params(
+            object(),
+            SearchRankingOptions(
+                ranker=ranker,
+                hybrid_search=HybridSearchOptions(embedding_weight=1.0, text_weight=3.0),
+            ),
+            VectorStoresConfig(),
+        )
+
+        assert params == {
+            "reranker_type": RERANKER_TYPE_RRF,
+            "reranker_params": {"impact_factor": 60.0, "weights": {"vector": 0.25, "keyword": 0.75}},
+        }
+
+    def test_build_reranker_params_hybrid_search_impact_factor(self):
+        """Test hybrid_search uses the request impact_factor and falls back to the configured RRF default."""
+        config = VectorStoresConfig(chunk_retrieval_params=ChunkRetrievalParams(rrf_impact_factor=30.0))
+        hybrid_search = HybridSearchOptions(embedding_weight=0.0, text_weight=2.0)
+
+        from_config = OpenAIVectorStoreMixin._build_reranker_params(
+            object(), SearchRankingOptions(hybrid_search=hybrid_search), config
+        )
+        from_request = OpenAIVectorStoreMixin._build_reranker_params(
+            object(), SearchRankingOptions(hybrid_search=hybrid_search, impact_factor=10.0), config
+        )
+
+        assert from_config["reranker_params"] == {"impact_factor": 30.0, "weights": {"vector": 0.0, "keyword": 1.0}}
+        assert from_request["reranker_params"] == {"impact_factor": 10.0, "weights": {"vector": 0.0, "keyword": 1.0}}

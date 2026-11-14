@@ -49,6 +49,18 @@ Used by: inference store (chat completion logs), conversations, prompts.
 
 The tenancy mode is set process-wide during startup via `set_default_tenancy_mode()` in `stack.py`.
 
+### Migrations
+
+`SqlStore` exposes primitives for in-place, idempotent table migrations (currently used to move
+the conversation items table from a single-`id` primary key to a `(conversation_id, id)` composite
+key): `table_exists`, `primary_key_columns`, `rename_table`, `copy_missing_rows` (an anti-join
+insert that is a no-op for rows already present), and `insert_do_nothing` (an insert that skips
+conflicting rows). The conversation migration runs on every boot, is flagged in a
+`conversation_migrations` table so the one-time backfill happens only once, and is written to be
+safe when several server workers start migrating the same database at once: each step is
+idempotent, and a worker that loses a DDL race to a sibling retries and re-reads the migrated
+state rather than failing its boot.
+
 ## Configuration
 
 Storage is configured in `StackConfig.storage` via `StorageConfig`. The `stores` field contains typed references (`KVStoreReference`, `SqlStoreReference`, `InferenceStoreReference`) that point to specific backend configurations.

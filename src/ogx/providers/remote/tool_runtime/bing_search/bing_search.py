@@ -7,7 +7,7 @@
 import json
 from typing import Any
 
-import httpx
+import httpx2
 
 from ogx.core.request_headers import NeedsRequestProviderData
 from ogx_api import (
@@ -31,10 +31,10 @@ class BingSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsReq
     def __init__(self, config: BingSearchToolConfig):
         self.config = config
         self.url = "https://api.bing.microsoft.com/v7.0/search"
-        self._client: httpx.AsyncClient | None = None
+        self._client: httpx2.AsyncClient | None = None
 
     async def initialize(self):
-        self._client = httpx.AsyncClient(timeout=self.config.to_httpx_timeout())
+        self._client = httpx2.AsyncClient(timeout=self.config.to_httpx_timeout())
 
     async def shutdown(self) -> None:
         if self._client:

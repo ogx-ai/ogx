@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_create_and_retrieve[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_create_and_retrieve[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is 2+2? Reply with just the number."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-8091a00d19e2e8e7",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay, so the user is asking what 2 plus 2 is, and they want just the number. Let me think. Well, in basic arithmetic, 2 plus 2 equals 4. But wait, maybe they want a more detailed explanation? Let me confirm. The question is straightforward, so the answer should be 4. I don't see any trick here. Just need to state the number without any extra words. Yep, that should do it.\n",
+          "signature": "3fec1fb019484ea19d8917b6b70e8598"
+        },
+        {
+          "type": "text",
+          "text": "\n\n4"
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 21,
+        "output_tokens": 101
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}
