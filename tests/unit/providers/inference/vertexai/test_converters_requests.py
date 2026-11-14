@@ -484,6 +484,22 @@ class TestConvertOpenAIMessagesToGemini:
         assert fc["name"] == "get_weather"
         assert fc["args"] == {"location": "Boston"}
 
+    @pytest.mark.parametrize("arguments", ["[1, 2]", "null", '"text"'])
+    def test_assistant_tool_call_with_non_object_arguments_sends_empty_args(self, arguments):
+        """Gemini function_call.args must be an object; never forward a list, null or string."""
+        messages = [
+            {"role": "user", "content": "What's the weather?"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "call_123", "type": "function", "function": {"name": "get_weather", "arguments": arguments}}
+                ],
+            },
+        ]
+        _, contents = convert_openai_messages_to_gemini(messages)
+        assert contents[1]["parts"][0]["function_call"]["args"] == {}
+
     def test_tool_response_message(self, weather_tool_call):
         """Test that tool response message."""
         messages = [

@@ -1,0 +1,60 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_completion_stop_sequence[txt=sglang/Qwen/Qwen3-0.6B-inference:completion:stop_sequence]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:30000/v1/v1/completions",
+    "headers": {},
+    "body": {
+      "model": "Qwen/Qwen3-0.6B",
+      "prompt": "Return the exact same sentence and don't add additional words): Michael Jordan was born in the year of 1963",
+      "stop": "1963",
+      "stream": false
+    },
+    "endpoint": "/v1/completions",
+    "model": "Qwen/Qwen3-0.6B",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.completion.Completion",
+      "__data__": {
+        "id": "rec-75192621c64e",
+        "choices": [
+          {
+            "finish_reason": "length",
+            "index": 0,
+            "logprobs": null,
+            "text": ", and is one of the most famous athletes of our time. So, the",
+            "matched_stop": null
+          }
+        ],
+        "created": 0,
+        "model": "Qwen/Qwen3-0.6B",
+        "object": "text_completion",
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 16,
+          "prompt_tokens": 25,
+          "total_tokens": 41,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "reasoning_tokens": 0
+        },
+        "metadata": {
+          "weight_version": "default",
+          "weight_versions": [
+            {
+              "version": "default",
+              "start": 0,
+              "end": 16
+            }
+          ]
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

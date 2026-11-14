@@ -1,0 +1,82 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[openai_client-txt=llama-cpp-server/qwen3-0.6b-inference:chat_completion:non_streaming_01]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet do humans live on?"
+        }
+      ],
+      "stream": false,
+      "reasoning_effort": "low"
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-538e9e8a902f",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Humans live on **Earth**. This planet is the only one in our solar system where life as we know it exists.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user is asking which planet humans live on. Let me start by recalling what I know about our solar system. The planets are in order from the Sun. The first one is Mercury, then Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune. I need to make sure I mention Earth first because it's the only one that's called Earth. Mercury is the closest, but the question is about the planet humans live on. So the answer should be Earth. I should also check if there's any other planet that's considered a planet in the solar system, but Earth is the only one known to have life as we understand it. Maybe I should explain why Earth is the correct answer. Also, maybe mention that it's the only one that's habitable, but the main question is just which planet humans live on. So the answer is Earth.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11669-620d2225c",
+        "usage": {
+          "completion_tokens": 208,
+          "prompt_tokens": 15,
+          "total_tokens": 223,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 15,
+          "prompt_ms": 120.457,
+          "prompt_per_token_ms": 8.030466666666666,
+          "prompt_per_second": 124.52576438065036,
+          "predicted_n": 208,
+          "predicted_ms": 5364.358,
+          "predicted_per_token_ms": 25.914772946859905,
+          "predicted_per_second": 38.588028614048504
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

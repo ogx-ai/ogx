@@ -87,18 +87,15 @@ class VectorIORouter(VectorIO):
         logger.debug("VectorIORouter.shutdown")
         pass
 
-    def _get_provider_id(self, vector_store_id: str) -> str:
+    async def _get_provider_id(self, vector_store_id: str) -> str:
         """Get the provider ID for a vector store for metrics labeling (best-effort).
 
-        Uses the same in-memory cache (get_cached) that the routing table's
-        get_provider_impl uses when dispatching operations, so this does NOT
-        cause an extra DB/async lookup on the hot path.
-
-        Returns "unknown" only as a fallback so that a metrics-label lookup
-        failure never blocks the actual operation.
-        """
+        Uses dist_registry.get() (cache-then-DB) so that multi-worker deployments
+        can resolve provider IDs for vector stores created by other workers. Falls
+        back to "unknown" on failure so a metrics-label lookup never blocks the
+        actual operation."""
         try:
-            obj = self.routing_table.dist_registry.get_cached("vector_store", vector_store_id)
+            obj = await self.routing_table.dist_registry.get("vector_store", vector_store_id)
             if obj is None:
                 logger.warning("Vector store not found in registry cache", vector_store_id=vector_store_id)
                 return "unknown"
@@ -174,7 +171,7 @@ class VectorIORouter(VectorIO):
         )
         start_time = time.perf_counter()
         num_chunks = len(request.chunks)
-        provider_id = self._get_provider_id(request.vector_store_id)
+        provider_id = await self._get_provider_id(request.vector_store_id)
         metric_attrs = create_vector_metric_attributes(
             vector_db=request.vector_store_id,
             operation="chunks",
@@ -208,7 +205,7 @@ class VectorIORouter(VectorIO):
     ) -> QueryChunksResponse:
         logger.debug("VectorIORouter.query_chunks", vector_store_id=request.vector_store_id)
         start_time = time.perf_counter()
-        provider_id = self._get_provider_id(request.vector_store_id)
+        provider_id = await self._get_provider_id(request.vector_store_id)
         metric_attrs = create_vector_metric_attributes(
             vector_db=request.vector_store_id,
             operation="query",
@@ -398,15 +395,18 @@ class VectorIORouter(VectorIO):
             if after_index >= 0:
                 all_stores = all_stores[after_index + 1 :]
 
+        before_found = False
         if before:
             before_index = next(
                 (i for i, store in enumerate(all_stores) if store.id == before),
                 len(all_stores),
             )
+            before_found = before_index < len(all_stores)
             all_stores = all_stores[:before_index]
 
-        # Apply limit
-        limited_stores = all_stores[:limit]
+        # Apply limit. A `before` cursor asks for the page immediately preceding it,
+        # so keep the items closest to the cursor rather than the head of the list.
+        limited_stores = all_stores[-limit:] if before_found else all_stores[:limit]
 
         # Determine pagination info
         has_more = len(all_stores) > limit
@@ -450,7 +450,7 @@ class VectorIORouter(VectorIO):
         vector_store_id: str,
     ) -> VectorStoreDeleteResponse:
         logger.debug("VectorIORouter.openai_delete_vector_store", vector_store_id=vector_store_id)
-        provider_id = self._get_provider_id(vector_store_id)
+        provider_id = await self._get_provider_id(vector_store_id)
         metric_attrs = create_vector_metric_attributes(
             vector_db=vector_store_id,
             operation="store",
@@ -474,7 +474,7 @@ class VectorIORouter(VectorIO):
     ) -> VectorStoreSearchResponsePage:
         logger.debug("VectorIORouter.openai_search_vector_store", vector_store_id=vector_store_id)
         start_time = time.perf_counter()
-        provider_id = self._get_provider_id(vector_store_id)
+        provider_id = await self._get_provider_id(vector_store_id)
         search_mode = getattr(request, "search_mode", "vector")
         metric_attrs = create_vector_metric_attributes(
             vector_db=vector_store_id,
@@ -532,7 +532,7 @@ class VectorIORouter(VectorIO):
             file_id=request.file_id,
         )
         start_time = time.perf_counter()
-        provider_id = self._get_provider_id(vector_store_id)
+        provider_id = await self._get_provider_id(vector_store_id)
         metric_attrs = create_vector_metric_attributes(
             vector_db=vector_store_id,
             operation="attach",
@@ -649,7 +649,7 @@ class VectorIORouter(VectorIO):
         file_id: str,
     ) -> VectorStoreFileDeleteResponse:
         logger.debug("VectorIORouter.openai_delete_vector_store_file", vector_store_id=vector_store_id, file_id=file_id)
-        provider_id = self._get_provider_id(vector_store_id)
+        provider_id = await self._get_provider_id(vector_store_id)
         metric_attrs = create_vector_metric_attributes(
             vector_db=vector_store_id,
             operation="file",

@@ -4,12 +4,10 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 from collections.abc import AsyncIterator
-from functools import cache
-from typing import Any
+from typing import Any, ClassVar
 from urllib.parse import urljoin
 
-import httpx
-import models_dev as _models_dev
+import httpx2
 from pydantic import ConfigDict
 
 from ogx.core.request_headers import get_authenticated_user
@@ -17,11 +15,11 @@ from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import (
     AssistantMessageWithReasoning,
 )
-from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
-from ogx.providers.utils.inference.http_client import (
-    build_network_client_kwargs as _build_network_client_kwargs,
-)
+from ogx.providers.utils.inference.anthropic_mixin import AnthropicMixin
+from ogx.providers.utils.inference.models_dev_registry import classify_model
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx.providers.utils.inference.stream_utils import wrap_reasoning_chunks
+from ogx.providers.utils.inference.systemone import LOCAL_ENGINE_API_KEY, systemone_judge
 from ogx_api import (
     HealthResponse,
     HealthStatus,
@@ -38,40 +36,30 @@ from ogx_api import (
     OpenAISystemMessageParam,
     RerankData,
     RerankResponse,
+    SystemOneRequest,
+    SystemOneResponse,
 )
 from ogx_api.inference import RerankRequest
-from ogx_api.messages.models import (
-    ANTHROPIC_VERSION,
-    AnthropicCountTokensRequest,
-    AnthropicCountTokensResponse,
-    AnthropicCreateMessageRequest,
-    AnthropicMessageResponse,
-    AnthropicStreamEvent,
-)
 
 from .config import VLLMInferenceAdapterConfig
 
 log = get_logger(name=__name__, category="inference::vllm")
 
-
-def _is_embedding_model(model_id: str, model: _models_dev.Model) -> bool:
-    return (model.family is not None and "embed" in model.family) or "embed" in model_id.lower()
-
-
-@cache
-def _models_dev_index() -> dict[str, _models_dev.Model]:
-    index: dict[str, _models_dev.Model] = {}
-    # Sort so huggingface is processed last: vLLM serves HF model IDs and the
-    # huggingface provider entry is the most authoritative source for them.
-    for provider in sorted(_models_dev.providers(), key=lambda p: p.id == "huggingface"):
-        for model_id, model in provider.models.items():
-            if _is_embedding_model(model_id, model):
-                index[model_id] = model
-    return index
+# Clef-omni and Tev1 use vLLM's structured-decisions API (NextTokenStrategy /
+# JointSchemaStrategy, keyed by model architecture); plain Clef/Clef-flash and
+# PPLX-Decider are included for parity with the other local engines even though
+# vLLM's current read strategies don't cover every one of them -- unsupported
+# checkpoints fail at call time (NotImplementedError from /v1/systemone), not at
+# classification time. vLLM's /v1/models response exposes no capabilities and the
+# served id is normally the HuggingFace path, so the last path segment is matched
+# by name, same as sglang.py.
+_SYSTEMONE_MODEL_NAMES = frozenset({"clef", "clef-flash", "clef-omni", "tev1"})
+_SYSTEMONE_MODEL_PREFIXES = ("pplx-decider", "tev1-")
 
 
-def _lookup_models_dev(identifier: str) -> _models_dev.Model | None:
-    return _models_dev_index().get(identifier)
+def _is_systemone_model(identifier: str) -> bool:
+    name = identifier.rsplit("/", 1)[-1].casefold()
+    return name in _SYSTEMONE_MODEL_NAMES or name.startswith(_SYSTEMONE_MODEL_PREFIXES)
 
 
 def _convert_developer_messages(messages: list[Any]) -> list[Any]:
@@ -88,7 +76,7 @@ def _convert_developer_messages(messages: list[Any]) -> list[Any]:
     return converted_messages
 
 
-class VLLMInferenceAdapter(OpenAIMixin):
+class VLLMInferenceAdapter(AnthropicMixin, OpenAIMixin):
     """Inference adapter for remote vLLM servers."""
 
     config: VLLMInferenceAdapterConfig
@@ -96,6 +84,8 @@ class VLLMInferenceAdapter(OpenAIMixin):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     provider_data_api_key_field: str = "vllm_api_token"
+    anthropic_auth_style: ClassVar[str] = "bearer"
+    anthropic_no_key_placeholder: ClassVar[str | None] = None
 
     def get_api_key(self) -> str | None:
         if self.config.auth_credential:
@@ -124,13 +114,6 @@ class VLLMInferenceAdapter(OpenAIMixin):
                 "You must provide a URL in config.yaml (or via the VLLM_URL environment variable) to use vLLM."
             )
 
-    def _build_httpx_client_kwargs(self) -> dict:
-        """Build httpx.AsyncClient kwargs that honour network/TLS configuration."""
-        kwargs = _build_network_client_kwargs(self.config.network)
-        if not kwargs:
-            kwargs["verify"] = self.shared_ssl_context
-        return kwargs
-
     async def health(self) -> HealthResponse:
         """
         Performs a health check by verifying connectivity to the remote vLLM server.
@@ -145,7 +128,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
             base_url = self.get_base_url()
             health_url = urljoin(base_url, "health")
 
-            async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+            async with httpx2.AsyncClient(**self._build_httpx_client_kwargs()) as client:
                 response = await client.get(health_url)
                 response.raise_for_status()
                 return HealthResponse(status=HealthStatus.OK)
@@ -222,19 +205,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
         if not isinstance(result, AsyncIterator):
             raise RuntimeError("Expected streaming response for reasoning, but got non-streaming result")
 
-        async def _wrap_chunks() -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
-            async for chunk in result:
-                reasoning = None
-                for choice in chunk.choices or []:
-                    reasoning = getattr(choice.delta, "reasoning", None) or getattr(
-                        choice.delta, "reasoning_content", None
-                    )
-                yield OpenAIChatCompletionChunkWithReasoning(
-                    chunk=chunk,
-                    reasoning_content=reasoning,
-                )
-
-        return _wrap_chunks()
+        return wrap_reasoning_chunks(result)
 
     def _get_base_url_without_version(self) -> str:
         """Get the base URL with any trailing /v1 suffix removed."""
@@ -243,97 +214,47 @@ class VLLMInferenceAdapter(OpenAIMixin):
             base_url = base_url[:-3]
         return base_url
 
-    async def anthropic_messages(
-        self,
-        params: AnthropicCreateMessageRequest,
-    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
-        """Handle Anthropic Messages via native /v1/messages endpoint."""
-        url = f"{self._get_base_url_without_version()}/v1/messages"
-        body = params.model_dump(exclude_none=True)
-        body["model"] = params.model
-        headers = {
-            "content-type": "application/json",
-            "anthropic-version": ANTHROPIC_VERSION,
-        }
-
-        api_key = self._get_api_key_from_config_or_provider_data()
-        if api_key and api_key != "NO KEY REQUIRED":
-            headers["Authorization"] = f"Bearer {api_key}"
-
-        if params.stream:
-            return passthrough_anthropic_stream(
-                url=url,
-                req_body=body,
-                headers=headers,
-                httpx_client_kwargs=self._build_httpx_client_kwargs(),
-            )
-
-        async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
-            resp = await client.post(url, json=body, headers=headers, timeout=300)
-            resp.raise_for_status()
-            return AnthropicMessageResponse(**resp.json())
-
-    async def anthropic_count_tokens(
-        self,
-        params: AnthropicCountTokensRequest,
-    ) -> AnthropicCountTokensResponse:
-        """Forward count_tokens to vLLM's /v1/messages/count_tokens endpoint."""
-        url = f"{self._get_base_url_without_version()}/v1/messages/count_tokens"
-        body = params.model_dump(exclude_none=True)
-        body["model"] = params.model
-        headers = {
-            "content-type": "application/json",
-            "anthropic-version": ANTHROPIC_VERSION,
-        }
-
-        api_key = self._get_api_key_from_config_or_provider_data()
-        if api_key and api_key != "NO KEY REQUIRED":
-            headers["Authorization"] = f"Bearer {api_key}"
-
-        async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
-            resp = await client.post(url, json=body, headers=headers, timeout=30)
-            resp.raise_for_status()
-            return AnthropicCountTokensResponse(**resp.json())
-
     def construct_model_from_identifier(self, identifier: str) -> Model:
         # vLLM's /v1/models response does not expose a model task/type field,
         # so we classify with models.dev with a name fallback.
-        md = _lookup_models_dev(identifier)
-        is_embedding = md is not None or "embed" in identifier.lower()
+        model = classify_model(identifier, self.__provider_id__)
+        if model is None:
+            model = super().construct_model_from_identifier(identifier)
+        if _is_systemone_model(identifier):
+            # Decision models answer SystemOne judgments, not chat completions; register them
+            # under ModelType.systemone so the /v1/systemone router finds them.
+            model.model_type = ModelType.systemone
+        return model
 
-        if is_embedding:
-            metadata: dict[str, int] = {}
-            if md is not None:
-                if md.limit.output:
-                    metadata["embedding_dimension"] = md.limit.output
-                if md.limit.context:
-                    metadata["context_length"] = md.limit.context
-                log.debug(
-                    "Classified embedding model via models.dev",
-                    identifier=identifier,
-                    family=md.family,
-                    metadata=metadata,
-                )
-            else:
-                log.debug(
-                    "Classified embedding model via name heuristic (not in models.dev)",
-                    identifier=identifier,
-                )
-            return Model(
-                provider_id=self.__provider_id__,
-                provider_resource_id=identifier,
-                identifier=identifier,
-                model_type=ModelType.embedding,
-                metadata=metadata,
-            )
-        if "rerank" in identifier.lower():
-            return Model(
-                provider_id=self.__provider_id__,
-                provider_resource_id=identifier,
-                identifier=identifier,
-                model_type=ModelType.rerank,
-            )
-        return super().construct_model_from_identifier(identifier)
+    async def judge(self, request: SystemOneRequest) -> SystemOneResponse:
+        """Answer a SystemOne judgment request by forwarding it to vLLM's /v1/systemone.
+
+        vLLM serves the structured decisions API natively for decision checkpoints whose
+        architecture it recognizes (e.g. Qwen3_5ForConditionalGeneration for Tev1,
+        ClefOmniForJointSchema for Clef-omni), so no translation of the request is needed.
+        The response needs light massaging first, though: vLLM reports its own per-call
+        id/object/created and per-question diagnostics (label_mass, argmax_is_label)
+        alongside `answers`, and its `noul` answers carry `probabilities`/`confidence`
+        fields that the SystemOne schema's choice/score answers also carry -- but as
+        required fields, not an extension, so they can only be stripped conditionally on
+        answer type, not unconditionally like SGLang's `x_label_mass`.
+        """
+        # get_api_key() returns a display placeholder ("NO KEY REQUIRED") when no
+        # credential is configured, which the typesafe SDK rejects; pass the
+        # configured credential or the fixed local placeholder instead.
+        api_key = (
+            self.config.auth_credential.get_secret_value()
+            if self.config.auth_credential is not None
+            else LOCAL_ENGINE_API_KEY
+        )
+        return await systemone_judge(
+            self._get_base_url_without_version(),
+            api_key,
+            request,
+            network=self.config.network,
+            top_level_extension_fields=frozenset({"id", "object", "created", "diagnostics"}),
+            extension_fields_by_type={"noul": frozenset({"probabilities", "confidence"})},
+        )
 
     async def rerank(
         self,
@@ -371,7 +292,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
             headers["Authorization"] = f"Bearer {api_key}"
 
         try:
-            async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+            async with httpx2.AsyncClient(**self._build_httpx_client_kwargs()) as client:
                 response = await client.post(endpoint, headers=headers, json=payload)
                 if response.status_code != 200:
                     raise RuntimeError(
@@ -399,5 +320,5 @@ class VLLMInferenceAdapter(OpenAIMixin):
 
                 return RerankResponse(data=rerank_data)
 
-        except httpx.HTTPError as e:
+        except httpx2.HTTPError as e:
             raise ConnectionError(f"Failed to connect to vLLM rerank API at {endpoint}: {e}") from e

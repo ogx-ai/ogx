@@ -48,7 +48,7 @@ External Service or Local Computation
 
 ### Detailed Flow Example: Chat Completion
 
-1. Client sends `POST /v1/chat/completions` with `model: "ollama/llama3.2:3b-instruct-fp16"`.
+1. Client sends `POST /v1/chat/completions` with `model: "ollama/qwen3.5:0.8b"`.
 2. `server.py` dispatches to the inference FastAPI router.
 3. The `InferenceRouter` (`core/routers/inference.py`) calls `routing_table.get_provider_impl(model_id)`.
 4. `CommonRoutingTableImpl` looks up the model in `DistributionRegistry`, finds it belongs to provider `ollama`.
@@ -211,6 +211,12 @@ Key features:
 - **Environment variable substitution**: `${env.VAR_NAME:=default}` syntax for config values.
 - **Conditional providers**: `${env.API_KEY:+provider_id}` syntax enables a provider only when a variable is set.
 - **Multiple providers per API**: e.g., both `ollama` and `openai` can serve inference, each handling different models.
+- **Explicit HTTP surface**: `apis:` lists the APIs served over HTTP. An explicit list is
+  authoritative, including when it is empty; omitting the key serves everything the
+  providers supply. It gates route registration only — omitted APIs are still resolved
+  in-process for providers that depend on them. The stack administration APIs (`admin`,
+  `inspect`, `providers`) are always served, and serving `responses` also serves
+  `conversations` and `prompts`.
 
 ### Distributions
 

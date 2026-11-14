@@ -9,7 +9,12 @@ import time
 import pytest
 
 from .fixtures.test_cases import basic_test_cases, image_test_cases, multi_turn_image_test_cases, multi_turn_test_cases
-from .helpers import assert_text_contains, provider_from_model, skip_if_provider_is_vertexai
+from .helpers import (
+    assert_text_contains,
+    provider_from_model,
+    skip_if_gpt_nano_limited_params,
+    skip_if_provider_is_vertexai,
+)
 from .streaming_assertions import StreamingValidator
 
 
@@ -25,6 +30,7 @@ def skip_if_chat_completions_logprobs_not_supported(client_with_models, text_mod
     provider_type = provider_from_model(client_with_models, text_model_id).provider_type
     if provider_type in ("remote::ollama", "remote::watsonx", "remote::vertexai"):
         pytest.skip(f"Model {text_model_id} hosted by {provider_type} doesn't support /v1/chat/completions logprobs.")
+    skip_if_gpt_nano_limited_params(text_model_id, "logprobs")
 
 
 @pytest.mark.parametrize("case", basic_test_cases)
@@ -78,10 +84,12 @@ def test_response_streaming_basic(responses_client, text_model_id, case):
         events.append(chunk)
 
         if chunk.type == "response.created":
-            # Verify response.created is emitted first and immediately
+            # Verify response.created is emitted first, before any content.
+            # 1s tolerates cold-server latency on loaded CI runners while
+            # still catching buffered (non-streaming) responses.
             assert len(events) == 1, "response.created should be the first event"
-            assert event_times[0] < 0.2, (
-                f"response.created should be emitted immediately (took {event_times[0]} seconds)"
+            assert event_times[0] < 1.0, (
+                f"response.created should be emitted before content (took {event_times[0]} seconds)"
             )
             assert chunk.response.status == "in_progress"
             response_id = chunk.response.id

@@ -4,9 +4,8 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import json
 import logging  # allow-direct-logging
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -229,21 +228,21 @@ def test_invalid_auth_header_format(http_client):
     assert "Invalid Authorization header format" in response.json()["error"]["message"]
 
 
-@patch("httpx.AsyncClient.post", new=mock_post_success)
+@patch("httpx2.AsyncClient.post", new=mock_post_success)
 def test_valid_http_authentication(http_client, valid_api_key):
     response = http_client.get("/test", headers={"Authorization": f"Bearer {valid_api_key}"})
     assert response.status_code == 200
     assert response.json() == {"message": "Authentication successful"}
 
 
-@patch("httpx.AsyncClient.post", new=mock_post_failure)
+@patch("httpx2.AsyncClient.post", new=mock_post_failure)
 def test_invalid_http_authentication(http_client, invalid_api_key, suppress_auth_errors):
     response = http_client.get("/test", headers={"Authorization": f"Bearer {invalid_api_key}"})
     assert response.status_code == 401
     assert "Authentication failed" in response.json()["error"]["message"]
 
 
-@patch("httpx.AsyncClient.post", new=mock_post_exception)
+@patch("httpx2.AsyncClient.post", new=mock_post_exception)
 def test_http_auth_service_error(http_client, valid_api_key, suppress_auth_errors):
     response = http_client.get("/test", headers={"Authorization": f"Bearer {valid_api_key}"})
     assert response.status_code == 401
@@ -257,21 +256,21 @@ def test_websocket_missing_auth_header_rejected(ws_client, suppress_auth_errors)
             websocket.receive_text()
 
 
-@patch("httpx.AsyncClient.post", new=mock_post_failure)
+@patch("httpx2.AsyncClient.post", new=mock_post_failure)
 def test_websocket_invalid_authentication_rejected(ws_client, invalid_api_key, suppress_auth_errors):
     with pytest.raises(WebSocketDisconnect):
         with ws_client.websocket_connect("/ws", headers={"Authorization": f"Bearer {invalid_api_key}"}) as websocket:
             websocket.receive_text()
 
 
-@patch("httpx.AsyncClient.post", new=mock_post_success)
+@patch("httpx2.AsyncClient.post", new=mock_post_success)
 def test_websocket_valid_authentication_accepted(ws_client, valid_api_key):
     with ws_client.websocket_connect("/ws", headers={"Authorization": f"Bearer {valid_api_key}"}) as websocket:
         assert websocket.receive_text() == "authenticated"
 
 
 def test_http_auth_request_payload(http_client, valid_api_key, mock_auth_endpoint, suppress_auth_errors):
-    with patch("httpx.AsyncClient.post") as mock_post:
+    with patch("httpx2.AsyncClient.post") as mock_post:
         mock_response = MockResponse(200, {"message": "Authentication successful"})
         mock_post.return_value = mock_response
 
@@ -307,7 +306,7 @@ async def test_http_middleware_with_access_attributes(mock_http_middleware, mock
 
     mock_scope["app"] = mock_app
 
-    with patch("httpx.AsyncClient.post") as mock_post:
+    with patch("httpx2.AsyncClient.post") as mock_post:
         mock_response = MockResponse(
             200,
             {
@@ -432,51 +431,41 @@ def jwt_token_valid(rsa_key_pair):
 
 
 @pytest.fixture
-def mock_jwks_urlopen(rsa_key_pair):
-    """Mock urllib.request.urlopen for PyJWKClient JWKS requests."""
+def mock_jwks_fetch(rsa_key_pair):
+    """Mock PyJWKClient.fetch_data for JWKS requests (stable mock boundary across pyjwt versions)."""
     _, jwk = rsa_key_pair
-    with patch("urllib.request.urlopen") as mock_urlopen:
-        mock_response = Mock()
-        mock_response.read.return_value = json.dumps({"keys": [jwk]}).encode()
-        mock_urlopen.return_value.__enter__.return_value = mock_response
-        yield mock_urlopen
+    with patch("jwt.PyJWKClient.fetch_data", return_value={"keys": [jwk]}) as mock_fetch:
+        yield mock_fetch
 
 
 @pytest.fixture
-def mock_jwks_urlopen_with_auth_required(rsa_key_pair):
-    """Mock urllib.request.urlopen that requires Bearer token for JWKS requests."""
+def mock_jwks_fetch_requires_auth(rsa_key_pair):
+    """Simulate a JWKS endpoint that rejects requests without a Bearer token.
+
+    Inspects the Authorization header the PyJWKClient was configured with,
+    mirroring the outgoing-request check the old urlopen mock performed.
+    """
+    from jwt.exceptions import PyJWKClientConnectionError
+
     _, jwk = rsa_key_pair
-    with patch("urllib.request.urlopen") as mock_urlopen:
 
-        def side_effect(request, **kwargs):
-            auth_header = request.headers.get("Authorization") if hasattr(request, "headers") else None
+    def fetch_data(self):
+        auth_header = (self.headers or {}).get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise PyJWKClientConnectionError('Fail to fetch data from the url, err: "HTTP Error 401: Unauthorized"')
+        return {"keys": [jwk]}
 
-            if not auth_header or not auth_header.startswith("Bearer "):
-                import urllib.error
-
-                raise urllib.error.HTTPError(
-                    url=request.full_url if hasattr(request, "full_url") else "",
-                    code=401,
-                    msg="Unauthorized",
-                    hdrs={},
-                    fp=None,
-                )
-
-            mock_response = Mock()
-            mock_response.read.return_value = json.dumps({"keys": [jwk]}).encode()
-            return mock_response
-
-        mock_urlopen.side_effect = side_effect
-        yield mock_urlopen
+    with patch("jwt.PyJWKClient.fetch_data", fetch_data) as mock_fetch:
+        yield mock_fetch
 
 
-def test_valid_oauth2_authentication(oauth2_client, jwt_token_valid, mock_jwks_urlopen):
+def test_valid_oauth2_authentication(oauth2_client, jwt_token_valid, mock_jwks_fetch):
     response = oauth2_client.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
     assert response.status_code == 200
     assert response.json() == {"message": "Authentication successful"}
 
 
-def test_invalid_oauth2_authentication(oauth2_client, invalid_token, mock_jwks_urlopen, suppress_auth_errors):
+def test_invalid_oauth2_authentication(oauth2_client, invalid_token, mock_jwks_fetch, suppress_auth_errors):
     response = oauth2_client.get("/test", headers={"Authorization": f"Bearer {invalid_token}"})
     assert response.status_code == 401
     assert "Invalid JWT token" in response.json()["error"]["message"]
@@ -515,14 +504,23 @@ def oauth2_client_with_jwks_token(oauth2_app_with_jwks_token):
 
 
 def test_oauth2_with_jwks_token_expected(
-    oauth2_client, jwt_token_valid, mock_jwks_urlopen_with_auth_required, suppress_auth_errors
+    oauth2_client, jwt_token_valid, mock_jwks_fetch_requires_auth, suppress_auth_errors
 ):
     response = oauth2_client.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
     assert response.status_code == 503
     assert "Authentication service unavailable" in response.json()["error"]["message"]
 
 
-def test_oauth2_with_jwks_token_configured(oauth2_client_with_jwks_token, jwt_token_valid, mock_jwks_urlopen):
+def test_oauth2_with_jwks_token_configured(oauth2_client_with_jwks_token, jwt_token_valid, mock_jwks_fetch):
+    response = oauth2_client_with_jwks_token.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
+    assert response.status_code == 200
+    assert response.json() == {"message": "Authentication successful"}
+
+
+def test_oauth2_with_jwks_token_sent_to_jwks_endpoint(
+    oauth2_client_with_jwks_token, jwt_token_valid, mock_jwks_fetch_requires_auth
+):
+    """The configured JWKS token must be sent as a Bearer header on JWKS requests."""
     response = oauth2_client_with_jwks_token.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
     assert response.status_code == 200
     assert response.json() == {"message": "Authentication successful"}
@@ -844,35 +842,35 @@ async def mock_introspection_failed(*args, **kwargs):
     )
 
 
-@patch("httpx.AsyncClient.post", new=mock_introspection_active)
+@patch("httpx2.AsyncClient.post", new=mock_introspection_active)
 def test_valid_introspection_authentication(introspection_client, valid_api_key):
     response = introspection_client.get("/test", headers={"Authorization": f"Bearer {valid_api_key}"})
     assert response.status_code == 200
     assert response.json() == {"message": "Authentication successful"}
 
 
-@patch("httpx.AsyncClient.post", new=mock_introspection_inactive)
+@patch("httpx2.AsyncClient.post", new=mock_introspection_inactive)
 def test_inactive_introspection_authentication(introspection_client, invalid_api_key, suppress_auth_errors):
     response = introspection_client.get("/test", headers={"Authorization": f"Bearer {invalid_api_key}"})
     assert response.status_code == 401
     assert "Token not active" in response.json()["error"]["message"]
 
 
-@patch("httpx.AsyncClient.post", new=mock_introspection_invalid)
+@patch("httpx2.AsyncClient.post", new=mock_introspection_invalid)
 def test_invalid_introspection_authentication(introspection_client, invalid_api_key, suppress_auth_errors):
     response = introspection_client.get("/test", headers={"Authorization": f"Bearer {invalid_api_key}"})
     assert response.status_code == 401
     assert "Not JSON" in response.json()["error"]["message"]
 
 
-@patch("httpx.AsyncClient.post", new=mock_introspection_failed)
+@patch("httpx2.AsyncClient.post", new=mock_introspection_failed)
 def test_failed_introspection_authentication(introspection_client, invalid_api_key, suppress_auth_errors):
     response = introspection_client.get("/test", headers={"Authorization": f"Bearer {invalid_api_key}"})
     assert response.status_code == 401
     assert "Token introspection failed: 500" in response.json()["error"]["message"]
 
 
-@patch("httpx.AsyncClient.post", new=mock_introspection_active)
+@patch("httpx2.AsyncClient.post", new=mock_introspection_active)
 def test_valid_introspection_with_custom_mapping_authentication(
     introspection_client_with_custom_mapping, valid_api_key
 ):
@@ -959,21 +957,21 @@ async def mock_kubernetes_selfsubjectreview_http_error(*args, **kwargs):
     return MockResponse(500, {"message": "Internal Server Error"})
 
 
-@patch("httpx.AsyncClient.post", new=mock_kubernetes_selfsubjectreview_success)
+@patch("httpx2.AsyncClient.post", new=mock_kubernetes_selfsubjectreview_success)
 def test_valid_kubernetes_auth_authentication(kubernetes_auth_client, valid_token):
     response = kubernetes_auth_client.get("/test", headers={"Authorization": f"Bearer {valid_token}"})
     assert response.status_code == 200
     assert response.json() == {"message": "Authentication successful"}
 
 
-@patch("httpx.AsyncClient.post", new=mock_kubernetes_selfsubjectreview_failure)
+@patch("httpx2.AsyncClient.post", new=mock_kubernetes_selfsubjectreview_failure)
 def test_invalid_kubernetes_auth_authentication(kubernetes_auth_client, invalid_token, suppress_auth_errors):
     response = kubernetes_auth_client.get("/test", headers={"Authorization": f"Bearer {invalid_token}"})
     assert response.status_code == 401
     assert "Invalid token" in response.json()["error"]["message"]
 
 
-@patch("httpx.AsyncClient.post", new=mock_kubernetes_selfsubjectreview_http_error)
+@patch("httpx2.AsyncClient.post", new=mock_kubernetes_selfsubjectreview_http_error)
 def test_kubernetes_auth_http_error(kubernetes_auth_client, valid_token, suppress_auth_errors):
     response = kubernetes_auth_client.get("/test", headers={"Authorization": f"Bearer {valid_token}"})
     assert response.status_code == 401
@@ -983,7 +981,7 @@ def test_kubernetes_auth_http_error(kubernetes_auth_client, valid_token, suppres
 def test_kubernetes_auth_request_payload(
     kubernetes_auth_client, valid_token, mock_kubernetes_api_server, suppress_auth_errors
 ):
-    with patch("httpx.AsyncClient.post") as mock_post:
+    with patch("httpx2.AsyncClient.post") as mock_post:
         mock_response = MockResponse(
             200,
             {

@@ -6,16 +6,21 @@
 
 """Unit tests for Anthropic<->OpenAI translation utilities in anthropic_translation."""
 
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx2
 import pytest
 
 from ogx.providers.utils.inference.anthropic_translation import (
     anthropic_request_to_openai,
     convert_tool_choice_to_openai,
+    is_thinking_requested,
     openai_response_to_anthropic,
     openai_stream_to_anthropic,
     parse_anthropic_sse_event,
+    passthrough_anthropic_stream,
+    thinking_to_reasoning_effort,
 )
 from ogx_api.messages.models import (
     AnthropicBase64ImageSource,
@@ -546,6 +551,7 @@ class TestResponseTranslation:
         openai_resp.choices[0].finish_reason = "stop"
         openai_resp.usage = MagicMock()
         openai_resp.usage.prompt_tokens = 10
+        openai_resp.usage.prompt_tokens_details = None
         openai_resp.usage.completion_tokens = 5
 
         result = openai_response_to_anthropic(openai_resp, "claude-sonnet-4-20250514")
@@ -575,6 +581,7 @@ class TestResponseTranslation:
         openai_resp.choices[0].finish_reason = "tool_calls"
         openai_resp.usage = MagicMock()
         openai_resp.usage.prompt_tokens = 20
+        openai_resp.usage.prompt_tokens_details = None
         openai_resp.usage.completion_tokens = 10
 
         result = openai_response_to_anthropic(openai_resp, "m")
@@ -585,6 +592,27 @@ class TestResponseTranslation:
         assert result.content[0].name == "get_weather"
         assert result.content[0].input == {"location": "SF"}
 
+    @pytest.mark.parametrize("arguments", ["[1, 2]", "null", '"text"'])
+    def test_tool_call_with_non_object_arguments_uses_empty_input(self, arguments):
+        """tool_use.input must be an object; valid JSON that is not one must not fail the response."""
+        tc = MagicMock()
+        tc.id = "call_123"
+        tc.function.name = "get_weather"
+        tc.function.arguments = arguments
+
+        openai_resp = MagicMock()
+        openai_resp.choices = [MagicMock()]
+        openai_resp.choices[0].message = MagicMock()
+        openai_resp.choices[0].message.content = None
+        openai_resp.choices[0].message.tool_calls = [tc]
+        openai_resp.choices[0].finish_reason = "tool_calls"
+        openai_resp.usage = None
+
+        result = openai_response_to_anthropic(openai_resp, "m")
+
+        assert result.content[0].type == "tool_use"
+        assert result.content[0].input == {}
+
     def test_length_stop_reason(self):
         openai_resp = MagicMock()
         openai_resp.choices = [MagicMock()]
@@ -594,6 +622,7 @@ class TestResponseTranslation:
         openai_resp.choices[0].finish_reason = "length"
         openai_resp.usage = MagicMock()
         openai_resp.usage.prompt_tokens = 5
+        openai_resp.usage.prompt_tokens_details = None
         openai_resp.usage.completion_tokens = 100
 
         result = openai_response_to_anthropic(openai_resp, "m")
@@ -613,10 +642,31 @@ class TestResponseTranslation:
         openai_resp.usage.prompt_tokens_details.cached_tokens = 75
 
         result = openai_response_to_anthropic(openai_resp, "m")
-        assert result.usage.input_tokens == 100
+        # Anthropic's input_tokens excludes cached tokens; OpenAI's prompt_tokens
+        # includes them. 100 prompt tokens with 75 cached translate to 25, and the
+        # Anthropic-side total (input + cache_read) recovers the original 100.
+        assert result.usage.input_tokens == 25
         assert result.usage.output_tokens == 50
         assert result.usage.cache_read_input_tokens == 75
         assert result.usage.cache_creation_input_tokens is None
+        assert result.usage.input_tokens + result.usage.cache_read_input_tokens == 100
+
+    def test_fully_cached_prompt_translates_to_zero_input_tokens(self):
+        openai_resp = MagicMock()
+        openai_resp.choices = [MagicMock()]
+        openai_resp.choices[0].message = MagicMock()
+        openai_resp.choices[0].message.content = "response"
+        openai_resp.choices[0].message.tool_calls = None
+        openai_resp.choices[0].finish_reason = "stop"
+        openai_resp.usage = MagicMock()
+        openai_resp.usage.prompt_tokens = 80
+        openai_resp.usage.completion_tokens = 10
+        openai_resp.usage.prompt_tokens_details = MagicMock()
+        openai_resp.usage.prompt_tokens_details.cached_tokens = 80
+
+        result = openai_response_to_anthropic(openai_resp, "m")
+        assert result.usage.input_tokens == 0
+        assert result.usage.cache_read_input_tokens == 80
 
     def test_cache_metrics_missing(self):
         openai_resp = MagicMock()
@@ -641,6 +691,35 @@ class TestResponseTranslation:
 
 
 class TestStreamingTranslation:
+    async def test_streaming_usage_excludes_cached_tokens_from_input(self):
+        chunk = MagicMock()
+        chunk.choices = [MagicMock()]
+        chunk.choices[0].delta = MagicMock()
+        chunk.choices[0].delta.content = "hi"
+        chunk.choices[0].delta.tool_calls = None
+        chunk.choices[0].finish_reason = "stop"
+        chunk.usage = MagicMock()
+        chunk.usage.prompt_tokens = 100
+        chunk.usage.completion_tokens = 7
+        chunk.usage.prompt_tokens_details = MagicMock()
+        chunk.usage.prompt_tokens_details.cached_tokens = 75
+
+        async def mock_stream():
+            yield chunk
+
+        events = []
+        async for event in openai_stream_to_anthropic(mock_stream(), "m"):
+            events.append(event)
+
+        delta_events = [e for e in events if e.type == "message_delta"]
+        assert len(delta_events) == 1
+        usage = delta_events[0].usage
+        # Same convention as the non-streaming path: 100 prompt tokens with 75
+        # cached translate to 25 input tokens, and the sum recovers the total.
+        assert usage.input_tokens == 25
+        assert usage.cache_read_input_tokens == 75
+        assert usage.input_tokens + usage.cache_read_input_tokens == 100
+
     async def test_text_streaming(self):
         chunks = []
 
@@ -780,6 +859,32 @@ class TestSSEParsing:
         assert event.type == "message_delta"
         assert event.delta.stop_reason == "pause_turn"
 
+    def test_stop_sequence_passthrough(self):
+        event = parse_anthropic_sse_event(
+            "message_delta",
+            {
+                "delta": {"stop_reason": "stop_sequence", "stop_sequence": "END"},
+                "usage": {"output_tokens": 10},
+            },
+        )
+        assert event is not None
+        assert event.type == "message_delta"
+        assert event.delta.stop_reason == "stop_sequence"
+        assert event.delta.stop_sequence == "END"
+
+    def test_stop_sequence_absent_defaults_to_none(self):
+        event = parse_anthropic_sse_event(
+            "message_delta",
+            {
+                "delta": {"stop_reason": "end_turn"},
+                "usage": {"output_tokens": 10},
+            },
+        )
+        assert event is not None
+        assert event.type == "message_delta"
+        assert event.delta.stop_reason == "end_turn"
+        assert event.delta.stop_sequence is None
+
     def test_ping_event_parsed(self):
         event = parse_anthropic_sse_event("ping", {})
         assert event is not None
@@ -820,6 +925,16 @@ class TestThinkingConfig:
             messages=[AnthropicMessage(role="user", content="Think about this")],
             max_tokens=8192,
             thinking=AnthropicThinkingConfig(type="enabled", budget_tokens=4096),
+        )
+        with pytest.raises(ValueError, match="extended thinking requires a native Anthropic-compatible provider"):
+            anthropic_request_to_openai(request)
+
+    def test_thinking_adaptive_raises_in_translation_mode(self):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Think about this")],
+            max_tokens=8192,
+            thinking=AnthropicThinkingConfig(type="adaptive"),
         )
         with pytest.raises(ValueError, match="extended thinking requires a native Anthropic-compatible provider"):
             anthropic_request_to_openai(request)
@@ -954,3 +1069,340 @@ class TestErrorStreamEvent:
         assert events[1].type == "ping"
         assert events[2].type == "error"
         assert len(events) == 3
+
+
+# -- Upstream stream closure --
+
+
+class TestUpstreamStreamClosure:
+    @staticmethod
+    def _make_chunk(text):
+        chunk = MagicMock()
+        chunk.choices = [MagicMock()]
+        chunk.choices[0].delta = MagicMock()
+        chunk.choices[0].delta.content = text
+        chunk.choices[0].delta.tool_calls = None
+        chunk.choices[0].finish_reason = None
+        chunk.usage = None
+        return chunk
+
+    async def test_upstream_closed_on_completion(self):
+        closed = []
+
+        async def mock_stream():
+            try:
+                yield self._make_chunk("hi")
+            finally:
+                closed.append(True)
+
+        events = [event async for event in openai_stream_to_anthropic(mock_stream(), "m")]
+        assert events[-1].type == "message_stop"
+        assert closed == [True]
+
+    async def test_upstream_closed_when_consumer_abandons_mid_stream(self):
+        closed = []
+
+        async def mock_stream():
+            try:
+                yield self._make_chunk("hi")
+                yield self._make_chunk("ho")
+            finally:
+                closed.append(True)
+
+        translation = openai_stream_to_anthropic(mock_stream(), "m")
+        assert (await translation.__anext__()).type == "message_start"
+        assert (await translation.__anext__()).type == "ping"
+        # Pull the first content event so the upstream stream has started.
+        assert (await translation.__anext__()).type == "content_block_start"
+        await translation.aclose()
+        assert closed == [True]
+
+    async def test_upstream_closed_on_upstream_error(self):
+        closed = []
+
+        async def failing_stream():
+            try:
+                yield self._make_chunk("partial")
+                raise RuntimeError("connection lost")
+            finally:
+                closed.append(True)
+
+        events = [event async for event in openai_stream_to_anthropic(failing_stream(), "m")]
+        assert events[-1].type == "error"
+        assert closed == [True]
+
+
+# -- Thinking (Anthropic thinking <-> OpenAI reasoning) --
+
+
+def _thinking_request(thinking: AnthropicThinkingConfig | None) -> AnthropicCreateMessageRequest:
+    return AnthropicCreateMessageRequest(
+        model="qwen3-32b",
+        messages=[AnthropicMessage(role="user", content="Think about this")],
+        max_tokens=8192,
+        thinking=thinking,
+    )
+
+
+class TestThinkingToReasoningEffort:
+    @pytest.mark.parametrize(
+        "budget,effort",
+        [
+            (None, "medium"),
+            (1024, "low"),
+            (2048, "low"),
+            (2049, "medium"),
+            (4000, "medium"),  # Claude Code "think"
+            (8192, "medium"),
+            (8193, "high"),
+            (10000, "high"),  # Claude Code "think hard"
+            (31999, "high"),  # Claude Code "ultrathink"
+        ],
+    )
+    def test_enabled_budget_maps_to_effort(self, budget, effort):
+        assert thinking_to_reasoning_effort(AnthropicThinkingConfig(type="enabled", budget_tokens=budget)) == effort
+
+    def test_adaptive_leaves_the_effort_to_the_backend(self):
+        assert thinking_to_reasoning_effort(AnthropicThinkingConfig(type="adaptive")) is None
+
+    def test_disabled_sends_no_effort(self):
+        assert thinking_to_reasoning_effort(AnthropicThinkingConfig(type="disabled")) is None
+
+    @pytest.mark.parametrize(
+        "thinking,requested",
+        [
+            (None, False),
+            (AnthropicThinkingConfig(type="disabled"), False),
+            (AnthropicThinkingConfig(type="enabled", budget_tokens=2048), True),
+            (AnthropicThinkingConfig(type="adaptive"), True),
+        ],
+    )
+    def test_is_thinking_requested(self, thinking, requested):
+        assert is_thinking_requested(thinking) is requested
+
+
+class TestThinkingRequestTranslation:
+    def test_enabled_on_a_reasoning_model_sets_reasoning_effort(self):
+        request = _thinking_request(AnthropicThinkingConfig(type="enabled", budget_tokens=10000))
+
+        result = anthropic_request_to_openai(request, reasoning_capable=True)
+
+        assert result.reasoning_effort == "high"
+
+    def test_adaptive_on_a_reasoning_model_is_accepted_without_an_effort(self):
+        result = anthropic_request_to_openai(
+            _thinking_request(AnthropicThinkingConfig(type="adaptive")), reasoning_capable=True
+        )
+
+        assert result.reasoning_effort is None
+
+    @pytest.mark.parametrize("config", [AnthropicThinkingConfig(type="enabled", budget_tokens=4096)])
+    def test_model_that_cannot_reason_is_rejected_naming_the_model(self, config):
+        with pytest.raises(ValueError, match="model 'qwen3-32b' is not known to support reasoning"):
+            anthropic_request_to_openai(_thinking_request(config), reasoning_capable=False)
+
+    @pytest.mark.parametrize("capable", [True, False])
+    def test_no_thinking_and_disabled_thinking_send_no_effort(self, capable):
+        for thinking in (None, AnthropicThinkingConfig(type="disabled")):
+            result = anthropic_request_to_openai(_thinking_request(thinking), reasoning_capable=capable)
+            assert result.reasoning_effort is None
+
+
+def _completion(message: SimpleNamespace, finish_reason: str = "stop") -> SimpleNamespace:
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=message, finish_reason=finish_reason)],
+        usage=None,
+    )
+
+
+class TestThinkingResponseTranslation:
+    @pytest.mark.parametrize("field", ["reasoning_content", "reasoning"])
+    def test_reasoning_becomes_a_leading_thinking_block(self, field):
+        """vLLM/DeepSeek call the field reasoning_content, newer vLLM and Ollama call it reasoning."""
+        message = SimpleNamespace(content="42", tool_calls=None, **{field: "Let me work it out."})
+
+        response = openai_response_to_anthropic(_completion(message), "m", include_thinking=True)
+
+        assert [b.type for b in response.content] == ["thinking", "text"]
+        assert response.content[0].thinking == "Let me work it out."
+        assert response.content[0].signature == ""
+        assert response.content[1].text == "42"
+
+    def test_thinking_block_precedes_tool_use(self):
+        tool_call = SimpleNamespace(id="call_1", function=SimpleNamespace(name="calc", arguments="{}"))
+        message = SimpleNamespace(content=None, tool_calls=[tool_call], reasoning_content="Need a tool.")
+
+        response = openai_response_to_anthropic(_completion(message, "tool_calls"), "m", include_thinking=True)
+
+        assert [b.type for b in response.content] == ["thinking", "tool_use"]
+        assert response.stop_reason == "tool_use"
+
+    def test_reasoning_is_dropped_when_thinking_was_not_requested(self):
+        message = SimpleNamespace(content="42", tool_calls=None, reasoning_content="Hidden.")
+
+        response = openai_response_to_anthropic(_completion(message), "m")
+
+        assert [b.type for b in response.content] == ["text"]
+
+    def test_no_thinking_block_when_the_backend_returned_no_reasoning(self):
+        message = SimpleNamespace(content="42", tool_calls=None, reasoning_content=None)
+
+        response = openai_response_to_anthropic(_completion(message), "m", include_thinking=True)
+
+        assert [b.type for b in response.content] == ["text"]
+
+
+def _delta_chunk(*, content=None, reasoning=None, tool_calls=None, finish_reason=None, field="reasoning_content"):
+    delta = SimpleNamespace(content=content, tool_calls=tool_calls, **{field: reasoning})
+    return SimpleNamespace(choices=[SimpleNamespace(delta=delta, finish_reason=finish_reason)], usage=None)
+
+
+async def _stream_events(chunks, **kwargs):
+    async def stream():
+        for chunk in chunks:
+            yield chunk
+
+    return [event async for event in openai_stream_to_anthropic(stream(), "m", **kwargs)]
+
+
+def _block_events(events):
+    """The content-block structure as (event type, index, block or delta type) tuples."""
+    summary = []
+    for event in events:
+        if event.type == "content_block_start":
+            summary.append(("start", event.index, event.content_block.type))
+        elif event.type == "content_block_delta":
+            summary.append(("delta", event.index, event.delta.type))
+        elif event.type == "content_block_stop":
+            summary.append(("stop", event.index))
+    return summary
+
+
+class TestThinkingStreamTranslation:
+    async def test_reasoning_then_answer_streams_a_thinking_block_then_a_text_block(self):
+        events = await _stream_events(
+            [
+                _delta_chunk(reasoning="Let me "),
+                _delta_chunk(reasoning="think."),
+                _delta_chunk(content="The answer"),
+                _delta_chunk(content=" is 42", finish_reason="stop"),
+            ],
+            include_thinking=True,
+        )
+
+        assert _block_events(events) == [
+            ("start", 0, "thinking"),
+            ("delta", 0, "thinking_delta"),
+            ("delta", 0, "thinking_delta"),
+            ("stop", 0),
+            ("start", 1, "text"),
+            ("delta", 1, "text_delta"),
+            ("delta", 1, "text_delta"),
+            ("stop", 1),
+        ]
+        thinking = [
+            e.delta.thinking for e in events if e.type == "content_block_delta" and e.delta.type == "thinking_delta"
+        ]
+        assert "".join(thinking) == "Let me think."
+        start = next(e for e in events if e.type == "content_block_start")
+        assert start.content_block.signature == ""
+
+    @pytest.mark.parametrize("field", ["reasoning_content", "reasoning"])
+    async def test_both_reasoning_field_names_are_read(self, field):
+        events = await _stream_events(
+            [_delta_chunk(reasoning="hmm", field=field), _delta_chunk(content="ok", finish_reason="stop")],
+            include_thinking=True,
+        )
+
+        assert ("delta", 0, "thinking_delta") in _block_events(events)
+
+    async def test_reasoning_then_tool_call_closes_the_thinking_block_first(self):
+        tool_delta = SimpleNamespace(index=0, id="call_1", function=SimpleNamespace(name="calc", arguments="{}"))
+        events = await _stream_events(
+            [
+                _delta_chunk(reasoning="Need a tool."),
+                _delta_chunk(tool_calls=[tool_delta], finish_reason="tool_calls"),
+            ],
+            include_thinking=True,
+        )
+
+        assert _block_events(events) == [
+            ("start", 0, "thinking"),
+            ("delta", 0, "thinking_delta"),
+            ("stop", 0),
+            ("start", 1, "tool_use"),
+            ("delta", 1, "input_json_delta"),
+            ("stop", 1),
+        ]
+
+    async def test_reasoning_after_text_opens_a_new_thinking_block(self):
+        events = await _stream_events(
+            [_delta_chunk(content="Hi"), _delta_chunk(reasoning="More thought", finish_reason="stop")],
+            include_thinking=True,
+        )
+
+        assert _block_events(events) == [
+            ("start", 0, "text"),
+            ("delta", 0, "text_delta"),
+            ("stop", 0),
+            ("start", 1, "thinking"),
+            ("delta", 1, "thinking_delta"),
+            ("stop", 1),
+        ]
+
+    async def test_reasoning_is_dropped_when_thinking_was_not_requested(self):
+        events = await _stream_events(
+            [_delta_chunk(reasoning="Hidden."), _delta_chunk(content="ok", finish_reason="stop")]
+        )
+
+        assert _block_events(events) == [("start", 0, "text"), ("delta", 0, "text_delta"), ("stop", 0)]
+
+    async def test_answer_without_reasoning_is_unchanged_when_thinking_is_requested(self):
+        events = await _stream_events([_delta_chunk(content="ok", finish_reason="stop")], include_thinking=True)
+
+        assert _block_events(events) == [("start", 0, "text"), ("delta", 0, "text_delta"), ("stop", 0)]
+
+
+class TestPassthroughStreamClientKwargs:
+    """passthrough_anthropic_stream builds its own httpx2 client from caller-supplied kwargs."""
+
+    @staticmethod
+    async def _client_kwargs(**stream_kwargs) -> dict:
+        with patch("ogx.providers.utils.inference.anthropic_translation.httpx2.AsyncClient") as mock_client_class:
+            response = MagicMock()
+            response.aiter_lines = lambda: _empty_lines()
+            stream = MagicMock()
+            stream.__aenter__ = AsyncMock(return_value=response)
+            stream.__aexit__ = AsyncMock(return_value=None)
+            client = MagicMock()
+            client.stream = MagicMock(return_value=stream)
+            mock_client_class.return_value.__aenter__.return_value = client
+
+            async for _ in passthrough_anthropic_stream(
+                url="http://localhost/v1/messages", req_body={}, headers={}, **stream_kwargs
+            ):
+                pass
+
+        return mock_client_class.call_args.kwargs
+
+    async def test_default_timeout_is_used_without_network_timeout(self):
+        kwargs = await self._client_kwargs(httpx_client_kwargs={"verify": False})
+
+        assert kwargs == {"timeout": 300.0, "verify": False}
+
+    async def test_network_timeout_overrides_the_default_instead_of_colliding_with_it(self):
+        """A provider passing network.timeout in the client kwargs used to raise a
+        duplicate-keyword TypeError."""
+        network_timeout = httpx2.Timeout(12.0)
+
+        kwargs = await self._client_kwargs(httpx_client_kwargs={"timeout": network_timeout})
+
+        assert kwargs["timeout"] is network_timeout
+
+    async def test_works_without_client_kwargs(self):
+        assert await self._client_kwargs() == {"timeout": 300.0}
+
+
+async def _empty_lines():
+    return
+    yield

@@ -1,0 +1,54 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_multi_turn[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_multi_turn[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "My name is Alice."
+        },
+        {
+          "role": "assistant",
+          "content": "Hello Alice! Nice to meet you."
+        },
+        {
+          "role": "user",
+          "content": "What is my name?"
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-991711739826dc5d",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay, the user is asking, \"What is my name?\" and I need to respond. Let me think about how to handle this.\n\nFirst, I should acknowledge their question. Since I'm an AI assistant, I can't have a real name, but I can respond in a friendly way. Maybe say something like \"Hi! I'm an AI assistant, but I don't have a name. Let me help you with something!\" That way, I'm polite and keep the conversation open.\n\nI should also check if there's any context I'm missing. The user might be testing if I can respond to a question without being identified. It's good to keep the response general but helpful. Let me make sure the tone is warm and encouraging. Alright, that should work.\n",
+          "signature": "eb5a53d430e4490c8e74fdb35eef8987"
+        },
+        {
+          "type": "text",
+          "text": "\n\nHello! I don't have a real name, but I'm here to help! How can I assist you today? \ud83d\ude0a"
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 36,
+        "output_tokens": 188
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

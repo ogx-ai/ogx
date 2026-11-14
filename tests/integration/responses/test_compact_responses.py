@@ -5,18 +5,16 @@
 # the root directory of this source tree.
 
 import pytest
-from ogx_open_client import OgxClient
+from ogx_client import OgxClient
 
-from .helpers import skip_if_provider_is_vertexai
+from .helpers import skip_if_provider_is_vertexai, skip_if_text_model_prefix
 
 
 @pytest.fixture(autouse=True)
-def _skip_compact_tests_for_watsonx(request):
-    """Skip compact tests for WatsonX — no recordings available yet."""
-    if "text_model_id" in request.fixturenames:
-        text_model_id = request.getfixturevalue("text_model_id")
-        if text_model_id and text_model_id.startswith("watsonx/"):
-            pytest.skip("WatsonX compact test recordings not available yet")
+def _skip_compact_tests_for_unsupported_models(request):
+    """Skip compact tests for models with no recordings available yet."""
+    skip_if_text_model_prefix(request, "watsonx/", "WatsonX compact test recordings not available yet")
+    skip_if_text_model_prefix(request, "bedrock/", "Bedrock GPT-OSS compact test recordings not available yet")
 
 
 class TestCompactResponses:

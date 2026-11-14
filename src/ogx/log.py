@@ -19,6 +19,62 @@ from rich.logging import RichHandler
 # Default log level
 DEFAULT_LOG_LEVEL = logging.INFO
 
+# Keys whose values must be redacted from log output to prevent leaking
+# user input, model output, or model selection into logs.
+SENSITIVE_LOG_KEYS: frozenset[str] = frozenset(
+    [
+        "prompt",
+        "messages",
+        "message",
+        "input_messages",
+        "output_messages",
+        "content",
+        "text",
+        "tool_calls",
+        "tool_call",
+        "input_items",
+        "output_items",
+        "reasoning_content",
+        "final_response",
+        "final_chat_completion",
+        "response",
+        "body",
+        "exc",
+        # User choices / selections — model name reveals intent
+        "model",
+        "model_id",
+        "provider_model_id",
+        "provider_resource_id",
+        # Session identifiers tied to user context
+        "conversation",
+        "conversation_id",
+        "batch_id",
+        "request_id",
+        "completion_id",
+        "stream_id",
+        # User-supplied URLs or identifiers in provider data
+        "url",
+        "server_url",
+        # Tool/connector identifiers from user requests
+        "vector_store_id",
+        "file_id",
+        "tool_name",
+        "tool_call_id",
+    ]
+)
+
+
+def _redact_sensitive_keys(logger, method_name, event_dict):
+    """Remove sensitive key-value pairs from log events.
+
+    This runs as a structlog processor on every log call to prevent
+    user input, model output, and user choices from leaking into logs.
+    """
+    for key in SENSITIVE_LOG_KEYS:
+        if key in event_dict:
+            event_dict[key] = "<REDACTED>"
+    return event_dict
+
 
 class LoggingConfig(BaseModel):
     """Configuration model for category-based logging levels."""
@@ -275,11 +331,17 @@ def _configure_structlog(json_output: bool = False) -> None:
 
     # Shared processors applied to all structlog-originated log entries
     # before they are passed to the stdlib logging infrastructure.
+    #
+    # Order matters: merge_contextvars and ExtraAdder inject additional
+    # data (context variables, stdlib extra=) into the event dict.
+    # _redact_sensitive_keys must run AFTER so that nothing sensitive
+    # injected by those steps escapes redaction.
     shared_processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.ExtraAdder(),
+        _redact_sensitive_keys,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.UnicodeDecoder(),

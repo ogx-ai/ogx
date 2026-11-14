@@ -9,12 +9,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from ogx.core.server.fastapi_router_registry import _ROUTER_FACTORIES
 from ogx.core.server.metrics import (
     RequestMetricsMiddleware,
     RouteInfo,
     _compile_route_patterns,
     build_route_to_api_map,
 )
+from ogx_api.datatypes import Api
 
 
 @pytest.fixture
@@ -270,3 +272,10 @@ class TestBuildRouteToApiMap:
         """Smoke test that build_route_to_api_map doesn't crash with empty inputs."""
         result = build_route_to_api_map({}, {})
         assert result == {}
+
+    def test_maps_included_router_routes(self):
+        """The admin router nests its versioned sub-routers, whose routes also need metric labels."""
+        result = build_route_to_api_map(_ROUTER_FACTORIES, {Api.admin: AsyncMock()})
+
+        assert "GET:/v1alpha/admin/connectors" in result
+        assert result["GET:/v1alpha/admin/connectors"].api == "admin"

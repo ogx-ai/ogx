@@ -9,10 +9,6 @@ inputs:
     description: Which ogx-client to test against — 'latest' generates the SDK in-repo from client-sdks/openapi, 'published' uses the PyPI release
     required: false
     default: "latest"
-  sdk_install_url:
-    description: 'URL to install Python SDK from (for testing preview builds). If provided, overrides client-version.'
-    required: false
-    default: ""
   branch:
     description: 'Explicit branch override (used by scheduled CI to pass the matrix branch)'
     required: false
@@ -31,7 +27,6 @@ runs:
       uses: ./.github/actions/install-ogx-client
       with:
         client-version: ${{ inputs.client-version }}
-        sdk_install_url: ${{ inputs.sdk_install_url }}
         branch: ${{ inputs.branch }}
 
     - name: Install dependencies

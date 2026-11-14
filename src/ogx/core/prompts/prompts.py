@@ -17,10 +17,13 @@ from ogx_api import (
     CreatePromptRequest,
     DeletePromptRequest,
     GetPromptRequest,
+    InvalidParameterError,
     ListPromptsResponse,
     ListPromptVersionsRequest,
     Prompt,
+    PromptNotFoundError,
     Prompts,
+    PromptVersionNotFoundError,
     ServiceNotEnabledError,
     SetDefaultVersionRequest,
     UpdatePromptRequest,
@@ -102,8 +105,9 @@ class PromptServiceImpl(Prompts):
             )
 
         if record is None:
-            version_label = request.version if request.version else "default"
-            raise ValueError(f"Prompt {request.prompt_id}:{version_label} not found")
+            if request.version is not None:
+                raise PromptVersionNotFoundError(request.version, request.prompt_id)
+            raise PromptNotFoundError(request.prompt_id)
 
         return self._row_to_prompt(record)
 
@@ -140,15 +144,17 @@ class PromptServiceImpl(Prompts):
     async def update_prompt(self, request: UpdatePromptRequest) -> Prompt:
         """Update an existing prompt (increments version)."""
         if request.version < 1:
-            raise ValueError("Version must be >= 1")
+            raise InvalidParameterError("version", request.version, "Must be >= 1.")
         variables = request.variables if request.variables is not None else []
 
         prompt_versions = await self.list_prompt_versions(ListPromptVersionsRequest(prompt_id=request.prompt_id))
         latest_prompt = max(prompt_versions.data, key=lambda x: int(x.version))
 
         if request.version and latest_prompt.version != request.version:
-            raise ValueError(
-                f"'{request.version}' is not the latest prompt version for prompt_id='{request.prompt_id}'. Use the latest version '{latest_prompt.version}' in request."
+            raise InvalidParameterError(
+                "version",
+                request.version,
+                f"Must be the latest prompt version '{latest_prompt.version}'.",
             )
 
         current_version = latest_prompt.version if request.version is None else request.version
@@ -194,7 +200,7 @@ class PromptServiceImpl(Prompts):
         )
 
         if not results.data:
-            raise ValueError(f"Prompt {request.prompt_id} not found")
+            raise PromptNotFoundError(request.prompt_id)
 
         prompts = [self._row_to_prompt(row) for row in results.data]
         return ListPromptsResponse(data=prompts)
@@ -206,7 +212,7 @@ class PromptServiceImpl(Prompts):
             where={"prompt_id": request.prompt_id, "version": request.version},
         )
         if record is None:
-            raise ValueError(f"Prompt {request.prompt_id} version {request.version} not found")
+            raise PromptVersionNotFoundError(request.version, request.prompt_id)
 
         # Clear all defaults first, then set the target. This avoids the race where
         # two concurrent calls interleave "set" and "clear" and remove each other's

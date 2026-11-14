@@ -13,8 +13,7 @@ import { Button } from "@/components/ui/button";
 import { FilePreview } from "@/components/ui/file-preview";
 import { InterruptPrompt } from "@/components/chat-playground/interrupt-prompt";
 
-interface MessageInputBaseProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface MessageInputBaseProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   value: string;
   submitOnEnter?: boolean;
   stop?: () => void;
@@ -35,8 +34,7 @@ interface MessageInputWithAttachmentsProps extends MessageInputBaseProps {
 }
 
 type MessageInputProps =
-  | MessageInputWithoutAttachmentProps
-  | MessageInputWithAttachmentsProps;
+  MessageInputWithoutAttachmentProps | MessageInputWithAttachmentsProps;
 
 export function MessageInput({
   placeholder = "Ask AI...",

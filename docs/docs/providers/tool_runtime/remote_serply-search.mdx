@@ -1,0 +1,27 @@
+---
+description: "Serply Search tool for web search via Serply's Google Search API."
+sidebar_label: Remote - Serply-Search
+title: remote::serply-search
+---
+
+# remote::serply-search
+
+## Description
+
+Serply Search tool for web search via Serply's Google Search API.
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `timeout` | `float` | No | 30.0 | Overall HTTP timeout in seconds for requests to external services. |
+| `connect_timeout` | `float` | No | 10.0 | TCP connect timeout in seconds. Shorter than the overall timeout to fail fast on unreachable hosts. |
+| `api_key` | `SecretStr \| None` | No |  | The Serply API key, sent in the X-Api-Key header. Can be overridden per-request via the X-OGX-Provider-Data header. |
+| `max_results` | `int` | No | 3 | The maximum number of results to return (at most 10) |
+
+## Sample Configuration
+
+```yaml
+api_key: ${env.SERPLY_API_KEY:=}
+max_results: 3
+```

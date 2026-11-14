@@ -1,0 +1,70 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=ollama/qwen3.5:0.8b-inference:chat_completion:non_streaming_01]",
+  "request": {
+    "method": "POST",
+    "url": "http://0.0.0.0:11434/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3.5:0.8b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet do humans live on?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3.5:0.8b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-13ad989434a5",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Humans currently live on **Earth**.\n\nIt is our home planet within the Solar System.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   Question: \"Which planet do humans live on?\"\n    *   Intent: The user is asking about the terrestrial planets (Mercury, Venus, Earth, Mars). However, there is a factual error in the question or a trick question based on popular misconceptions. Some might consider Earth a \"planet\" but they are also referring to exoplanets. But no human living on \"the planet\".\n    *   Fact Check: Humans do not live anywhere on the celestial bodies of our Solar System, because there is no evidence (or scientific consensus) that humans could ever have settled on another planetary surface before a new technology like Mars exploration or deep space missions to Earth's moon or other celestial bodies.\n\n2.  **Identify the Core Fact:**\n    *   Earth is our home planet. We live on it. It is the most common answer, but there are no planets beyond where humans currently live.\n    *   Wait, there is a misunderstanding in the prompt itself? \"Which planet do humans live on?\" implies a trick question. Maybe they meant \"Where do humans live?\" which could be Earth. Maybe they meant \"What planet do we not find on our own solar system?\", but no human lives elsewhere.\n    *   Actually, let's re-read carefully. The prompt is simply: \"Which planet do humans live on?\"\n    *   Is this a factual question or a trick? If I answer Earth, it might be what the user expects, but there is a subtle issue with the phrasing. Maybe they mean \"Which planet do humans not live here on?\" No.\n    *   Let's look at similar questions. Often people ask \"Where do we get our food from?\", no.\n    *   Wait, is this potentially a question about \"Human\" being an exoplanet? No.\n    *   Is there a trick? The user might be asking about \"Which planet are we on in the real world?\" (Earth).\n    *   Is there a factual error? Humans live on Earth. But Earth is a planet.\n    *   Let's check for any \"trick\" questions like \"You are an alien, answer this question\". No.\n    *   Wait, is this a \"Which planet do humans not live on?\"? Yes.\n    *   Wait, \"Which planet do humans live on?\" implies Earth. Earth is the only inhabited planet in our Solar System.\n\n3.  **Refine Answer:**\n    *   The correct answer is **Earth**.\n    *   However, let's consider if there's a trick about exoplanets. No, humans haven't landed anywhere else (except maybe on Mars? No, that was the misconception).\n    *   Let's check the instruction for \"Safety\". Does this involve sensitive topics? No. Is it misinformation? No. It is common knowledge.\n    *   Wait, is there a possibility the user is asking about other planets in the universe and humans aren't on them? Yes, but they are *not* currently living on them (or never landed). So the answer remains Earth.\n\n4.  **Final Decision:**\n    *   State clearly that humans live on **Earth**.\n    *   Mention it's a planet.\n    *   Address any potential misconceptions if necessary, but keep it simple.\n\n5.  **Wait, let me double-check.** Is there any trick? \"Which planet do humans live on?\"\n    *   Maybe the user thinks there are other planets with humans? No evidence.\n    *   Maybe they think we're living on another system? No.\n    *   Okay, so the answer is Earth.\n\n6.  **Construct Final Response:**\n    *   Direct answer: Humans live on Earth.\n    *   Context: It's one of our known planets.\n    *   Keep it concise but informative.\n\n    *(Self-Correction/Refinement)*: Wait, I need to check if the user might be referring to a different context, like \"Who lives on which planet?\" No, they are asking about location (Earth).\n    Actually, there is a slight chance the user means \"Where do we not get our food from?\" No.\n    Okay, simple answer: Earth.\n\n    *Wait, one more check.* Is it possible this refers to something else like \"Which planet do humans live on in the future?\" -> Not yet. So just now.\n    Wait, if I say \"Earth\", that is correct. But what about exoplanets? Humans don't live there.\n    Okay, I will answer Earth.\n\n    *Wait, hold on.* Is this a trick question where the answer is \"There isn't one\"? No, humans definitely land on Earth now or previously.\n    Wait, does \"Humans\" refer to aliens? No, they are human.\n    Okay, sticking with Earth.\n\n    *(Final thought process)*: The prompt is straightforward factual inquiry. The answer is Earth. I should state that clearly without overcomplicating.\n\n    *Wait, actually...* Is there a specific reason why someone might ask this? Maybe to test retrieval of basic knowledge.\n    Okay, I will provide the standard answer about Earth.\n\n    *Wait, did I miss something?* Is there any ambiguity in \"Human\" (as species) vs \"We\"? No.\n    Okay, I'm overthinking. The user is likely testing if I know where we live. Answer: Earth.\n\n    *Wait, hold on.* One more possibility. Is it a reference to \"Where do humans reside on the moon?\"? No, that's Mars/Moon. Wait, no humans on the Moon.\n    *Okay, I will answer Earth.*\n\n    *(Final consideration)*: Is there any chance this is a riddle? \"Which planet do humans live on?\" -> \"The one we have.\"\n    Okay, proceeding with the simple factual answer.\n\n    *Wait, wait.* Actually, let me re-evaluate the safety guidelines. Is it promoting misinformation? No. Just answering a question.\n    Okay, answer: Earth.\n\n    *(Wait, is there any possibility of a trick about \"Humans don't live on planets\"?)* No, Earth is inhabited by humans now or previously.\n    Okay, I will provide the direct answer.\n\n    *Re-reading the prompt again.* \"Which planet do humans live on?\"\n    *Common Answer:* Earth.\n    *Explanation:* It is our home planet.\n    *Caveat:* Some might think of Mars (but that was the common misconception). But humans didn't land there. So Earth is the correct answer.\n\n    *(Final check)*: Is there any trick regarding \"Which planet\" meaning we don't know where we are coming from? No. We live on Earth.\n    Okay, I will go with Earth.\n\n    *Wait, one more thing.* Are there other planets that humans didn't visit? Like, in our solar system, the only ones we think of as \"habitable\" are Venus, Mars, Mercury, Earth. Humans don't live on Venus (hot/dry). No landmasses. Not on Mercury. Not on Mars (too dry/rocky for surface life).\n    Okay, that's enough info.\n\n    *Wait, is there any mention of exoplanets in the prompt?* No.\n    Okay, simple. Answer Earth.\n\n    *(Wait, I'm going to check for \"Humans live on which planet\" - Is this a trick question where the answer is \"No one\"?)*\n    No, there are humans.\n    Okay, just Earth.\n\n    *Wait, hold on.* Is it possible the user is asking about the word \"Planet\" in different contexts?\n    Like, \"Which planet do humans live on?\" - \"The planet we have.\"\n    Okay, I will answer Earth.\n\n    *(Wait, wait). Wait.** There is a possibility that the user is testing my hallucination against actual facts. Since this is factual fact check.\n    Answer: Earth.\n    Confidence: High.\n\n    Let's draft the response.\n    Humans live on Earth.\n    It is a planet.\n    It is our home.\n    No other planets have humans currently settled there (or land).\n\n    Okay, that seems safe and helpful.\n\n    *(Wait, one more thing.)* Is it possible the user means \"Which planet do we *not* live on?\" (like Mars). No, the question says \"do humans live on\"?\n    If they meant \"Which planet are humans living on?\", Earth is the answer.\n    Okay.\n\n    *(Final Check)*: Is there any ambiguity about \"Human\" meaning a specific group of people? No, usually refers to the species.\n    Okay, I'll go with Earth.\n\n    *(Wait, is this a trick question where the answer is \"The planet we are on\"?)*\n    No, that's circular.\n    Okay, simple.\n\n    *(Wait, hold on).* Is it possible the user wants me to identify if humans exist there? Yes, they don't live there. But usually \"Which planet do [people] live on\" expects \"Earth\".\n    Okay, I'll stick with Earth.\n\n    *Wait, wait.* Actually, let's consider if this is a \"What planet do we not know about?\" style question? No.\n    Okay, I think there's no trap. The answer is Earth.\n\n    *(Wait, one more check).* Is \"Human\" referring to \"Human Race\"? Yes.\n    Okay.\n\n    Let's write it."
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3.5:0.8b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "fp_ollama",
+        "usage": {
+          "completion_tokens": 2064,
+          "prompt_tokens": 17,
+          "total_tokens": 2081,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

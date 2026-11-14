@@ -7,7 +7,7 @@
 import json
 from unittest.mock import AsyncMock, MagicMock
 
-import httpx
+import httpx2
 import pytest
 from pydantic import SecretStr
 
@@ -18,7 +18,7 @@ from ogx.providers.remote.tool_runtime.nimble_search.nimble_search import Nimble
 @pytest.fixture
 def nimble_search():
     impl = NimbleSearchToolRuntimeImpl(NimbleSearchToolConfig(api_key="test-key", max_results=3))
-    impl._client = MagicMock(spec=httpx.AsyncClient)
+    impl._client = MagicMock(spec=httpx2.AsyncClient)
     # No per-request provider data by default; _get_api_key now always consults it.
     impl.get_request_provider_data = MagicMock(return_value=None)
     return impl
@@ -29,7 +29,7 @@ def mock_nimble_response():
     # Shape of POST /v1/search per nimble-python v0.18 SearchResponse: each result
     # carries title, url, content, description, and metadata. In 'lite' depth the
     # content is empty and the description carries the text.
-    return httpx.Response(
+    return httpx2.Response(
         200,
         json={
             "request_id": "00000000-0000-0000-0000-000000000000",
@@ -50,7 +50,7 @@ def mock_nimble_response():
                 }
             ],
         },
-        request=httpx.Request("POST", NimbleSearchToolRuntimeImpl._SEARCH_URL),
+        request=httpx2.Request("POST", NimbleSearchToolRuntimeImpl._SEARCH_URL),
     )
 
 
@@ -162,7 +162,7 @@ async def test_no_user_location_means_no_country(nimble_search, mock_nimble_resp
 
 async def test_missing_api_key_sends_no_auth_header(mock_nimble_response):
     impl = NimbleSearchToolRuntimeImpl(NimbleSearchToolConfig(api_key=None))
-    impl._client = MagicMock(spec=httpx.AsyncClient)
+    impl._client = MagicMock(spec=httpx2.AsyncClient)
     impl._client.post = AsyncMock(return_value=mock_nimble_response)
     # No config key and no per-request provider data -> no Authorization header; the API
     # rejects the request, matching the sibling search providers (no early raise).
@@ -182,10 +182,10 @@ async def test_provider_data_overrides_config_api_key(nimble_search, mock_nimble
 
 
 async def test_403_returns_graceful_tool_error(nimble_search):
-    forbidden = httpx.Response(
+    forbidden = httpx2.Response(
         403,
         json={"detail": "search_depth='fast' is not enabled for this account"},
-        request=httpx.Request("POST", NimbleSearchToolRuntimeImpl._SEARCH_URL),
+        request=httpx2.Request("POST", NimbleSearchToolRuntimeImpl._SEARCH_URL),
     )
     nimble_search._client.post = AsyncMock(return_value=forbidden)
     result = await nimble_search.invoke_tool("web_search", {"query": "q"})

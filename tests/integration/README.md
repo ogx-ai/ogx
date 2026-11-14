@@ -8,9 +8,17 @@ For the list of target models per provider and their CI lanes, see [TARGET_MODEL
 
 ```bash
 # Run all integration tests with existing recordings
-uv run --group test \
+uv run --group dev \
   pytest -sv tests/integration/ --stack-config=starter
 ```
+
+### Provider dependencies
+
+`scripts/integration-tests.sh` checks that the provider dependencies for the
+stack config are installed — the same `ogx stack list-deps <config> |
+xargs -L1 uv pip install` step CI runs — and fails early with the exact
+install command when any are missing. Pass `--install-deps` to install them
+automatically before running the tests.
 
 ## Configuration Options
 
@@ -39,6 +47,7 @@ Model parameters can be influenced by the following options:
 - `--vision-model`: comma-separated list of vision models.
 - `--embedding-model`: comma-separated list of embedding models.
 - `--judge-model`: comma-separated list of judge models.
+- `--rerank-model`: comma-separated list of rerank models.
 - `--embedding-dimension`: output dimensionality of the embedding model to use for testing. Default: 768
 
 Each of these are comma-separated lists and can be used to generate multiple parameter combinations. Note that tests will be skipped
@@ -51,10 +60,12 @@ if no model is specified.
   - `base`: collects most tests (excludes responses)
   - `responses`: collects tests under `tests/integration/responses` (needs strong tool-calling models)
   - `vision`: collects only `tests/integration/inference/test_vision_inference.py`
+  - `auth`: kubernetes-auth access-control tests. Its `auth` setup is `matrix_excluded`, so this suite only ever runs under the dedicated auth workflow (which stands up the k8s auth provider) and never in the standard CI matrix
+  - `connect-cli`: drives the real agent CLIs (Claude Code, Codex, OpenCode) through `ogx connect <agent>` against the mock setup. The tests self-skip unless the CLIs are installed, so they only actually run under the dedicated connect-cli workflow
 - `--setup`: global configuration that can be used with any suite. Setups prefill model/env defaults; explicit CLI flags always win.
   - Available setups:
-    - `ollama`: Local Ollama provider with lightweight models (sets OLLAMA_URL, uses llama3.2:3b-instruct-fp16)
-    - `vllm`: VLLM provider for efficient local inference (sets VLLM_URL, uses Llama-3.2-1B-Instruct)
+    - `ollama`: Local Ollama provider with lightweight models (sets OLLAMA_URL, uses qwen3.5:0.8b)
+    - `vllm`: vLLM provider running natively on the host (sets VLLM_URL, uses Qwen/Qwen3-0.6B)
     - `gpt`: OpenAI GPT models for high-quality responses (uses gpt-4o)
     - `claude`: Anthropic Claude models for high-quality responses (uses claude-3-5-sonnet)
 
@@ -88,7 +99,7 @@ Run all inference tests by auto-starting a server with the `starter` config:
 OLLAMA_URL=http://localhost:11434 \
   pytest -s -v tests/integration/inference \
    --stack-config=server:starter \
-   --text-model=ollama/llama3.2:3b-instruct-fp16 \
+   --text-model=ollama/qwen3.5:0.8b \
    --embedding-model=nomic-embed-text-v1.5
 ```
 
@@ -98,7 +109,7 @@ Run tests with auto-server startup on a custom port:
 OLLAMA_URL=http://localhost:11434 \
   pytest -s -v tests/integration/inference/ \
    --stack-config=server:starter:8322 \
-   --text-model=ollama/llama3.2:3b-instruct-fp16 \
+   --text-model=ollama/qwen3.5:0.8b \
    --embedding-model=nomic-embed-text-v1.5
 ```
 
@@ -168,6 +179,42 @@ By default, the recording directory is `tests/integration/recordings`. You can o
 
 ## Managing Recordings
 
+### SGLang Recordings
+
+SGLang uses Qwen3-0.6B for the `sglang` setup and
+`togethercomputer/Tev1-0.8B-experimental` for `sglang-systemone`. Live recording
+uses the AMX backend of the pinned SGLang CPU image. An AVX-512-only
+runner can pass import but hit an illegal instruction in Qwen3 Q/K norm; Tev1
+also needs the AMX gated RMSNorm path. Automatic PR recording skips unsupported
+runners and
+reports the skip in the job summary; manually dispatched recording fails with a
+message to re-run that job. No recordings are produced in either case. Re-run the
+job to request another runner. Replay uses the saved responses and does not
+require AMX or a running SGLang server.
+
+### vLLM SystemOne Recordings
+
+The `vllm` setup uses Qwen/Qwen3-0.6B, and `vllm-systemone` uses
+`togethercomputer/Tev1-0.8B-experimental`, served natively (no container) by
+the pinned vLLM 0.32.0 CPU wheel against vLLM's structured decisions API
+(`/v1/systemone`). Both checkpoints are pinned to immutable HuggingFace
+commits, and every file is sha256-verified before use. Replay uses the saved
+responses and does not require a running vLLM server.
+
+### Model-List Recordings
+
+`models-*.json` files record provider model-list responses
+(`models-{request_hash}-{model_set_digest}.json`). Replay unions the bodies of
+every digest for a request hash, so stale model catalogs accumulate one digest
+per recording. `scripts/cleanup_recordings.py` prunes them:
+
+- files whose filename hash no longer matches the current hash function are
+  unreachable by any replay lookup, and
+- model-set digests that add no model referenced by the test suites (recording
+  requests + CI stack-config registrations) are redundant, with the
+  guarantee that the kept files per (directory, request hash) still cover
+  every referenced model and that each group keeps at least one file.
+
 ### Viewing Recordings
 
 ```bash
@@ -230,15 +277,25 @@ gh workflow run record-integration-tests.yml \
   -f pattern="test_streaming"
 ```
 
+**Forcing a full re-record:** Recordings are keyed by the SHA256 of the request body, so `record-if-missing` never overwrites existing recordings. This matters when a pinned test server is bumped, since recordings captured against the old server stay stale for as long as the request body is unchanged. To force a full re-record, dispatch with `inference_mode=record`:
+
+```bash
+gh workflow run record-integration-tests.yml \
+  -f pr_number=1234 -f providers="vllm" -f inference_mode=record
+```
+
+Note that `record` overwrites all existing recordings for the selected provider/suite, producing a large recording diff on the PR branch. This option is only available via `workflow_dispatch`; `pull_request`-triggered runs always use `record-if-missing`.
+
 **Available providers:**
 
 - `ollama` - No API keys (auto-runs on PRs)
+- `llama-cpp-server` - No API keys (auto-runs on PRs)
+- `vllm` - No API keys (auto-runs on PRs; installed natively from a pinned CPU wheel)
+- `text-embeddings-inference` - No API keys (auto-runs on PRs)
 - `gpt` - OpenAI (requires `OPENAI_API_KEY` secret)
 - `azure` - Azure OpenAI (requires `AZURE_API_KEY`, `AZURE_API_BASE` secrets)
 - `bedrock` - AWS Bedrock (requires `AWS_BEARER_TOKEN_BEDROCK` secret)
 - `watsonx` - IBM watsonx (requires `WATSONX_API_KEY`, `WATSONX_BASE_URL`, `WATSONX_PROJECT_ID` secrets)
-
-Note: `vllm` is not yet supported in this recording workflow (not in the provider matrix).
 
 **Adding new providers:**
 
@@ -304,8 +361,8 @@ def test_asymmetric_embeddings(ogx_client, embedding_model_id):
 TypeScript SDK tests can run alongside Python tests when testing against `server:<config>` stacks. Set `TS_CLIENT_PATH` to the path or version of `ogx-client-typescript` to enable:
 
 ```bash
-# Use published npm package (responses suite)
-TS_CLIENT_PATH=^0.3.2 scripts/integration-tests.sh --stack-config server:ci-tests --suite responses --setup gpt
+# Use the latest published npm package (responses suite)
+TS_CLIENT_PATH=latest scripts/integration-tests.sh --stack-config server:ci-tests --suite responses --setup gpt
 
 # Use local checkout from ~/.cache (recommended for development)
 git clone https://github.com/ogx-ai/ogx-client-typescript.git ~/.cache/ogx-client-typescript

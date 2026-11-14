@@ -6,18 +6,24 @@
 
 """Integration tests for the Anthropic Message Batches API.
 
-Covers POST/GET/cancel/results under /v1/messages/batches. Each batch request
-reuses the Anthropic↔OpenAI translation path, so these tests are intended to
-run under the `messages-openai` suite.
+Covers POST/GET/cancel/results under /v1/messages/batches. Under the `messages`
+suite with the `gpt` setup, each batch request exercises the
+Anthropic-to-OpenAI translation path.
 """
 
 import json
 import time
 
-from .conftest import _build_headers
+from .conftest import (
+    _REQUEST_TIMEOUT,
+    _all_block_text,
+    _build_headers,
+    _max_tokens_floor,
+    _thinking_params_fragment,
+)
 
 
-def _poll_until_ended(client, batch_id: str, timeout: float = 60.0) -> dict:
+def _poll_until_ended(client, batch_id: str, timeout: float = _REQUEST_TIMEOUT) -> dict:
     """Poll the batch until processing_status is 'ended' or timeout."""
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -39,7 +45,8 @@ def _create_batch(client, text_model_id: str, prompts: list[tuple[str, str]]) ->
                 "params": {
                     "model": text_model_id,
                     "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 32,
+                    "max_tokens": _max_tokens_floor(32),
+                    **_thinking_params_fragment(),
                 },
             }
             for cid, prompt in prompts
@@ -106,7 +113,9 @@ def test_messages_batch_results(messages_client, text_model_id):
         assert entry["result"]["type"] == "succeeded"
         assert entry["result"]["message"]["type"] == "message"
         assert entry["result"]["message"]["role"] == "assistant"
-        assert len(entry["result"]["message"]["content"]) > 0
+        assert _all_block_text(entry["result"]["message"]["content"]), (
+            f"No output content in: {entry['result']['message']['content']}"
+        )
         custom_ids.add(entry["custom_id"])
 
     assert custom_ids == {"r1", "r2"}

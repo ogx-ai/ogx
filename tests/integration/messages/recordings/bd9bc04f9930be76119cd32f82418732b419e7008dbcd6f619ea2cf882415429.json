@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_create_and_retrieve[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_create_and_retrieve[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is 3+3? Reply with just the number."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-99ca89fcd68a66a7",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay, the user is asking what 3 plus 3 is, and they want just the number. Let me think. Well, adding 3 and 3, so 3 plus 3 equals 6. But wait, do I need to explain that? The user just wants the number, so maybe I should just state the result without any explanation. Let me check the instructions again. Oh, they said to reply with just the number. So I need to make sure I don't add any extra text. Alright, so 3 plus 3 is 6. Just the number, so 6. Yep, that's it.\n",
+          "signature": "cd6341c507df41bd8adec90e25322dca"
+        },
+        {
+          "type": "text",
+          "text": "\n\n6"
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 21,
+        "output_tokens": 137
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

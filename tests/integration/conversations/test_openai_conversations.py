@@ -7,7 +7,7 @@
 import os
 
 import pytest
-from openai import NotFoundError, OpenAI
+from openai import BadRequestError, NotFoundError, OpenAI
 
 
 def get_auth_token(env_var: str, default: str) -> str:
@@ -142,6 +142,61 @@ class TestOpenAIConversations:
         assert result.id == conversation.id
         assert result.object == "conversation"
 
+    def test_conversation_item_id_copies_item_into_other_conversation(self, openai_client):
+        conv_a = openai_client.conversations.create()
+        conv_b = openai_client.conversations.create()
+        created = openai_client.conversations.items.create(
+            conv_a.id,
+            items=[{"type": "message", "role": "user", "content": [{"type": "input_text", "text": "hello from A"}]}],
+        )
+        item_id = created.data[0].id
+
+        copied = openai_client.conversations.items.create(
+            conv_b.id,
+            items=[
+                {
+                    "type": "message",
+                    "role": "user",
+                    "id": item_id,
+                    "content": [{"type": "input_text", "text": "content sent for B"}],
+                }
+            ],
+        )
+
+        assert copied.data[0].id == item_id
+        assert copied.data[0].content[0].text == "hello from A"
+
+        openai_client.conversations.items.delete(item_id, conversation_id=conv_a.id)
+
+        still_in_b = openai_client.conversations.items.retrieve(item_id, conversation_id=conv_b.id)
+        assert still_in_b.content[0].text == "hello from A"
+
+    def test_conversation_item_id_already_in_conversation_is_rejected(self, openai_client):
+        conversation = openai_client.conversations.create()
+        created = openai_client.conversations.items.create(
+            conversation.id,
+            items=[{"type": "message", "role": "user", "content": [{"type": "input_text", "text": "first"}]}],
+        )
+        item_id = created.data[0].id
+
+        with pytest.raises(BadRequestError) as exc_info:
+            openai_client.conversations.items.create(
+                conversation.id,
+                items=[
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "id": item_id,
+                        "content": [{"type": "input_text", "text": "second"}],
+                    }
+                ],
+            )
+
+        assert exc_info.value.status_code == 400
+        assert "Item already in conversation" in str(exc_info.value)
+        item = openai_client.conversations.items.retrieve(item_id, conversation_id=conversation.id)
+        assert item.content[0].text == "first"
+
     def test_full_workflow(self, openai_client):
         conversation = openai_client.conversations.create(
             metadata={"topic": "workflow-test"}, items=[{"type": "message", "role": "user", "content": "Hello!"}]
@@ -184,23 +239,29 @@ class TestConversationAccessControl:
     @pytest.fixture
     def alice_client(self, openai_client):
         """Create an OpenAI client for Alice."""
+        from ogx.testing.api_recorder import build_test_id_http_client
+
         token = get_auth_token("ALICE_TOKEN", "token-alice")
         return OpenAI(
             base_url=str(openai_client.base_url),
             api_key=token,
             max_retries=0,
             timeout=30.0,
+            http_client=build_test_id_http_client(),
         )
 
     @pytest.fixture
     def bob_client(self, openai_client):
         """Create an OpenAI client for Bob."""
+        from ogx.testing.api_recorder import build_test_id_http_client
+
         token = get_auth_token("BOB_TOKEN", "token-bob")
         return OpenAI(
             base_url=str(openai_client.base_url),
             api_key=token,
             max_retries=0,
             timeout=30.0,
+            http_client=build_test_id_http_client(),
         )
 
     def test_user_cannot_retrieve_other_users_conversation(self, alice_client, bob_client, require_server):

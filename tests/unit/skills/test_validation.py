@@ -48,6 +48,12 @@ class TestValidateSkillZip:
         with pytest.raises(ValueError, match="must include 'name'"):
             validate_skill_zip(content)
 
+    def test_skill_md_invalid_frontmatter_yaml(self):
+        skill_md = "---\nname: my-skill\ndescription: Does: something: useful\n---\nInstructions."
+        content = _make_zip({"SKILL.md": skill_md})
+        with pytest.raises(ValueError, match="Failed to parse SKILL.md frontmatter"):
+            validate_skill_zip(content)
+
     def test_not_a_zip(self):
         with pytest.raises(ValueError, match="not a valid zip archive"):
             validate_skill_zip(b"this is not a zip file")

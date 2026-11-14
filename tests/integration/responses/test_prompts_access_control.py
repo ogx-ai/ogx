@@ -27,7 +27,7 @@ server with auth enabled:
 
 import os
 
-import httpx
+import httpx2
 import pytest
 
 
@@ -53,7 +53,7 @@ class PromptsClient:
         }
 
     def create(self, prompt: str, variables: list[str] | None = None) -> dict:
-        resp = httpx.post(
+        resp = httpx2.post(
             f"{self.base_url}/v1/prompts",
             headers=self._headers(),
             json={"prompt": prompt, "variables": variables or []},
@@ -62,15 +62,15 @@ class PromptsClient:
         resp.raise_for_status()
         return resp.json()
 
-    def retrieve(self, prompt_id: str, version: int | None = None) -> httpx.Response:
+    def retrieve(self, prompt_id: str, version: int | None = None) -> httpx2.Response:
         url = f"{self.base_url}/v1/prompts/{prompt_id}"
         if version is not None:
             url += f"?version={version}"
-        resp = httpx.get(url, headers=self._headers(), timeout=30.0)
+        resp = httpx2.get(url, headers=self._headers(), timeout=30.0)
         return resp
 
-    def update(self, prompt_id: str, version: int, prompt: str, variables: list[str]) -> httpx.Response:
-        resp = httpx.put(
+    def update(self, prompt_id: str, version: int, prompt: str, variables: list[str]) -> httpx2.Response:
+        resp = httpx2.put(
             f"{self.base_url}/v1/prompts/{prompt_id}",
             headers=self._headers(),
             json={"version": version, "prompt": prompt, "variables": variables},
@@ -78,16 +78,16 @@ class PromptsClient:
         )
         return resp
 
-    def delete(self, prompt_id: str) -> httpx.Response:
-        resp = httpx.delete(
+    def delete(self, prompt_id: str) -> httpx2.Response:
+        resp = httpx2.delete(
             f"{self.base_url}/v1/prompts/{prompt_id}",
             headers=self._headers(),
             timeout=30.0,
         )
         return resp
 
-    def list_prompts(self) -> httpx.Response:
-        resp = httpx.get(
+    def list_prompts(self) -> httpx2.Response:
+        resp = httpx2.get(
             f"{self.base_url}/v1/prompts",
             headers=self._headers(),
             timeout=30.0,

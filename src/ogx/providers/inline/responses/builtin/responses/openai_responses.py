@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 import tiktoken
 from pydantic import TypeAdapter
 
+from ogx.core.conversations.item_sync import SyncableConversations
 from ogx.core.conversations.validation import CONVERSATION_ID_PATTERN
 from ogx.core.datatypes import VectorStoresConfig
 from ogx.core.task import (
@@ -41,8 +42,8 @@ from ogx_api import (
     AddItemsRequest,
     ConflictError,
     Connectors,
+    ContextLengthExceededError,
     ConversationItem,
-    Conversations,
     CreateResponseRequest,
     Files,
     GetPromptRequest,
@@ -86,6 +87,7 @@ from ogx_api import (
     ToolGroups,
     ToolRuntime,
     VectorIO,
+    WebSearchToolTypes,
 )
 from ogx_api.inference import OpenAIChatCompletionRequestWithExtraBody, ServiceTier
 
@@ -133,7 +135,7 @@ class OpenAIResponsesImpl:
         responses_store: ResponsesStore,
         vector_io_api: VectorIO,  # VectorIO
         moderation_endpoint: str | None,
-        conversations_api: Conversations,
+        conversations_api: SyncableConversations,
         prompts_api: Prompts,
         files_api: Files,
         connectors_api: Connectors,
@@ -945,6 +947,18 @@ class OpenAIResponsesImpl:
                                 "Authorization credentials must be passed via the 'authorization' parameter, not 'headers'.",
                             )
 
+        # Resolve the web search tool here so a missing provider is a 400 before any stream starts.
+        if request.tools and any(tool.type in WebSearchToolTypes for tool in request.tools):
+            try:
+                await self.tool_groups_api.get_tool("web_search")
+            except ValueError as exc:
+                raise InvalidParameterError(
+                    "tools",
+                    "web_search",
+                    "Web search is not enabled on this server, so the web_search tool cannot be used. "
+                    "Remove web_search from your request, or use a server with web search enabled.",
+                ) from exc
+
         if request.guardrails and not self.moderation_endpoint:
             raise ServiceNotEnabledError(
                 "moderation_endpoint",
@@ -1018,6 +1032,8 @@ class OpenAIResponsesImpl:
                         # context window exceeded). Use the error code to pick the right HTTP status.
                         if error_code == "invalid_prompt":
                             raise InvalidParameterError("model", request.model, error_message)
+                        if error_code == "context_length_exceeded":
+                            raise ContextLengthExceededError(error_message)
                         raise InternalServerError(error_message)
                     case _:
                         pass  # Other event types don't have .response
@@ -1817,4 +1833,4 @@ class OpenAIResponsesImpl:
 
         adapter = TypeAdapter(list[ConversationItem])
         validated_items = adapter.validate_python(conversation_items)
-        await self.conversations_api.add_items(conversation_id, AddItemsRequest(items=validated_items))
+        await self.conversations_api.sync_items(conversation_id, AddItemsRequest(items=validated_items))

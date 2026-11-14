@@ -210,7 +210,7 @@ def test_nonexistent_prompt_id(responses_client_with_prompts, text_model_id):
             stream=False,
         )
 
-    assert e.value.status_code == 400
+    assert e.value.status_code == 404
     assert "not found" in str(e.value).lower()
 
 
@@ -227,5 +227,5 @@ def test_invalid_prompt_version(responses_client_with_prompts, text_model_id):
             stream=False,
         )
 
-    assert e.value.status_code == 400
+    assert e.value.status_code == 404
     assert "not found" in str(e.value).lower()

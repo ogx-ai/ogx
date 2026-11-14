@@ -3,7 +3,9 @@
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
+import hashlib
 import json
+import uuid
 from typing import Any
 
 import weaviate
@@ -53,6 +55,13 @@ OPENAI_VECTOR_STORES_FILES_PREFIX = f"openai_vector_stores_files:weaviate:{VERSI
 OPENAI_VECTOR_STORES_FILES_CONTENTS_PREFIX = f"openai_vector_stores_files_contents:weaviate:{VERSION}::"
 
 
+def _chunk_uuid(chunk_id: str) -> str:
+    # Derive a UUID from the SHA-256 of chunk_id (same pattern as the Qdrant
+    # provider). SHA-256 is FIPS-compliant; uuid5 is not allowed in src/.
+    sha256_hash = hashlib.sha256(chunk_id.encode()).hexdigest()
+    return str(uuid.UUID(sha256_hash[:32]))
+
+
 class WeaviateIndex(EmbeddingIndex):
     """Embedding index backed by a Weaviate collection."""
 
@@ -68,6 +77,9 @@ class WeaviateIndex(EmbeddingIndex):
         if not chunks:
             return
 
+        # Derive the Weaviate object UUID from chunk_id so that re-inserting a chunk
+        # replaces the existing object (upsert) instead of creating a duplicate.
+        # Weaviate batch imports overwrite objects that share the same UUID.
         data_objects = []
         for chunk in chunks:
             data_objects.append(
@@ -77,6 +89,7 @@ class WeaviateIndex(EmbeddingIndex):
                         "chunk_content": chunk.model_dump_json(),
                     },
                     vector=chunk.embedding,  # Already a list[float]
+                    uuid=_chunk_uuid(chunk.chunk_id),
                 )
             )
 
@@ -87,6 +100,8 @@ class WeaviateIndex(EmbeddingIndex):
         collection.data.insert_many(data_objects)
 
     async def delete_chunks(self, chunks_for_deletion: list[ChunkForDeletion]) -> None:
+        if not chunks_for_deletion:
+            return
         sanitized_collection_name = sanitize_collection_name(self.collection_name, weaviate_format=True)
         collection = self.client.collections.get(sanitized_collection_name)
         chunk_ids = [chunk.chunk_id for chunk in chunks_for_deletion]
@@ -157,8 +172,13 @@ class WeaviateIndex(EmbeddingIndex):
             if self.client.collections.exists(sanitized_collection_name):
                 self.client.collections.delete(sanitized_collection_name)
             return
+        if not chunk_ids:
+            # contains_any([]) raises WeaviateInvalidInputError rather than matching nothing.
+            return
         collection = self.client.collections.get(sanitized_collection_name)
-        collection.data.delete_many(where=Filter.by_property("id").contains_any(chunk_ids))
+        # "id" is the Weaviate object UUID, not a stored property -- chunk_id is, and is
+        # what delete_chunks() above filters on too.
+        collection.data.delete_many(where=Filter.by_property("chunk_id").contains_any(chunk_ids))
 
     async def query_keyword(
         self,
@@ -292,6 +312,9 @@ class WeaviateIndex(EmbeddingIndex):
 class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtocolPrivate):
     """VectorIO adapter that uses Weaviate for similarity search and vector storage."""
 
+    # WeaviateIndex.query_hybrid hardcodes alpha=0.5, so Weaviate always weights vector and keyword equally.
+    supports_weighted_hybrid_search = False
+
     def __init__(
         self,
         config: WeaviateVectorIOConfig,
@@ -376,8 +399,22 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
                 vectorizer_config=wvc.config.Configure.Vectorizer.none(),
                 properties=[
                     wvc.config.Property(name="chunk_content", data_type=wvc.config.DataType.TEXT),
+                    # Default (word) tokenization splits on non-alphanumeric characters, so
+                    # chunk IDs that share a token (e.g. "doc-1_1" and "doc-1_2" both tokenize
+                    # to include "doc" and "1") would over-match a contains_any filter on this
+                    # property -- field tokenization treats the whole value as one token, so
+                    # delete()/delete_chunks() match only the exact chunk_id requested (#6710).
+                    wvc.config.Property(
+                        name="chunk_id",
+                        data_type=wvc.config.DataType.TEXT,
+                        tokenization=wvc.config.Tokenization.FIELD,
+                    ),
                 ],
             )
+
+        if self.kvstore is not None:
+            key = f"{VECTOR_DBS_PREFIX}{vector_store.identifier}"
+            await self.kvstore.set(key=key, value=vector_store.model_dump_json())
 
         self.cache[vector_store.identifier] = VectorStoreWithIndex(
             vector_store, WeaviateIndex(client=client, collection_name=sanitized_collection_name), self.inference_api
@@ -386,11 +423,13 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
     async def unregister_vector_store(self, vector_store_id: str) -> None:
         client = self._get_client()
         sanitized_collection_name = sanitize_collection_name(vector_store_id, weaviate_format=True)
-        if vector_store_id not in self.cache or client.collections.exists(sanitized_collection_name) is False:
-            return
-        client.collections.delete(sanitized_collection_name)
-        await self.cache[vector_store_id].index.delete()
-        del self.cache[vector_store_id]
+        if vector_store_id in self.cache and client.collections.exists(sanitized_collection_name):
+            client.collections.delete(sanitized_collection_name)
+            await self.cache[vector_store_id].index.delete()
+            del self.cache[vector_store_id]
+
+        if self.kvstore is not None:
+            await self.kvstore.delete(key=f"{VECTOR_DBS_PREFIX}{vector_store_id}")
 
     async def _get_and_cache_vector_store_index(self, vector_store_id: str) -> VectorStoreWithIndex | None:
         if vector_store_id in self.cache:

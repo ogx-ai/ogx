@@ -10,6 +10,7 @@ import pytest
 
 from ogx.providers.remote.inference.openai.config import OpenAIConfig
 from ogx.providers.remote.inference.openai.openai import (
+    _COUNT_MAX_OUTPUT_TOKENS,
     _MODEL_MAX_OUTPUT_TOKENS,
     _WARNED_MODELS,
     OpenAIInferenceAdapter,
@@ -18,8 +19,10 @@ from ogx_api import (
     OpenAIChatCompletion,
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAIChatCompletionResponseMessage,
+    OpenAIChatCompletionUsage,
     OpenAIChoice,
 )
+from ogx_api.messages.models import AnthropicCountTokensRequest
 
 
 @pytest.fixture
@@ -331,7 +334,7 @@ class TestOpenAIMaxOutputTokensWarning:
 
         assert result1 is None
         assert result2 is None
-        warning_count = sum(1 for r in caplog.records if "brand-new-model" in r.message)
+        warning_count = sum(1 for r in caplog.records if "Unknown max_output_tokens for model" in r.message)
         assert warning_count == 1
 
     def test_all_known_models_have_limits(self):
@@ -342,3 +345,78 @@ class TestOpenAIMaxOutputTokensWarning:
     def test_prefix_matching_prefers_more_specific_model(self):
         adapter = _make_adapter()
         assert adapter._get_max_output_tokens("o1-mini-2024-09-12") == 65536
+
+
+class TestCountTokensSuppressesToolCalls:
+    """OpenAI 400s when a tool call cannot be constructed within max_tokens, so the
+    count_tokens fallback sends tool_choice "none" when tools are present: the tool
+    definitions still count toward the input, and the plain-text reply fits in one
+    token regardless of how much room a tool call would need."""
+
+    _TOOLS = [
+        {
+            "name": "get_weather",
+            "description": "Get the current weather in a given location",
+            "input_schema": {
+                "type": "object",
+                "properties": {"location": {"type": "string"}},
+                "required": ["location"],
+            },
+        }
+    ]
+
+    def _response_with_usage(self):
+        return OpenAIChatCompletion(
+            id="chatcmpl-abc123",
+            created=1,
+            model="gpt-4o-mini",
+            choices=[
+                OpenAIChoice(
+                    message=OpenAIChatCompletionResponseMessage(content="h"),
+                    finish_reason="length",
+                    index=0,
+                )
+            ],
+            usage=OpenAIChatCompletionUsage(prompt_tokens=42, completion_tokens=1, total_tokens=43),
+        )
+
+    async def test_count_tokens_with_tools_sends_tool_choice_none(self):
+        adapter = _make_adapter()
+
+        with patch.object(OpenAIInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_prop:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=self._response_with_usage())
+            mock_client_prop.return_value = mock_client
+
+            request = AnthropicCountTokensRequest(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": "What's the weather in San Francisco?"}],
+                tools=self._TOOLS,
+            )
+            result = await adapter.anthropic_count_tokens(request)
+
+            call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+            assert call_kwargs["max_completion_tokens"] == _COUNT_MAX_OUTPUT_TOKENS
+            assert call_kwargs["tool_choice"] == "none"
+            assert call_kwargs["tools"]
+            assert result.input_tokens == 42
+
+    async def test_count_tokens_without_tools_sends_no_tool_choice(self):
+        adapter = _make_adapter()
+
+        with patch.object(OpenAIInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_prop:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=self._response_with_usage())
+            mock_client_prop.return_value = mock_client
+
+            request = AnthropicCountTokensRequest(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": "Hello, world!"}],
+            )
+            result = await adapter.anthropic_count_tokens(request)
+
+            call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+            assert call_kwargs["max_completion_tokens"] == _COUNT_MAX_OUTPUT_TOKENS
+            assert call_kwargs.get("tool_choice") is None
+            assert "tools" not in call_kwargs
+            assert result.input_tokens == 42

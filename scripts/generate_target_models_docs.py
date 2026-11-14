@@ -29,6 +29,7 @@ PROVIDER_DISPLAY_NAMES = {
     "vertexai": "Vertex AI",
     "watsonx": "WatsonX",
     "vllm": "vLLM",
+    "sglang": "SGLang",
     "ollama": "Ollama",
     "gemini": "Gemini",
     "anthropic": "Anthropic",
@@ -40,17 +41,17 @@ PROVIDER_DISPLAY_NAMES = {
     "tgi": "TGI",
     "llama-cpp-server": "llama.cpp server",
     "llama-openai-compat": "Llama API",
+    "text-embeddings-inference": "Text-Embeddings-Inference",
 }
 
 SETUP_PROVIDER_ALIASES = {
     "gpt": "openai",
-    "gpt-reasoning": "openai",
     "azure": "azure",
     "bedrock": "bedrock",
     "vertexai": "vertexai",
     "watsonx": "watsonx",
     "vllm": "vllm",
-    "vllm-qwen3next": "vllm",
+    "sglang": "sglang",
     "ollama": "ollama",
     "ollama-vision": "ollama",
     "ollama-reasoning": "ollama",
@@ -64,6 +65,7 @@ SETUP_PROVIDER_ALIASES = {
     "tgi": "tgi",
     "llama-cpp-server": "llama-cpp-server",
     "llama-api": "llama-openai-compat",
+    "text-embeddings-inference": "text-embeddings-inference",
 }
 
 # These inference providers exist in the registry but do not have named
@@ -74,8 +76,10 @@ INTENTIONALLY_UNMAPPED_REGISTRY_PROVIDERS = {
     "meta",
     "nvidia",
     "oci",
+    "passthrough",
     "runpod",
     "sambanova",
+    "typesafe",
 }
 
 
@@ -205,13 +209,7 @@ def _job_notes(
 
     provider = SETUP_PROVIDER_ALIASES.get(job["setup"])
     coverage = responses_summary.get(provider)
-    if coverage and job["suite"] in {
-        "responses",
-        "bedrock-responses",
-        "gpt-reasoning",
-        "vllm-reasoning",
-        "ollama-reasoning",
-    }:
+    if coverage and job["suite"] in {"responses", "reasoning"}:
         notes.append(f"Responses coverage: {coverage['passing']}/{responses_total} ({coverage['coverage_pct']}%)")
 
     return "; ".join(notes)

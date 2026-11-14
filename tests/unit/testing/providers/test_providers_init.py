@@ -9,9 +9,8 @@
 import types
 from unittest.mock import patch
 
-import httpx
+import httpx2
 import pytest
-from ollama import ResponseError
 from openai import NotFoundError
 
 from ogx.testing.exception_utils import GenericProviderError
@@ -28,14 +27,10 @@ class TestDetectProvider:
     """Test provider detection from exception module path."""
 
     def test_openai_exception_detected(self):
-        request = httpx.Request("GET", "https://api.openai.com/v1/models")
-        response = httpx.Response(404, request=request)
+        request = httpx2.Request("GET", "https://api.openai.com/v1/models")
+        response = httpx2.Response(404, request=request)
         exc = NotFoundError(message="x", response=response, body=None)
         assert detect_provider(exc) == "openai"
-
-    def test_ollama_exception_detected(self):
-        exc = ResponseError(error="model not found", status_code=404)
-        assert detect_provider(exc) == "ollama"
 
     def test_unknown_exception_returns_unknown(self):
         exc = ValueError("plain Python exception")
@@ -57,12 +52,6 @@ class TestCreateProviderError:
         exc = create_provider_error("openai", 418, None, "I'm a teapot")
         assert exc.status_code == 418
         assert "teapot" in str(exc).lower()
-
-    def test_ollama_reconstructs_response_error(self):
-        exc = create_provider_error("ollama", 404, None, "model not found")
-        assert isinstance(exc, ResponseError)
-        assert exc.status_code == 404
-        assert "not found" in str(exc).lower()
 
     def test_unknown_provider_returns_generic_with_status_and_body(self):
         """Unknown providers get GenericProviderError for consistent replay."""

@@ -827,7 +827,7 @@ async def test_store_response_disables_incremental_input_when_auto_compaction_ap
         (OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")), None),
         (
             OpenAIResponseText(format=OpenAIResponseTextFormat(name="Test", schema={"foo": "bar"}, type="json_schema")),
-            OpenAIResponseFormatJSONSchema(json_schema=OpenAIJSONSchema(name="Test", schema={"foo": "bar"})),
+            OpenAIResponseFormatJSONSchema(json_schema=OpenAIJSONSchema(name="Test", schema_={"foo": "bar"})),
         ),
         (OpenAIResponseText(format=OpenAIResponseTextFormat(type="json_object")), OpenAIResponseFormatJSONObject()),
         # ensure text param with no format specified defaults to None
@@ -938,3 +938,6 @@ async def test_create_openai_response_with_output_types_as_input(
 
     assert stored_with_outputs.input == input_with_output_types
     assert len(stored_with_outputs.input) == 3
+
+
+# End of file

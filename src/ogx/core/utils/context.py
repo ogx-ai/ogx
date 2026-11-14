@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
 from contextvars import ContextVar, Token
 from typing import Any
 
@@ -12,10 +12,10 @@ _MISSING = object()
 
 
 def preserve_contexts_async_generator[T](
-    gen: AsyncGenerator[T, None], context_vars: list[ContextVar[Any]]
+    gen: AsyncIterator[T], context_vars: list[ContextVar[Any]]
 ) -> AsyncGenerator[T, None]:
     """
-    Wraps an async generator to preserve context variables across iterations.
+    Wraps an async iterator to preserve context variables across iterations.
     This is needed because we start a new asyncio event loop for each streaming request,
     and we need to preserve the context across the event loop boundary.
     """
@@ -64,8 +64,8 @@ def preserve_contexts_async_generator[T](
                 for context_var in context_vars:
                     _restore_context_var(context_var)
                 break
-            except Exception:
-                # Restore all context vars on exception
+            except BaseException:
+                # Cancellation must also restore the caller's context.
                 for context_var in context_vars:
                     _restore_context_var(context_var)
                 raise
@@ -76,6 +76,12 @@ def preserve_contexts_async_generator[T](
                 # This allows context changes to persist across generator iterations
                 for context_var in context_vars:
                     initial_context_values[context_var.name] = context_var.get()
+            except BaseException:
+                # Closing the wrapper must close its source while provider
+                # context is still active, before restoring the caller below.
+                if hasattr(gen, "aclose"):
+                    await gen.aclose()
+                raise
             finally:
                 # Restore context vars after each yield to prevent leaks between requests
                 for context_var in context_vars:

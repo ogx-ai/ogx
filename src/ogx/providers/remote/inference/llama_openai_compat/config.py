@@ -31,8 +31,13 @@ class LlamaCompatConfig(RemoteInferenceProviderConfig):
     )
 
     @classmethod
-    def sample_run_config(cls, api_key: str = "${env.LLAMA_API_KEY}", **kwargs) -> dict[str, Any]:
+    def sample_run_config(
+        cls,
+        base_url: str = "${env.LLAMA_API_BASE_URL:=https://api.llama.com/compat/v1/}",
+        api_key: str = "${env.LLAMA_API_KEY}",
+        **kwargs,
+    ) -> dict[str, Any]:
         return {
-            "base_url": "https://api.llama.com/compat/v1/",
+            "base_url": base_url,
             "api_key": api_key,
         }

@@ -1716,6 +1716,8 @@ components:
             type: object
           - type: 'null'
       type: object
+      required:
+      - name
       title: OpenAIJSONSchema
       description: JSON schema specification for OpenAI-compatible structured response format.
     OpenAIResponseFormatJSONObject:
@@ -2392,7 +2394,6 @@ components:
           description: List of choices.
           items:
             $ref: '#/components/schemas/OpenAICompletionChoice'
-          minItems: 1
           title: Choices
           type: array
         created:
@@ -2410,6 +2411,10 @@ components:
           type: string
           enum:
           - text_completion
+        usage:
+          $ref: '#/components/schemas/OpenAIChatCompletionUsage'
+          description: Token usage information (typically included in the final chunk with stream_options).
+          nullable: true
       required:
       - id
       - choices
@@ -3005,6 +3010,10 @@ components:
           - type: string
           - type: 'null'
         status:
+          anyOf:
+          - type: string
+          - type: 'null'
+        namespace:
           anyOf:
           - type: string
           - type: 'null'
@@ -3810,6 +3819,7 @@ components:
       - llm
       - embedding
       - rerank
+      - systemone
       title: ModelType
       description: Enumeration of supported model types in OGX.
     Prompt:
@@ -4520,6 +4530,7 @@ components:
           file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
           function: '#/components/schemas/OpenAIResponseInputToolFunction'
           mcp: '#/components/schemas/OpenAIResponseInputToolMCP'
+          namespace: '#/components/schemas/OpenAIResponseInputToolNamespace'
           web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
           web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
           web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
@@ -4534,7 +4545,9 @@ components:
         title: OpenAIResponseInputToolFunction
       - $ref: '#/components/schemas/OpenAIResponseInputToolMCP'
         title: OpenAIResponseInputToolMCP
-      title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+      - $ref: '#/components/schemas/OpenAIResponseInputToolNamespace'
+        title: OpenAIResponseInputToolNamespace
+      title: OpenAIResponseInputToolWebSearch | ... (5 variants)
     OpenAIResponseInputToolMCP:
       properties:
         type:
@@ -6429,7 +6442,7 @@ components:
       description: |-
         `ChunkMetadata` is backend metadata for a `Chunk` that is used to store additional information about the chunk that
             will not be used in the context during inference, but is required for backend functionality. The `ChunkMetadata`
-            is set during chunk creation in `FileSearchToolRuntimeImpl().insert()`and is not expected to change after.
+            is set during chunk creation in `make_overlapped_chunks()` and is not expected to change after.
             Use `Chunk.metadata` for metadata that will be used in the context during inference.
     InsertChunksRequest:
       properties:
@@ -8103,6 +8116,29 @@ components:
       - Not Implemented
       title: HealthStatus
       description: Health check status values for provider readiness.
+    HybridSearchOptions:
+      properties:
+        embedding_weight:
+          type: number
+          minimum: 0.0
+          title: Embedding Weight
+          description: The weight of the embedding in the reciprocal ranking fusion.
+        text_weight:
+          type: number
+          minimum: 0.0
+          title: Text Weight
+          description: The weight of the text in the reciprocal ranking fusion.
+      type: object
+      required:
+      - embedding_weight
+      - text_weight
+      title: HybridSearchOptions
+      description: |-
+        Weights that balance embedding and keyword matches in hybrid search.
+
+        Matches OpenAI's file_search `ranking_options.hybrid_search`. The weights are relative:
+        they are normalized to sum to 1 and applied as weighted Reciprocal Rank Fusion. Vector stores
+        whose provider cannot apply the weights reject the search with a 400 error.
     InputTokensDetails:
       properties:
         cached_tokens:
@@ -8257,6 +8293,12 @@ components:
           type: string
           title: File Id
           description: The ID of the file to attach.
+        options:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          description: Optional provider-specific file processing parameters.
         attributes:
           anyOf:
           - additionalProperties:
@@ -8582,6 +8624,33 @@ components:
       type: object
       title: OpenAIResponseInputToolChoiceWebSearch
       description: Indicates that the model should use web search to generate a response
+    OpenAIResponseInputToolNamespace:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - namespace
+        name:
+          type: string
+          minLength: 1
+          title: Name
+        description:
+          type: string
+          title: Description
+        tools:
+          items:
+            $ref: '#/components/schemas/OpenAIResponseInputToolFunction'
+          type: array
+          minItems: 1
+          title: Tools
+      type: object
+      required:
+      - name
+      - description
+      - tools
+      title: OpenAIResponseInputToolNamespace
+      description: Namespace tool configuration grouping function tools under a shared name.
     OpenAIResponseOutputMessageFileSearchToolCallResults:
       properties:
         attributes:
@@ -8973,6 +9042,13 @@ components:
           - type: string
           - type: 'null'
           description: Model identifier for neural reranker
+        hybrid_search:
+          anyOf:
+          - $ref: '#/components/schemas/HybridSearchOptions'
+            title: HybridSearchOptions
+          - type: 'null'
+          description: Weights that control how reciprocal rank fusion balances semantic embedding matches versus sparse keyword matches. Setting it selects hybrid search, and score_threshold then applies to the fused reciprocal rank fusion scores. Vector stores whose provider cannot apply the weights reject the search with a 400 error, which fails the whole request when the search is a Responses file_search or memory retrieval.
+          title: HybridSearchOptions
       type: object
       title: SearchRankingOptions
       description: |-
@@ -9154,6 +9230,333 @@ components:
       - version
       title: SkillVersionDeleteResponse
       description: Response from deleting a skill version. Matches OpenAI DeletedSkillVersion wire format.
+    SystemOneChoiceAnswer:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - choice
+        choice:
+          type: string
+          title: Choice
+          description: The selected option name, one of the question's `criteria` keys.
+        probabilities:
+          additionalProperties:
+            type: number
+          type: object
+          title: Probabilities
+          description: Probability assigned to each option.
+        confidence:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence
+          description: Overall confidence in `choice`.
+      additionalProperties: false
+      type: object
+      required:
+      - choice
+      - probabilities
+      - confidence
+      title: SystemOneChoiceAnswer
+      description: Answer to a `choice` question.
+    SystemOneChoiceQuestion:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - choice
+        instructions:
+          anyOf:
+          - type: string
+          - additionalProperties: true
+            type: object
+          - items: {}
+            type: array
+            title: array
+          - type: 'null'
+          title: string | object | array
+          description: The question to answer about `state`.
+        criteria:
+          additionalProperties:
+            anyOf:
+            - type: string
+            - additionalProperties: true
+              type: object
+            - items: {}
+              type: array
+              title: array
+            - type: 'null'
+            title: string | object | array
+          type: object
+          maxProperties: 255
+          title: Criteria
+          description: Option name -> description (string, object, array, or null). Up to 255 options.
+      additionalProperties: false
+      type: object
+      required:
+      - criteria
+      title: SystemOneChoiceQuestion
+      description: A question answered by picking one of up to 255 named options.
+    SystemOneNoulAnswer:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - noul
+        noul:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Noul
+          description: Calibrated probability that the answer is true.
+      additionalProperties: false
+      type: object
+      required:
+      - noul
+      title: SystemOneNoulAnswer
+      description: Answer to a `noul` question.
+    SystemOneNoulCriteria:
+      properties:
+        'true':
+          anyOf:
+          - type: string
+          - additionalProperties: true
+            type: object
+          - items: {}
+            type: array
+            title: array
+          - type: 'null'
+          title: string | object | array
+          description: What a yes (value near 1) means.
+        'false':
+          anyOf:
+          - type: string
+          - additionalProperties: true
+            type: object
+          - items: {}
+            type: array
+            title: array
+          - type: 'null'
+          title: string | object | array
+          description: What a no (value near 0) means.
+      additionalProperties: false
+      type: object
+      title: SystemOneNoulCriteria
+      description: Optional descriptions of the yes and no outcomes of a `noul` question.
+    SystemOneNoulQuestion:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - noul
+        instructions:
+          anyOf:
+          - type: string
+          - additionalProperties: true
+            type: object
+          - items: {}
+            type: array
+            title: array
+          - type: 'null'
+          title: string | object | array
+          description: The question to answer about `state`.
+        criteria:
+          anyOf:
+          - $ref: '#/components/schemas/SystemOneNoulCriteria'
+            title: SystemOneNoulCriteria
+          - type: 'null'
+          description: Optional descriptions of the true/false outcomes.
+          title: SystemOneNoulCriteria
+      additionalProperties: false
+      type: object
+      title: SystemOneNoulQuestion
+      description: A yes/no question, answered with a calibrated probability.
+    SystemOneRequest:
+      properties:
+        model:
+          type: string
+          title: Model
+          description: The decision model to use for judgment.
+        state:
+          anyOf:
+          - type: string
+          - additionalProperties: true
+            type: object
+          - items: {}
+            type: array
+            title: array
+          title: string | object | array
+          description: The context the questions are evaluated against.
+        questions:
+          additionalProperties:
+            oneOf:
+            - $ref: '#/components/schemas/SystemOneNoulQuestion'
+              title: SystemOneNoulQuestion
+            - $ref: '#/components/schemas/SystemOneChoiceQuestion'
+              title: SystemOneChoiceQuestion
+            - $ref: '#/components/schemas/SystemOneScoreQuestion'
+              title: SystemOneScoreQuestion
+            discriminator:
+              propertyName: type
+              mapping:
+                choice: '#/components/schemas/SystemOneChoiceQuestion'
+                noul: '#/components/schemas/SystemOneNoulQuestion'
+                score: '#/components/schemas/SystemOneScoreQuestion'
+            title: SystemOneNoulQuestion | SystemOneChoiceQuestion | SystemOneScoreQuestion
+          type: object
+          minProperties: 1
+          title: Questions
+          description: Questions to answer about `state`, keyed by caller-chosen name.
+      additionalProperties: false
+      type: object
+      required:
+      - model
+      - state
+      - questions
+      title: SystemOneRequest
+      description: Request body for POST /v1/systemone.
+    SystemOneResponse:
+      properties:
+        model:
+          type: string
+          title: Model
+          description: The decision model that produced the answers.
+        answers:
+          additionalProperties:
+            oneOf:
+            - $ref: '#/components/schemas/SystemOneNoulAnswer'
+              title: SystemOneNoulAnswer
+            - $ref: '#/components/schemas/SystemOneChoiceAnswer'
+              title: SystemOneChoiceAnswer
+            - $ref: '#/components/schemas/SystemOneScoreAnswer'
+              title: SystemOneScoreAnswer
+            discriminator:
+              propertyName: type
+              mapping:
+                choice: '#/components/schemas/SystemOneChoiceAnswer'
+                noul: '#/components/schemas/SystemOneNoulAnswer'
+                score: '#/components/schemas/SystemOneScoreAnswer'
+            title: SystemOneNoulAnswer | SystemOneChoiceAnswer | SystemOneScoreAnswer
+          type: object
+          title: Answers
+          description: Answers to the request's questions, keyed by the same names.
+        usage:
+          $ref: '#/components/schemas/SystemOneUsage'
+          description: Token usage for this call.
+      additionalProperties: false
+      type: object
+      required:
+      - model
+      - answers
+      title: SystemOneResponse
+      description: Response body for POST /v1/systemone.
+    SystemOneScoreAnswer:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - score
+        score:
+          type: number
+          title: Score
+          description: Probability-weighted score across the rubric's ordered levels; can land between levels.
+        legend:
+          additionalProperties:
+            anyOf:
+            - type: string
+            - additionalProperties: true
+              type: object
+            - items: {}
+              type: array
+              title: array
+            title: string | object | array
+          type: object
+          title: Legend
+          description: Each level (string key) mapped back to its description.
+        probabilities:
+          additionalProperties:
+            type: number
+          type: object
+          title: Probabilities
+          description: Probability assigned to each rubric level.
+        confidence:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence
+          description: Overall confidence in `score`.
+      additionalProperties: false
+      type: object
+      required:
+      - score
+      - legend
+      - probabilities
+      - confidence
+      title: SystemOneScoreAnswer
+      description: Answer to a `score` question.
+    SystemOneScoreQuestion:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - score
+        instructions:
+          anyOf:
+          - type: string
+          - additionalProperties: true
+            type: object
+          - items: {}
+            type: array
+            title: array
+          - type: 'null'
+          title: string | object | array
+          description: The question to answer about `state`.
+        criteria:
+          items:
+            anyOf:
+            - type: string
+            - additionalProperties: true
+              type: object
+            - items: {}
+              type: array
+              title: array
+            title: string | object | array
+          type: array
+          maxItems: 10
+          minItems: 1
+          title: Criteria
+          description: Ordered list of level descriptions, one per score from zero.
+      additionalProperties: false
+      type: object
+      required:
+      - criteria
+      title: SystemOneScoreQuestion
+      description: A question answered against an ordered rubric of 1-10 levels.
+    SystemOneUsage:
+      properties:
+        input_tokens:
+          type: integer
+          minimum: 0.0
+          title: Input Tokens
+          description: Number of tokens in `state` and the questions.
+          default: 0
+        output_tokens:
+          type: integer
+          minimum: 0.0
+          title: Output Tokens
+          description: Number of tokens used to produce the answers.
+          default: 0
+      additionalProperties: false
+      type: object
+      title: SystemOneUsage
+      description: Token usage for a SystemOne judgment call.
     UpdatePromptBodyRequest:
       properties:
         prompt:
@@ -10008,6 +10411,45 @@ components:
       required:
       - models
       title: GoogleListModelsResponse
+      type: object
+    TypeSafeModelInfo:
+      description: |-
+        A model in TypeSafe's ``GET /v1/models`` response shape.
+
+        :name: Model name or alias accepted by the ``model`` field of a SystemOne request
+        :description: Human-readable description of the model and its capabilities
+        :release_date: Model release date, formatted as YYYY-MM-DD
+      properties:
+        name:
+          description: Model name or alias accepted by a SystemOne request's model field.
+          title: Name
+          type: string
+        description:
+          default: ''
+          description: Human-readable description of the model and its capabilities.
+          title: Description
+          type: string
+        release_date:
+          default: ''
+          description: Model release date, formatted as YYYY-MM-DD.
+          title: Release Date
+          type: string
+      required:
+      - name
+      title: TypeSafeModelInfo
+      type: object
+    TypeSafeListModelsResponse:
+      description: Response containing a list of TypeSafe model objects (SystemOne judgment models).
+      properties:
+        models:
+          description: List of SystemOne (judgment) model objects.
+          items:
+            $ref: '#/components/schemas/TypeSafeModelInfo'
+          title: Models
+          type: array
+      required:
+      - models
+      title: TypeSafeListModelsResponse
       type: object
     GetModelRequest:
       description: Request model for getting a model by ID.

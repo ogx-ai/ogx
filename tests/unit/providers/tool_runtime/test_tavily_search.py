@@ -6,7 +6,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 from pydantic import SecretStr
 
@@ -21,13 +21,13 @@ def tavily_search():
 
 @pytest.fixture
 def tavily_search_client(tavily_search):
-    tavily_search._client = MagicMock(spec=httpx.AsyncClient)
+    tavily_search._client = MagicMock(spec=httpx2.AsyncClient)
     return tavily_search
 
 
 @pytest.fixture
 def mock_tavily_response():
-    return httpx.Response(
+    return httpx2.Response(
         200,
         json={
             "query": "test query",
@@ -40,7 +40,7 @@ def mock_tavily_response():
                 }
             ],
         },
-        request=httpx.Request("POST", "https://api.tavily.com/search"),
+        request=httpx2.Request("POST", "https://api.tavily.com/search"),
     )
 
 
@@ -186,16 +186,16 @@ class TestProviderDataApiKeyOverride:
 
     async def test_api_key_omitted_from_body_when_both_keys_null(self):
         """Request body should not include api_key field when no key is available."""
-        mock_response = httpx.Response(
+        mock_response = httpx2.Response(
             200,
             json={
                 "query": "test query",
                 "results": [],
             },
-            request=httpx.Request("POST", "https://api.tavily.com/search"),
+            request=httpx2.Request("POST", "https://api.tavily.com/search"),
         )
         impl = TavilySearchToolRuntimeImpl(TavilySearchToolConfig(max_results=3))
-        impl._client = MagicMock(spec=httpx.AsyncClient)
+        impl._client = MagicMock(spec=httpx2.AsyncClient)
         impl._client.post = AsyncMock(return_value=mock_response)
         with patch.object(impl, "get_request_provider_data", return_value=None):
             await impl.invoke_tool("web_search", {"query": "test query"})

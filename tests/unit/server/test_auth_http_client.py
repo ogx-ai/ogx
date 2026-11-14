@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import httpx
+import httpx2
 
 from ogx.core.datatypes import (
     CustomAuthConfig,
@@ -18,7 +18,7 @@ class TestCustomAuthProviderClient:
     def test_client_created_with_timeout(self):
         config = CustomAuthConfig(endpoint="http://auth.example.com/validate")
         provider = CustomAuthProvider(config)
-        assert isinstance(provider._client, httpx.AsyncClient)
+        assert isinstance(provider._client, httpx2.AsyncClient)
         assert provider._client.timeout.connect == 5.0
         assert provider._client.timeout.read == 10.0
         assert provider._client.timeout.write == 10.0

@@ -1,0 +1,81 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[openai_client-txt=llama-cpp-server/qwen3-0.6b-inference:chat_completion:non_streaming_02]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet has rings around it with a name starting with letter S?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.17.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-906a61197737",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "The planet with rings around it and a name starting with the letter **S** is **Saturn**.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, so the question is asking which planet has rings around it and the name starts with the letter S. Let me think. I know that there are several planets with rings, like Saturn. Wait, Saturn is a planet with rings, and its name starts with S. So that would be Saturn. But wait, are there any other planets with rings that start with S? Like maybe Neptune? Neptune is also a gas giant with a ring system. But Neptune's name starts with N, not S. So Neptune isn't it. Then there's Venus, but Venus is a gas giant with a ring system as well. But again, its name starts with V. So Venus is not it. Mars? Mars has a ring system, but its name is Mars, which starts with M. So no. Then Jupiter? Jupiter has a ring system, and its name starts with J. So Jupiter. Wait, but the question says the planet has rings around it. So Saturn, Jupiter, and maybe something else. Let me check again. Saturn, Jupiter, and maybe something else. Oh, there's Uranus, but Uranus is a gas giant with rings. But its name starts with U. So no. Neptune, V, Mars, and Jupiter. So the answer should be Jupiter or Saturn. But I need to make sure. Wait, Saturn is the one with rings starting with S. So the answer is Saturn.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11147-fee39dd92",
+        "usage": {
+          "completion_tokens": 316,
+          "prompt_tokens": 22,
+          "total_tokens": 338,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 22,
+          "prompt_ms": 162.75,
+          "prompt_per_token_ms": 7.3977272727272725,
+          "prompt_per_second": 135.17665130568355,
+          "predicted_n": 316,
+          "predicted_ms": 8802.789,
+          "predicted_per_token_ms": 27.945361904761906,
+          "predicted_per_second": 35.7841134213259
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

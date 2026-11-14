@@ -34,6 +34,7 @@ from ogx_api.vector_io import (
     VectorStoreChunkingStrategy,
 )
 
+from ._metadata import extract_structural_metadata
 from .config import DoclingFileProcessorConfig
 
 log = get_logger(name=__name__, category="providers::file_processors")
@@ -233,7 +234,7 @@ class DoclingFileProcessor:
             if not text or not text.strip():
                 return []
 
-            chunk_id = generate_chunk_id(document_id, text)
+            chunk_id = generate_chunk_id(document_id=document_id, chunk_text=text)
             return [
                 Chunk(
                     content=text,
@@ -277,17 +278,15 @@ class DoclingFileProcessor:
             if not text or not text.strip():
                 continue
 
-            headings = getattr(doc_chunk, "headings", None)
             chunk_window = f"{i}"
 
-            chunk_id = generate_chunk_id(document_id, text, chunk_window)
+            chunk_id = generate_chunk_id(document_id=document_id, chunk_text=text, chunk_window=chunk_window)
 
             meta: dict[str, Any] = {
                 "document_id": document_id,
                 **document_metadata,
             }
-            if headings:
-                meta["headings"] = headings
+            meta.update(extract_structural_metadata(doc_chunk))
 
             chunks.append(
                 Chunk(

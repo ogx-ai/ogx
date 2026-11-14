@@ -7,7 +7,7 @@
 """
 SigV4 authentication for AWS Bedrock OpenAI-compatible endpoint.
 
-This module provides httpx.Auth implementation that signs requests using
+This module provides httpx2.Auth implementation that signs requests using
 AWS Signature Version 4, enabling IAM/STS authentication with the Bedrock
 OpenAI-compatible API endpoint.
 
@@ -46,7 +46,7 @@ import threading
 from collections.abc import AsyncGenerator, Generator
 from typing import Any
 
-import httpx
+import httpx2
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 
@@ -56,11 +56,11 @@ from ogx.providers.utils.bedrock.config import DEFAULT_SESSION_TTL
 logger = get_logger(name=__name__, category="providers")
 
 
-class BedrockSigV4Auth(httpx.Auth):
+class BedrockSigV4Auth(httpx2.Auth):
     """
-    httpx.Auth that signs requests with AWS SigV4.
+    httpx2.Auth that signs requests with AWS SigV4.
 
-    Only signs headers that httpx won't touch after signing, to avoid
+    Only signs headers that httpx2 won't touch after signing, to avoid
     signature mismatches. Credential refresh is handled automatically
     by boto3 for temporary credentials (STS, IRSA).
     """
@@ -132,20 +132,20 @@ class BedrockSigV4Auth(httpx.Auth):
                 )
             return credentials.get_frozen_credentials()
 
-    def _sign_request(self, request: httpx.Request) -> None:
+    def _sign_request(self, request: httpx2.Request) -> None:
         credentials = self._get_credentials()
 
         # drop the openai sdk's "Bearer <NOTUSED>" placeholder before signing
         if "authorization" in request.headers:
             del request.headers["authorization"]
 
-        # sign only stable headers — anything httpx might rewrite after this point
+        # sign only stable headers — anything httpx2 might rewrite after this point
         # would invalidate the signature, so we leave those out
         host = request.headers.get("host") or str(request.url.netloc)
         headers_to_sign = {"host": host}
 
         # only include content-type if the request already has one; injecting a
-        # default here would cause a mismatch if httpx sends a different value
+        # default here would cause a mismatch if httpx2 sends a different value
         if "content-type" in request.headers:
             headers_to_sign["content-type"] = request.headers["content-type"]
 
@@ -155,7 +155,7 @@ class BedrockSigV4Auth(httpx.Auth):
 
         try:
             content = request.content
-        except httpx.RequestNotRead:
+        except httpx2.RequestNotRead:
             content = request.read()
 
         aws_request = AWSRequest(
@@ -177,11 +177,11 @@ class BedrockSigV4Auth(httpx.Auth):
             f"path={request.url.path}, service={self._service}, region={self._region}"
         )
 
-    def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
+    def auth_flow(self, request: httpx2.Request) -> Generator[httpx2.Request, httpx2.Response, None]:
         self._sign_request(request)
         yield request
 
-    async def async_auth_flow(self, request: httpx.Request) -> AsyncGenerator[httpx.Request, httpx.Response]:
+    async def async_auth_flow(self, request: httpx2.Request) -> AsyncGenerator[httpx2.Request, httpx2.Response]:
         # offload to a thread because credential resolution can do IMDS calls or file I/O;
         # keep signing off the event loop to avoid blocking async request handling
         await asyncio.to_thread(self._sign_request, request)

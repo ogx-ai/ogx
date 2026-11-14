@@ -8,25 +8,12 @@
 import time
 
 import pytest
-from openai import OpenAI
 from pydantic import BaseModel
 
-from ..helpers import assert_text_contains
+from ogx.providers.utils.inference.models_dev_registry import supports_reasoning
+
+from ..helpers import assert_text_contains, is_ollama_reasoning_model, provider_from_model
 from ..test_cases.test_case import TestCase
-
-
-def provider_from_model(client_with_models, model_id):
-    models = {m.id: m for m in client_with_models.models.list().data}
-    models.update(
-        {
-            m.custom_metadata["provider_resource_id"]: m
-            for m in client_with_models.models.list().data
-            if m.custom_metadata
-        }
-    )
-    provider_id = models[model_id].custom_metadata["provider_id"]
-    providers = {p.provider_id: p for p in client_with_models.providers.list()}
-    return providers[provider_id]
 
 
 def skip_if_model_doesnt_support_openai_completion(client_with_models, model_id):
@@ -46,7 +33,6 @@ def skip_if_model_doesnt_support_openai_completion(client_with_models, model_id)
         # {"error":{"message":"Unknown request URL: GET /openai/v1/completions. Please check the URL for typos,
         # or see the docs at https://console.groq.com/docs/","type":"invalid_request_error","code":"unknown_url"}}
         "remote::groq",
-        "remote::llama-cpp-server",
         "remote::oci",
         "remote::gemini",  # https://generativelanguage.googleapis.com/v1beta/openai/completions -> 404
         "remote::anthropic",  # at least claude-3-{5,7}-{haiku,sonnet}-* / claude-{sonnet,opus}-4-* are not supported
@@ -66,6 +52,19 @@ def skip_if_doesnt_support_completions_logprobs(client_with_models, model_id):
     if provider_type in (
         "remote::ollama",  # logprobs is ignored
         "remote::watsonx",
+        # Fireworks returns /v1/completions logprobs, but (unlike OpenAI) does not guarantee that
+        # the actually-sampled token is included in each position's top_logprobs. The test's
+        # `top_logprobs[i][token] == prob` assertion therefore can fail (e.g. sampled token '4'
+        # absent from a top-5 of {2,0,5,6,1}). Revisit/remove this skip if Fireworks changes to
+        # OpenAI-compatible top_logprobs semantics.
+        "remote::fireworks",
+        # llama.cpp's /v1/completions only honors the legacy n_probs param and its own
+        # boolean logprobs + top_logprobs, returning a non-OAI {"content": [...]} shape.
+        # Integer logprobs=N (what these tests send) isn't honored at all.
+        "remote::llama-cpp-server",
+        # SGLang can return fewer than logprobs=N entries or omit the sampled token.
+        # Revisit when its top_logprobs satisfy the shared completions contract.
+        "remote::sglang",
     ):
         pytest.skip(f"Model {model_id} hosted by {provider_type} doesn't support /v1/completions logprobs.")
 
@@ -113,6 +112,17 @@ def skip_if_doesnt_support_n(client_with_models, model_id):
         pytest.skip(f"Model {model_id} hosted by {provider.provider_type} doesn't support n param.")
 
 
+# Cheap/weak models (e.g. Fireworks' nemotron-lightning) are used to exercise a provider's
+# API surface, not to verify answer quality. For such a model the `n=2` test still asserts the
+# service returns two results (fewer would be a broken service), but skips the per-choice
+# content check, since a weak model is not expected to produce correct answers.
+_WEAK_MODEL_MARKERS = ("nemotron",)
+
+
+def is_weak_model(model_id: str) -> bool:
+    return any(marker in model_id for marker in _WEAK_MODEL_MARKERS)
+
+
 def skip_if_model_doesnt_support_openai_chat_completion(client_with_models, model_id):
     provider = provider_from_model(client_with_models, model_id)
     if provider.provider_type in (
@@ -156,6 +166,39 @@ def skip_if_doesnt_support_json_schema(client_with_models, model_id):
         pytest.skip(f"Model {model_id} hosted by {provider.provider_type} doesn't support json_schema response_format.")
 
 
+def reasoning_effort_steering(model_id):
+    """Explicit reasoning-effort steering for chat-completion tests on reasoning models.
+
+    Models that reason by default apply their own medium reasoning effort
+    when the caller sends none; on the CPU record runners that rambles past
+    the client timeout even for trivial prompts. These tests assert on answer
+    content, not reasoning, so they set the effort explicitly (tests that
+    exercise reasoning set it themselves).
+    """
+    if supports_reasoning(model_id):
+        return {"reasoning_effort": "low"}
+    return {}
+
+
+_OLLAMA_REASONING_COMPLETION_MAX_TOKENS = 8192
+
+
+def ollama_reasoning_completion_max_tokens(client_with_models, model_id, default):
+    """Token budget for legacy /v1/completions requests to Ollama thinking models.
+
+    That endpoint has no reasoning-effort parameter, so the model's default
+    medium reasoning runs first and must fit in the budget alongside the
+    answer: with the small default budget the reasoning exhausts it (and the
+    server-side context) and the response comes back with empty content. The
+    raised budget also makes ollama grow the context to fit it, so the answer
+    is generated after the reasoning. At ~12 tok/s on the CPU record runners
+    these requests take minutes, so the lane raises OGX_CLIENT_TIMEOUT.
+    """
+    if is_ollama_reasoning_model(client_with_models, model_id):
+        return _OLLAMA_REASONING_COMPLETION_MAX_TOKENS
+    return default
+
+
 @pytest.mark.parametrize(
     "test_case",
     [
@@ -172,6 +215,7 @@ def test_openai_completion_non_streaming(ogx_client, client_with_models, text_mo
         model=text_model_id,
         prompt=prompt,
         stream=False,
+        max_tokens=ollama_reasoning_completion_max_tokens(client_with_models, text_model_id, None),
     )
     assert len(response.choices) > 0
     choice = response.choices[0]
@@ -216,19 +260,90 @@ def test_openai_completion_streaming(ogx_client, client_with_models, text_model_
 
     # ollama needs more verbose prompting for some reason here...
     prompt = "Respond to this question and explain your answer. " + tc["content"]
+
     response = ogx_client.completions.create(
         model=text_model_id,
         prompt=prompt,
         stream=True,
-        max_tokens=50,
+        max_tokens=ollama_reasoning_completion_max_tokens(client_with_models, text_model_id, 50),
     )
-    streamed_content = [chunk.choices[0].text or "" for chunk in response]
+    # Without include_usage every chunk must carry a choice.
+    streamed_content = []
+    for chunk in response:
+        assert chunk.choices, "Streaming chunk without choices arrived although include_usage was not requested"
+        streamed_content.append(chunk.choices[0].text or "")
     content_str = "".join(streamed_content).lower().strip()
     assert len(content_str) > 10
 
 
+def skip_if_doesnt_support_completions_stream_usage(client_with_models, model_id):
+    provider_type = provider_from_model(client_with_models, model_id).provider_type
+    if provider_type in (
+        # llama.cpp's /v1/completions sends usage on the final streaming chunk alongside a
+        # (non-empty) choices entry, instead of OpenAI's trailing empty-choices usage chunk.
+        "remote::llama-cpp-server",
+    ):
+        pytest.skip(f"Model {model_id} hosted by {provider_type} doesn't support /v1/completions stream usage.")
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        "inference:completion:sanity",
+    ],
+)
+def test_openai_completion_streaming_with_usage(ogx_client, client_with_models, text_model_id, test_case):
+    """A streaming completion with include_usage ends with a final chunk that has an
+    empty choices list and a populated usage object.
+    """
+    skip_if_model_doesnt_support_openai_completion(client_with_models, text_model_id)
+    skip_if_doesnt_support_completions_stream_usage(client_with_models, text_model_id)
+    tc = TestCase(test_case)
+
+    # ollama needs more verbose prompting for some reason here...
+    prompt = "Respond to this question and explain your answer. " + tc["content"]
+
+    response = ogx_client.completions.create(
+        model=text_model_id,
+        prompt=prompt,
+        stream=True,
+        max_tokens=ollama_reasoning_completion_max_tokens(client_with_models, text_model_id, 50),
+        stream_options={"include_usage": True},
+    )
+    streamed_content = []
+    usage = None
+    for chunk in response:
+        # A raw dict means the chunk failed to deserialize into OpenAICompletion,
+        # e.g. the trailing empty-choices usage chunk while choices has min_length=1.
+        assert not isinstance(chunk, dict), "stream yielded a raw dict instead of OpenAICompletion"
+        if chunk.choices:
+            assert usage is None, "Content chunk arrived after the trailing usage chunk"
+            streamed_content.append(chunk.choices[0].text or "")
+        else:
+            usage = chunk.usage
+    content_str = "".join(streamed_content).lower().strip()
+    assert len(content_str) > 10
+    assert usage is not None, "include_usage was requested but no trailing usage chunk arrived"
+    assert usage.prompt_tokens, "prompt_tokens should be populated in the trailing usage chunk"
+    assert usage.completion_tokens, "completion_tokens should be populated in the trailing usage chunk"
+    assert usage.total_tokens, "total_tokens should be populated in the trailing usage chunk"
+
+
 def test_openai_completion_guided_choice(ogx_client, client_with_models, text_model_id):
     skip_if_provider_isnt_vllm(client_with_models, text_model_id)
+    # vllm-project/vllm#57726: when the vLLM server is started with a
+    # --reasoning-parser (which our CI setup does, to support the vllm-reasoning
+    # suite), structured outputs on /v1/completions are silently NOT enforced:
+    # the grammar is gated on the prompt having ended a reasoning turn, which a
+    # raw completion prompt never does, so the model generates unconstrained
+    # text with a 200 and no warning (observed on vLLM 0.31.0). The existing
+    # recording for this test (made before the bug landed in our pinned vLLM)
+    # still replays fine. To re-enable: confirm the fix is in the pinned
+    # release, remove this skip, and re-record with --inference-mode record.
+    pytest.skip(
+        "vLLM does not enforce /v1/completions structured outputs while a --reasoning-parser is "
+        "configured (vllm-project/vllm#57726); re-enable once the pinned vLLM release includes the fix."
+    )
 
     prompt = "I am feeling really sad today."
     response = ogx_client.completions.create(
@@ -258,7 +373,8 @@ def test_openai_chat_completion_non_streaming(compat_client, client_with_models,
     question = tc["question"]
     expected = tc["expected"]
 
-    request_options = {"timeout": 120} if isinstance(compat_client, OpenAI) else {}
+    # No per-request timeout: it would override the client-level timeout,
+    # which scripts/integration-tests.sh raises per lane via OGX_CLIENT_TIMEOUT.
     response = compat_client.chat.completions.create(
         model=text_model_id,
         messages=[
@@ -268,7 +384,7 @@ def test_openai_chat_completion_non_streaming(compat_client, client_with_models,
             }
         ],
         stream=False,
-        **request_options,
+        **reasoning_effort_steering(text_model_id),
     )
     message_content = response.choices[0].message.content
     assert len(message_content) > 0
@@ -292,7 +408,7 @@ def test_openai_chat_completion_streaming(compat_client, client_with_models, tex
         model=text_model_id,
         messages=[{"role": "user", "content": question}],
         stream=True,
-        timeout=120,  # Increase timeout to 2 minutes for large conversation history
+        **reasoning_effort_steering(text_model_id),
     )
     streamed_content = []
     for chunk in response:
@@ -322,15 +438,25 @@ def test_openai_chat_completion_streaming_with_n(compat_client, client_with_mode
         model=text_model_id,
         messages=[{"role": "user", "content": question}],
         stream=True,
-        timeout=120,  # Increase timeout to 2 minutes for large conversation history,
         n=2,
+        **reasoning_effort_steering(text_model_id),
     )
     streamed_content = {}
+    chunks_per_index = {}
     for chunk in response:
         for choice in chunk.choices:
+            chunks_per_index[choice.index] = chunks_per_index.get(choice.index, 0) + 1
             if choice.delta.content:
                 streamed_content[choice.index] = streamed_content.get(choice.index, "") + choice.delta.content
-    assert len(streamed_content) == 2
+    # Presence is checked by counting chunks per choice index rather than by
+    # content: some reasoning models exhaust their token budget thinking and
+    # finish without ever sending a "content" delta, so a content-based check
+    # would miss a choice the provider did stream. A choice that never sent a
+    # chunk was never produced by the provider.
+    assert set(chunks_per_index) == {0, 1}
+    if is_weak_model(text_model_id):
+        # Weak models (see _WEAK_MODEL_MARKERS) need two results, not correct content.
+        return
     for i, content in streamed_content.items():
         assert_text_contains(content, expected, msg=f"Choice {i}: Expected '{expected}' in '{content}'")
 
@@ -356,6 +482,7 @@ def test_inference_store(compat_client, client_with_models, text_model_id, strea
             }
         ],
         stream=stream,
+        **reasoning_effort_steering(text_model_id),
     )
     if stream:
         # accumulate the streamed content
@@ -455,6 +582,7 @@ def test_inference_store_tool_calls(compat_client, client_with_models, text_mode
             }
         ],
         stream=stream,
+        **reasoning_effort_steering(text_model_id),
         tools=[
             {
                 "type": "function",
@@ -693,8 +821,9 @@ def test_openai_completion_logprobs_streaming(client_with_models, openai_client,
         max_tokens=5,
     )
     for chunk in response:
+        if not chunk.choices:  # skip the trailing usage chunk (empty choices)
+            continue
         choice = chunk.choices[0]
-        choice = response.choices[0]
         if choice.text:  # if there's a token, we expect logprobs
             assert choice.logprobs, "Logprobs should not be empty"
             logprobs = choice.logprobs
@@ -723,6 +852,7 @@ def test_openai_chat_completion_with_tools(openai_client, text_model_id, test_ca
         tools=tc["tools"],
         tool_choice="auto",
         stream=False,
+        **reasoning_effort_steering(text_model_id),
     )
     assert len(response.choices) == 1
     assert len(response.choices[0].message.tool_calls) == 1
@@ -747,6 +877,7 @@ def test_openai_chat_completion_with_tools_and_streaming(openai_client, text_mod
         tools=tc["tools"],
         tool_choice="auto",
         stream=True,
+        **reasoning_effort_steering(text_model_id),
     )
     # Accumulate tool calls from streaming chunks
     tool_calls = []
@@ -781,6 +912,7 @@ def test_openai_chat_completion_with_tool_choice_none(openai_client, text_model_
         tools=tc["tools"],
         tool_choice="none",
         stream=False,
+        **reasoning_effort_steering(text_model_id),
     )
     assert len(response.choices) == 1
     tool_calls = response.choices[0].message.tool_calls
@@ -814,6 +946,7 @@ def test_openai_chat_completion_structured_output(openai_client, client_with_mod
             },
         },
         stream=False,
+        **reasoning_effort_steering(text_model_id),
     )
     print(response.choices[0].message.content)
     answer = AnswerFormat.model_validate_json(response.choices[0].message.content)
