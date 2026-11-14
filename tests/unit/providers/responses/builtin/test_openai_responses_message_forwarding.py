@@ -429,12 +429,33 @@ async def test_truncation_retry_drops_oldest_turn(
 
 @pytest.mark.parametrize("truncation", [None, ResponseTruncation.disabled])
 @pytest.mark.parametrize("stream", [True, False])
+@pytest.mark.parametrize(
+    "error_body",
+    [
+        {
+            "error": {
+                "code": 400,
+                "message": "This model's maximum context length is 128000 tokens. However your input contains 200000 tokens.",
+                "type": "BadRequestError",
+            }
+        },
+        {
+            "error": {
+                "code": "context_length_exceeded",
+                "message": "This model's maximum context length is 128000 tokens. However your input contains 200000 tokens.",
+                "type": "invalid_request_error",
+            }
+        },
+    ],
+    ids=["vllm_int_code", "openai_string_code"],
+)
 async def test_context_length_error_without_truncation_auto_does_not_drop_turns(
     openai_responses_impl,
     mock_inference_api,
     mock_responses_store,
     truncation,
     stream,
+    error_body,
 ):
     """Without truncation='auto', a context-length error fails the request
     instead of dropping the oldest turn and retrying."""
@@ -454,11 +475,11 @@ async def test_context_length_error_without_truncation_auto_does_not_drop_turns(
         store=True,
     )
 
-    error_message = "This model's maximum context length is 128000 tokens. However your input contains 200000 tokens."
+    error_message = error_body["error"]["message"]
 
     class ContextLengthError(Exception):
         status_code = 400
-        body = {"error": {"code": 400, "message": error_message, "type": "BadRequestError"}}
+        body = error_body
 
     mock_inference_api.openai_chat_completion.side_effect = ContextLengthError("context length exceeded")
 
@@ -475,8 +496,9 @@ async def test_context_length_error_without_truncation_auto_does_not_drop_turns(
         result = await openai_responses_impl.create_openai_response(request)
         last_event = [chunk async for chunk in result][-1]
     else:
-        with pytest.raises(InvalidParameterError, match="maximum context length"):
+        with pytest.raises(InvalidParameterError, match="maximum context length") as exc_info:
             await openai_responses_impl.create_openai_response(request)
+        assert exc_info.value.status_code == 400
 
     mock_inference_api.openai_chat_completion.assert_called_once()
     assert len(mock_inference_api.openai_chat_completion.call_args.args[0].messages) == 3
