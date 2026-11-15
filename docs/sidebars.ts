@@ -145,27 +145,6 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'DatasetIO',
-          collapsed: false,
-          link: { type: 'doc', id: 'providers/datasetio/index' },
-          items: [
-            'providers/datasetio/inline_localfs',
-            'providers/datasetio/remote_huggingface',
-            'providers/datasetio/remote_nvidia'
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Eval',
-          collapsed: false,
-          link: { type: 'doc', id: 'providers/eval/index' },
-          items: [
-            'providers/eval/inline_builtin',
-            'providers/eval/remote_nvidia'
-          ],
-        },
-        {
-          type: 'category',
           label: 'File Processors',
           collapsed: false,
           link: { type: 'doc', id: 'providers/file_processors/index' },
@@ -298,7 +277,6 @@ const sidebars: SidebarsConfig = {
         'building_applications/agent_execution_loop',
         'building_applications/responses_vs_agents',
         'building_applications/tools',
-        'building_applications/evals',
         'building_applications/telemetry',
         'building_applications/playground',
         'building_applications/claude_code_integration',
