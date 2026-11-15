@@ -86,6 +86,7 @@ from ogx_api import (
     ToolGroups,
     ToolRuntime,
     VectorIO,
+    WebSearch,
     WebSearchToolTypes,
 )
 from ogx_api.inference import OpenAIChatCompletionRequestWithExtraBody, ServiceTier
@@ -139,6 +140,7 @@ class OpenAIResponsesImpl:
         files_api: Files,
         connectors_api: Connectors,
         skills_api: "Skills | None" = None,
+        web_search_api: WebSearch | None = None,
         moderation_headers: dict[str, str] | None = None,
         vector_stores_config: VectorStoresConfig | None = None,
         compaction_config=None,
@@ -158,10 +160,12 @@ class OpenAIResponsesImpl:
             tool_runtime_api=tool_runtime_api,
             vector_io_api=vector_io_api,
             vector_stores_config=vector_stores_config,
+            web_search_api=web_search_api,
         )
         self.prompts_api = prompts_api
         self.files_api = files_api
         self.connectors_api = connectors_api
+        self.web_search_api = web_search_api
 
         self.compaction_config = compaction_config or CompactionConfig()
         self.memory_config = memory_config or MemoryConfig()
@@ -948,15 +952,13 @@ class OpenAIResponsesImpl:
 
         # Resolve the web search tool here so a missing provider is a 400 before any stream starts.
         if request.tools and any(tool.type in WebSearchToolTypes for tool in request.tools):
-            try:
-                await self.tool_groups_api.get_tool("web_search")
-            except ValueError as exc:
+            if self.web_search_api is None:
                 raise InvalidParameterError(
                     "tools",
                     "web_search",
                     "Web search is not enabled on this server, so the web_search tool cannot be used. "
                     "Remove web_search from your request, or use a server with web search enabled.",
-                ) from exc
+                )
 
         if request.guardrails and not self.moderation_endpoint:
             raise ServiceNotEnabledError(
@@ -1380,6 +1382,7 @@ class OpenAIResponsesImpl:
                 vector_io_api=self.vector_io_api,
                 vector_stores_config=self.tool_executor.vector_stores_config,
                 mcp_session_manager=mcp_session_manager,
+                web_search_api=self.web_search_api,
             )
 
             orchestrator = StreamingResponseOrchestrator(

@@ -212,7 +212,22 @@ jobs:
           ANTHROPIC_API_KEY: ${{ matrix.config.setup == 'anthropic' && 'replay-mode-dummy-key' || '' }}
           META_API_KEY: ${{ matrix.config.setup == 'meta' && 'replay-mode-dummy-key' || '' }}
           DEEPSEEK_API_KEY: ${{ matrix.config.setup == 'deepseek' && 'replay-mode-dummy-key' || '' }}
-          TAVILY_SEARCH_API_KEY: ${{ secrets.TAVILY_SEARCH_API_KEY || 'replay-mode-dummy-key' }}
+          # Web search backends are only configured for their own web-search-* lane
+          # (the provider_id in the web-search.yaml config is env-gated on the key).
+          # The dummy value activates the provider in replay mode; the recorder
+          # serves the recorded search responses instead of calling the live API.
+          # The repo only provisions a TAVILY_SEARCH_API_KEY secret, so only the
+          # Tavily lane (plus the keyless placeholder lane, which needs no key) is
+          # in ci_matrix.json. To enable another lane: add its secret, uncomment
+          # its key here, record via record-integration-tests.yml, and re-add its
+          # entry to ci_matrix.json.
+          # BRAVE_SEARCH_API_KEY: ${{ matrix.config.setup == 'web-search-brave' && (secrets.BRAVE_SEARCH_API_KEY || 'replay-mode-dummy-key') || '' }}
+          # BING_API_KEY: ${{ matrix.config.setup == 'web-search-bing' && (secrets.BING_API_KEY || 'replay-mode-dummy-key') || '' }}
+          # EXA_API_KEY: ${{ matrix.config.setup == 'web-search-exa' && (secrets.EXA_API_KEY || 'replay-mode-dummy-key') || '' }}
+          # NIMBLE_API_KEY: ${{ matrix.config.setup == 'web-search-nimble' && (secrets.NIMBLE_API_KEY || 'replay-mode-dummy-key') || '' }}
+          # SERPLY_API_KEY: ${{ matrix.config.setup == 'web-search-serply' && (secrets.SERPLY_API_KEY || 'replay-mode-dummy-key') || '' }}
+          # SEARCHAPI_API_KEY: ${{ matrix.config.setup == 'web-search-searchapi' && (secrets.SEARCHAPI_API_KEY || 'replay-mode-dummy-key') || '' }}
+          TAVILY_SEARCH_API_KEY: ${{ matrix.config.setup == 'web-search-tavily' && (secrets.TAVILY_SEARCH_API_KEY || 'replay-mode-dummy-key') || '' }}
           TYPESAFE_API_KEY: replay-mode-dummy-key
           TS_CLIENT_PATH: ${{ steps.setup-ts-client.outputs.ts-client-path || '' }}
         with:

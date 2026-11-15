@@ -414,6 +414,102 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "judge_model": "typesafe/jev-latest",
         },
     ),
+    # Web search backend lanes for the web_search suite. Each targets exactly one
+    # backend of the ci-tests web-search.yaml config (the provider_id is env-gated on
+    # the backend's API key, which the workflow sets only for its own lane); the
+    # GPT model defaults match the gpt setup since the search calls are driven by
+    # OpenAI model tool calls. The placeholder lane is keyless: with no backend key
+    # set, resolution falls through to the placeholder backend.
+    #
+    # Only web-search-tavily and web-search-placeholder are in ci_matrix.json: the
+    # repo only provisions a TAVILY_SEARCH_API_KEY secret, and a lane without
+    # recordings would fail in replay mode. The other setups run locally with the
+    # corresponding key; to enable one in CI, add the repo secret, re-add the
+    # setup to ci_matrix.json, and re-enable its matrix entry and env key in the
+    # workflows (both have the lane commented out with notes).
+    "web-search-brave": Setup(
+        name="gpt",
+        description="Web search suite against the Brave backend (BRAVE_SEARCH_API_KEY)",
+        defaults={
+            "text_model": "openai/gpt-5-nano",
+            "vision_model": "openai/gpt-5-nano",
+            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_dimension": 1536,
+        },
+    ),
+    "web-search-bing": Setup(
+        name="gpt",
+        description="Web search suite against the Bing backend (BING_API_KEY)",
+        defaults={
+            "text_model": "openai/gpt-5-nano",
+            "vision_model": "openai/gpt-5-nano",
+            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_dimension": 1536,
+        },
+    ),
+    "web-search-exa": Setup(
+        name="gpt",
+        description="Web search suite against the Exa backend (EXA_API_KEY)",
+        defaults={
+            "text_model": "openai/gpt-5-nano",
+            "vision_model": "openai/gpt-5-nano",
+            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_dimension": 1536,
+        },
+    ),
+    "web-search-nimble": Setup(
+        name="gpt",
+        description="Web search suite against the Nimble backend (NIMBLE_API_KEY)",
+        defaults={
+            "text_model": "openai/gpt-5-nano",
+            "vision_model": "openai/gpt-5-nano",
+            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_dimension": 1536,
+        },
+    ),
+    "web-search-serply": Setup(
+        name="gpt",
+        description="Web search suite against the Serply backend (SERPLY_API_KEY)",
+        defaults={
+            "text_model": "openai/gpt-5-nano",
+            "vision_model": "openai/gpt-5-nano",
+            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_dimension": 1536,
+        },
+    ),
+    "web-search-searchapi": Setup(
+        name="gpt",
+        description="Web search suite against the SearchAPI backend (SEARCHAPI_API_KEY)",
+        defaults={
+            "text_model": "openai/gpt-5-nano",
+            "vision_model": "openai/gpt-5-nano",
+            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_dimension": 1536,
+        },
+    ),
+    "web-search-tavily": Setup(
+        name="gpt",
+        description="Web search suite against the Tavily backend (TAVILY_SEARCH_API_KEY)",
+        defaults={
+            "text_model": "openai/gpt-5-nano",
+            "vision_model": "openai/gpt-5-nano",
+            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_dimension": 1536,
+        },
+    ),
+    "web-search-placeholder": Setup(
+        name="gpt",
+        description=(
+            "Web search suite keyless: with no backend API key set, web search "
+            "resolution falls through to the placeholder backend"
+        ),
+        defaults={
+            "text_model": "openai/gpt-5-nano",
+            "vision_model": "openai/gpt-5-nano",
+            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_dimension": 1536,
+        },
+    ),
 }
 
 
@@ -431,6 +527,7 @@ base_roots = [
         "messages",
         "interactions",
         "connect_cli",
+        "web_search",
     )
 ]
 
@@ -468,6 +565,15 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         name="responses",
         roots=["tests/integration/responses"],
         default_setup="gpt",
+    ),
+    # Web search backend suite. Each web-search-* setup targets one search backend
+    # via the ci-tests web-search.yaml config (see the setups above); the default
+    # placeholder setup runs keyless against the placeholder backend, so the suite
+    # is always green even where no search API key is configured.
+    "web_search": Suite(
+        name="web_search",
+        roots=["tests/integration/web_search"],
+        default_setup="web-search-placeholder",
     ),
     "vision": Suite(
         name="vision",

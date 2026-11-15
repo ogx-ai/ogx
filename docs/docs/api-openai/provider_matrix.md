@@ -19,9 +19,9 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 112 | 112 | 0 | 86% |
+| azure | 108 | 108 | 0 | 85% |
 | ollama | 4 | 4 | 0 | 3% |
-| openai | 117 | 117 | 0 | 89% |
+| openai | 114 | 114 | 0 | 90% |
 | vllm | 3 | 3 | 0 | 2% |
 
 ## Provider Details
@@ -42,7 +42,6 @@ Models, endpoints, and versions used during test recordings.
 | include logprobs non streaming | ✅ | — | ⏭️ | — |
 | include logprobs streaming | ✅ | — | ⏭️ | — |
 | include logprobs with function tools | ✅ | — | ⏭️ | — |
-| include logprobs with web search | ✅ | — | ⏭️ | — |
 | non streaming basic | ✅ | — | ✅ | — |
 | non streaming image | ✅ | — | ✅ | — |
 | non streaming multi turn | ✅ | — | ✅ | — |
@@ -212,19 +211,16 @@ Models, endpoints, and versions used during test recordings.
 | max tool calls with function tools | ✅ | — | ✅ | — |
 | max tool calls with mcp tools | ✅ | — | ✅ | — |
 | mcp tool approval | ✅ | — | ✅ | — |
-| multi turn streaming web search | ✅ | — | ✅ | — |
 | non streaming custom tool | ✅ | — | ✅ | — |
 | non streaming file search | ✅ | — | ✅ | — |
 | non streaming file search empty vector store | ✅ | — | ✅ | — |
 | non streaming mcp tool | ✅ | — | ✅ | — |
 | non streaming multi turn tool execution | ✅ | — | ✅ | — |
-| non streaming web search | ✅ | — | ✅ | — |
 | parallel tool calls with function tools | ✅ | — | ✅ | — |
 | parallel tool calls with mcp tools | ✅ | — | ✅ | — |
 | sequential file search | ✅ | — | ✅ | — |
 | sequential mcp tool | ✅ | — | ✅ | — |
 | streaming multi turn tool execution | ✅ | — | ✅ | — |
-| streaming web search | ✅ | — | ✅ | — |
 
 ---
 

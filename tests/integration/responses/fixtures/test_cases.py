@@ -85,26 +85,6 @@ multi_turn_test_cases = [
     ),
 ]
 
-# Web search test cases
-web_search_test_cases = [
-    pytest.param(
-        ResponsesTestCase(
-            input="How many experts does the Llama 4 Maverick model have?",
-            tools=[{"type": "web_search", "search_context_size": "low"}],
-            expected="128",
-        ),
-        id="llama_experts",
-    ),
-    pytest.param(
-        ResponsesTestCase(
-            input="What is the latest version of Python?",
-            tools=[{"type": "web_search_2025_08_26"}],
-            expected="python",
-        ),
-        id="web_search_2025_08_26_type",
-    ),
-]
-
 # File search test cases
 file_search_test_cases = [
     pytest.param(

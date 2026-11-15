@@ -53,6 +53,7 @@ from ogx_api import (
     ToolRuntime,
     VectorIO,
     VectorStore,
+    WebSearch,
 )
 from ogx_api import (
     Providers as ProvidersAPI,
@@ -96,6 +97,8 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.messages: Messages,
         Api.interactions: Interactions,
         Api.skills: Skills,
+        Api.web_search: WebSearch,
+        Api.web_search_providers: WebSearch,
     }
 
     if external_apis:

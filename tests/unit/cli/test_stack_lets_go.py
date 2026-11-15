@@ -498,7 +498,7 @@ class TestAddFileSearchAndResponses:
         assert "nimble-search" not in web_search_providers
 
         # A real provider was added, so the placeholder must not be
-        provider_types = [p.provider_type for p in run_config.providers["tool_runtime"]]
+        provider_types = [p.provider_type for p in run_config.providers["web_search"]]
         assert "inline::placeholder" not in provider_types
 
     def test_falls_back_to_tavily_when_only_tavily_key_set(self, monkeypatch: pytest.MonkeyPatch):
@@ -600,7 +600,7 @@ class TestAddFileSearchAndResponses:
         assert has_placeholder
 
         # The placeholder provider should be registered so the web_search tool is hosted
-        provider_types = [p.provider_type for p in run_config.providers["tool_runtime"]]
+        provider_types = [p.provider_type for p in run_config.providers["web_search"]]
         assert "inline::placeholder" in provider_types
 
     def test_duplicate_providers_when_already_configured(self, monkeypatch: pytest.MonkeyPatch):
@@ -638,7 +638,7 @@ class TestAddFileSearchAndResponses:
             "remote::bing-search",
             "remote::nimble-search",
         }
-        web_search_providers = [p for p in config.providers["tool_runtime"] if p.provider_type in web_search_types]
+        web_search_providers = [p for p in config.providers["web_search"] if p.provider_type in web_search_types]
         assert len(web_search_providers) == 1
 
     def test_existing_provider_keeps_no_api_key_config(self):
@@ -662,9 +662,7 @@ class TestAddFileSearchAndResponses:
         with patch("ogx.cli.stack.lets_go.cprint"):
             _add_file_search_and_responses(config)
 
-        web_search_providers = [
-            p for p in config.providers["tool_runtime"] if p.provider_type == "remote::brave-search"
-        ]
+        web_search_providers = [p for p in config.providers["web_search"] if p.provider_type == "remote::brave-search"]
         assert len(web_search_providers) == 1
         assert web_search_providers[0].config["api_key"] == "existing-key"
         assert web_search_providers[0].config["max_results"] == 5
