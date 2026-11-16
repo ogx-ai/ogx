@@ -171,6 +171,7 @@ _GUARDRAIL_BATCH_CHARS = 200
 # Maps OpenAI Chat Completions error codes to Responses API error codes
 _RESPONSES_API_ERROR_CODES = {
     "invalid_base64": "invalid_base64_image",
+    "context_length_exceeded": "invalid_prompt",
 }
 
 _VALID_RESPONSE_ERROR_CODES = frozenset(
@@ -900,7 +901,7 @@ class StreamingResponseOrchestrator:
             # propagate so responses.create raises it instead of reporting a "server_error" failure.
             raise
         except Exception as exc:  # noqa: BLE001
-            if _is_context_length_error(exc):
+            if self.truncation == ResponseTruncation.auto and _is_context_length_error(exc):
                 # Context-length exceeded from provider - signal retry with truncation
                 logger.warning(
                     "Context length exceeded during response generation - will retry with truncated history",

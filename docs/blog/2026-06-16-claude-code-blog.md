@@ -13,7 +13,7 @@ Today we are happy to announce `ogx connect` support for Claude Code, allowing O
 Using OGX as your backend for Claude Code can provide some strong advantages over different backend options:
 
 - Control your budget by offering a mixture of different models from different sources, rather than relying on a single backend provider
-- Take advantage of Claude Code's mapping of models to seemlessly switch between self-hosted and SaaS options with no server interactions required
+- Take advantage of Claude Code's mapping of models to seamlessly switch between self-hosted and SaaS options with no server interactions required
 - Ensure redundancy by never being reliant on one SaaS backend, always keeping Claude Code running for users of your OGX server
 
 In this blog I am going to share how to start running Claude Code using models on an OGX server, using a remote server that has both self-hosted and SaaS models enabled.
