@@ -922,6 +922,24 @@ def _is_web_search_url(url: str) -> bool:
     return any(endpoint in url for endpoint in _WEB_SEARCH_ENDPOINTS)
 
 
+# Credential fields some backends carry in the request body: Tavily sends its
+# API key in the JSON body (the other backends use headers, which the recorder
+# neither hashes nor stores). The credential is config-derived, not part of
+# the query, so it is redacted before hashing and storing -- committed
+# recordings then never contain a live key, and the hash is independent of
+# which key is configured, so a recording made under one key replays under any.
+_WEB_SEARCH_CREDENTIAL_FIELDS = ("api_key",)
+
+
+def _redact_web_search_credentials(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return the web search payload without credential fields.
+
+    Returns a copy: the live request (built by the provider) still carries the
+    real key, so redaction only affects the hash and the stored recording.
+    """
+    return {field: value for field, value in payload.items() if field not in _WEB_SEARCH_CREDENTIAL_FIELDS}
+
+
 async def _record_replay_web_search(
     original, self, url_str: str, method: str, payload: dict[str, Any], **kwargs
 ) -> Any:
@@ -930,10 +948,15 @@ async def _record_replay_web_search(
     The request hash covers the URL, method, and exact payload (query, result
     limits, ...). That payload is deterministic per test because the model's
     tool-call arguments come from a replayed inference response.
+
+    Credential fields in the payload (Tavily's body-borne API key) are
+    redacted before hashing and storing, so recordings are key-independent
+    and never store a live key.
     """
     global _current_mode, _current_storage
 
-    request_hash = normalize_http_request(url_str, method, payload)
+    redacted_payload = _redact_web_search_credentials(payload)
+    request_hash = normalize_http_request(url_str, method, redacted_payload)
 
     if _current_mode in (APIRecordingMode.REPLAY, APIRecordingMode.RECORD_IF_MISSING):
         recording = _current_storage.find_recording(request_hash)
@@ -975,7 +998,7 @@ async def _record_replay_web_search(
                 "test_id": get_test_context(),
                 "url": url_str,
                 "method": method,
-                "payload": payload,
+                "payload": redacted_payload,
             },
             {
                 "status": response.status_code,
