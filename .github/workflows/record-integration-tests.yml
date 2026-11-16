@@ -389,7 +389,10 @@ jobs:
         with:
           python-version: "3.12"
           client-version: "latest"
-          setup: ${{ matrix.provider.setup }}
+          # The web-search-* lanes drive the model on the local Ollama server
+          # (setup defaults in tests/integration/suites.py), so they start the
+          # ollama test server like the ollama lanes do.
+          setup: ${{ startsWith(matrix.provider.setup, 'web-search-') && 'ollama' || matrix.provider.setup }}
           suite: ${{ inputs.suite || matrix.provider.suite }}
           inference-mode: ${{ inputs.inference_mode || 'record-if-missing' }}
 
@@ -421,9 +424,7 @@ jobs:
         if: steps.should_run.outputs.run == 'true'
         uses: ogx-ai/ogx/.github/actions/run-and-record-tests@d4ffee2179c7035d3e1377fc0468e83936feb11a
         env:
-          # The web-search-* lanes drive the model with OpenAI (gpt-5-nano) while
-          # the search itself goes to the lane's backend, so they need OPENAI_API_KEY too.
-          OPENAI_API_KEY: ${{ (matrix.provider.setup == 'gpt' || startsWith(matrix.provider.setup, 'web-search-')) && secrets.OPENAI_API_KEY || '' }}
+          OPENAI_API_KEY: ${{ matrix.provider.setup == 'gpt' && secrets.OPENAI_API_KEY || '' }}
           AZURE_API_KEY: ${{ matrix.provider.setup == 'azure' && secrets.AZURE_API_KEY || '' }}
           AZURE_API_BASE: ${{ matrix.provider.setup == 'azure' && secrets.AZURE_API_BASE || '' }}
           WATSONX_API_KEY: ${{ matrix.provider.setup == 'watsonx' && secrets.WATSONX_API_KEY || '' }}
