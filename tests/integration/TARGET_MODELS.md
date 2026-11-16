@@ -13,13 +13,13 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `base` | `ollama` |  |
 | `base` | `ollama-postgres` | server client only; Postgres store |
 | `vision` | `ollama-vision` | `test_vision_inference.py` only |
-| `responses` | `gpt` | `responses` only; Responses coverage: 114/127 (90%) |
-| `responses` | `azure` | `responses` only; Responses coverage: 108/127 (85%) |
-| `reasoning` | `gpt` | 4 roots; Responses coverage: 114/127 (90%) |
+| `responses` | `gpt` | `responses` only; Responses coverage: 114/128 (89%) |
+| `responses` | `azure` | `responses` only; Responses coverage: 109/128 (85%) |
+| `reasoning` | `gpt` | 4 roots; Responses coverage: 114/128 (89%) |
 | `inference` | `vllm` | `inference` only |
 | `inference` | `sglang` | `inference` only |
-| `reasoning` | `vllm` | 4 roots; Responses coverage: 3/127 (2%) |
-| `reasoning` | `ollama-reasoning` | 4 roots; Responses coverage: 4/127 (3%) |
+| `reasoning` | `vllm` | 4 roots; Responses coverage: 3/128 (2%) |
+| `reasoning` | `ollama-reasoning` | 4 roots; Responses coverage: 4/128 (3%) |
 | `messages` | `ollama` | `messages` only |
 | `messages` | `gpt` | `messages` only |
 | `messages` | `vllm` | `messages` only |
@@ -62,8 +62,8 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `typesafe` | — | — | — | — | `systemone` | — |
 | `vllm` | vllm/Qwen/Qwen3-0.6B | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `inference`, `reasoning`, `messages` | — |
 | `vllm-systemone` | — | — | — | — | `systemone` | — |
-| `web-search-placeholder` | openai/gpt-5-nano | openai/gpt-5-nano | openai/text-embedding-3-small | — | `web_search` | — |
-| `web-search-tavily` | openai/gpt-5-nano | openai/gpt-5-nano | openai/text-embedding-3-small | — | `web_search` | — |
+| `web-search-placeholder` | ollama/qwen3.5:0.8b | — | ollama/nomic-embed-text:v1.5 | — | `web_search` | — |
+| `web-search-tavily` | ollama/qwen3.5:0.8b | — | ollama/nomic-embed-text:v1.5 | — | `web_search` | — |
 
 ## Additional Named Setups
 
@@ -80,12 +80,12 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `together` | together/meta-llama/Llama-3.3-70B-Instruct-Turbo-Free | — | together/togethercomputer/m2-bert-80M-32k-retrieval | — | — | — |
 | `vertexai` | vertexai/publishers/google/models/gemini-2.0-flash | vertexai/publishers/google/models/gemini-2.0-flash | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | — | — |
 | `watsonx` | watsonx/meta-llama/llama-3-3-70b-instruct | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | — | — |
-| `web-search-bing` | openai/gpt-5-nano | openai/gpt-5-nano | openai/text-embedding-3-small | — | — | — |
-| `web-search-brave` | openai/gpt-5-nano | openai/gpt-5-nano | openai/text-embedding-3-small | — | — | — |
-| `web-search-exa` | openai/gpt-5-nano | openai/gpt-5-nano | openai/text-embedding-3-small | — | — | — |
-| `web-search-nimble` | openai/gpt-5-nano | openai/gpt-5-nano | openai/text-embedding-3-small | — | — | — |
-| `web-search-searchapi` | openai/gpt-5-nano | openai/gpt-5-nano | openai/text-embedding-3-small | — | — | — |
-| `web-search-serply` | openai/gpt-5-nano | openai/gpt-5-nano | openai/text-embedding-3-small | — | — | — |
+| `web-search-bing` | ollama/qwen3.5:0.8b | — | ollama/nomic-embed-text:v1.5 | — | — | — |
+| `web-search-brave` | ollama/qwen3.5:0.8b | — | ollama/nomic-embed-text:v1.5 | — | — | — |
+| `web-search-exa` | ollama/qwen3.5:0.8b | — | ollama/nomic-embed-text:v1.5 | — | — | — |
+| `web-search-nimble` | ollama/qwen3.5:0.8b | — | ollama/nomic-embed-text:v1.5 | — | — | — |
+| `web-search-searchapi` | ollama/qwen3.5:0.8b | — | ollama/nomic-embed-text:v1.5 | — | — | — |
+| `web-search-serply` | ollama/qwen3.5:0.8b | — | ollama/nomic-embed-text:v1.5 | — | — | — |
 
 ## Responses Coverage Summary
 
@@ -93,9 +93,9 @@ This section is derived from the same replay recordings used to generate `docs/d
 
 | Provider | Tested | Passing | Coverage |
 |----------|--------|---------|----------|
-| OpenAI | 114 | 114 | 90% |
-| Azure | 108 | 108 | 85% |
+| OpenAI | 114 | 114 | 89% |
+| Azure | 109 | 109 | 85% |
 | Ollama | 4 | 4 | 3% |
 | vLLM | 3 | 3 | 2% |
 
-Total Responses features counted: 127.
+Total Responses features counted: 128.

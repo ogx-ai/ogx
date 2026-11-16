@@ -416,10 +416,12 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
     ),
     # Web search backend lanes for the web_search suite. Each targets exactly one
     # backend of the ci-tests web-search.yaml config (the provider_id is env-gated on
-    # the backend's API key, which the workflow sets only for its own lane); the
-    # GPT model defaults match the gpt setup since the search calls are driven by
-    # OpenAI model tool calls. The placeholder lane is keyless: with no backend key
-    # set, resolution falls through to the placeholder backend.
+    # the backend's API key, which the workflow sets only for its own lane). The model
+    # defaults match the ollama setup: the search calls are driven by model tool calls
+    # against a local Ollama server (which the CI setup starts for these lanes), so the
+    # lanes need no external inference API key -- only the lane's search backend key.
+    # The placeholder lane is keyless: with no backend key set, resolution falls
+    # through to the placeholder backend.
     #
     # Only web-search-tavily and web-search-placeholder are in ci_matrix.json: the
     # repo only provisions a TAVILY_SEARCH_API_KEY secret, and a lane without
@@ -428,86 +430,94 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
     # setup to ci_matrix.json, and re-enable its matrix entry and env key in the
     # workflows (both have the lane commented out with notes).
     "web-search-brave": Setup(
-        name="gpt",
+        name="ollama",
         description="Web search suite against the Brave backend (BRAVE_SEARCH_API_KEY)",
+        env={
+            "OLLAMA_URL": "http://0.0.0.0:11434/v1",
+        },
         defaults={
-            "text_model": "openai/gpt-5-nano",
-            "vision_model": "openai/gpt-5-nano",
-            "embedding_model": "openai/text-embedding-3-small",
-            "embedding_dimension": 1536,
+            "text_model": "ollama/qwen3.5:0.8b",
+            "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
     "web-search-bing": Setup(
-        name="gpt",
+        name="ollama",
         description="Web search suite against the Bing backend (BING_API_KEY)",
+        env={
+            "OLLAMA_URL": "http://0.0.0.0:11434/v1",
+        },
         defaults={
-            "text_model": "openai/gpt-5-nano",
-            "vision_model": "openai/gpt-5-nano",
-            "embedding_model": "openai/text-embedding-3-small",
-            "embedding_dimension": 1536,
+            "text_model": "ollama/qwen3.5:0.8b",
+            "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
     "web-search-exa": Setup(
-        name="gpt",
+        name="ollama",
         description="Web search suite against the Exa backend (EXA_API_KEY)",
+        env={
+            "OLLAMA_URL": "http://0.0.0.0:11434/v1",
+        },
         defaults={
-            "text_model": "openai/gpt-5-nano",
-            "vision_model": "openai/gpt-5-nano",
-            "embedding_model": "openai/text-embedding-3-small",
-            "embedding_dimension": 1536,
+            "text_model": "ollama/qwen3.5:0.8b",
+            "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
     "web-search-nimble": Setup(
-        name="gpt",
+        name="ollama",
         description="Web search suite against the Nimble backend (NIMBLE_API_KEY)",
+        env={
+            "OLLAMA_URL": "http://0.0.0.0:11434/v1",
+        },
         defaults={
-            "text_model": "openai/gpt-5-nano",
-            "vision_model": "openai/gpt-5-nano",
-            "embedding_model": "openai/text-embedding-3-small",
-            "embedding_dimension": 1536,
+            "text_model": "ollama/qwen3.5:0.8b",
+            "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
     "web-search-serply": Setup(
-        name="gpt",
+        name="ollama",
         description="Web search suite against the Serply backend (SERPLY_API_KEY)",
+        env={
+            "OLLAMA_URL": "http://0.0.0.0:11434/v1",
+        },
         defaults={
-            "text_model": "openai/gpt-5-nano",
-            "vision_model": "openai/gpt-5-nano",
-            "embedding_model": "openai/text-embedding-3-small",
-            "embedding_dimension": 1536,
+            "text_model": "ollama/qwen3.5:0.8b",
+            "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
     "web-search-searchapi": Setup(
-        name="gpt",
+        name="ollama",
         description="Web search suite against the SearchAPI backend (SEARCHAPI_API_KEY)",
+        env={
+            "OLLAMA_URL": "http://0.0.0.0:11434/v1",
+        },
         defaults={
-            "text_model": "openai/gpt-5-nano",
-            "vision_model": "openai/gpt-5-nano",
-            "embedding_model": "openai/text-embedding-3-small",
-            "embedding_dimension": 1536,
+            "text_model": "ollama/qwen3.5:0.8b",
+            "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
     "web-search-tavily": Setup(
-        name="gpt",
+        name="ollama",
         description="Web search suite against the Tavily backend (TAVILY_SEARCH_API_KEY)",
+        env={
+            "OLLAMA_URL": "http://0.0.0.0:11434/v1",
+        },
         defaults={
-            "text_model": "openai/gpt-5-nano",
-            "vision_model": "openai/gpt-5-nano",
-            "embedding_model": "openai/text-embedding-3-small",
-            "embedding_dimension": 1536,
+            "text_model": "ollama/qwen3.5:0.8b",
+            "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
     "web-search-placeholder": Setup(
-        name="gpt",
+        name="ollama",
         description=(
             "Web search suite keyless: with no backend API key set, web search "
             "resolution falls through to the placeholder backend"
         ),
+        env={
+            "OLLAMA_URL": "http://0.0.0.0:11434/v1",
+        },
         defaults={
-            "text_model": "openai/gpt-5-nano",
-            "vision_model": "openai/gpt-5-nano",
-            "embedding_model": "openai/text-embedding-3-small",
-            "embedding_dimension": 1536,
+            "text_model": "ollama/qwen3.5:0.8b",
+            "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
 }
