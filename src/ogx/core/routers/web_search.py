@@ -66,7 +66,16 @@ class WebSearchRouter(WebSearch):
             )
             tool_invocations_total.add(1, {"tool_name": "web_search", "provider": resolved, "status": "success"})
             return result
-        except Exception:
+        except Exception as e:
+            # The caller (the responses tool executor) feeds this error back to the
+            # model as a tool message but never logs it, so without this a failing
+            # backend leaves no trace in the server log beyond a bare 'failed' status.
+            log.error(
+                "Failed to perform web search",
+                provider=resolved or str(provider_id),
+                query=query,
+                error=str(e),
+            )
             tool_invocations_total.add(
                 1, {"tool_name": "web_search", "provider": resolved or str(provider_id), "status": "error"}
             )

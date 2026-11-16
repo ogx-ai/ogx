@@ -46,7 +46,7 @@ class NimbleSearchWebSearchImpl(WebSearch, NeedsRequestProviderData):
     def _get_api_key(self) -> str | None:
         api_key = self.config.api_key.get_secret_value() if self.config.api_key else None
 
-        provider_data = self.get_request_provider_data()
+        provider_data = self.get_request_provider_data(quiet=True)
         if provider_data and provider_data.nimble_search_api_key:
             api_key = str(provider_data.nimble_search_api_key.get_secret_value())
 

@@ -4,6 +4,8 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import logging  # allow-direct-logging
+
 import pytest
 
 from ogx.core.routing_tables.web_search import WebSearchRoutingTable
@@ -166,6 +168,56 @@ async def test_real_backends_route_and_default_resolves_to_placeholder():
     brave_def = await router.tool_def("brave")
     assert brave_def.name == "web_search"
     assert brave_def.description == "Search the web for information"
+
+
+async def test_router_logs_backend_failure(caplog):
+    """A failing backend's error is logged, not just fed back to the model.
+
+    The responses tool executor forwards a search error to the model as a tool
+    message and marks the web_search_call 'failed' without logging anything, so
+    a broken backend (bad key, no egress) would leave no trace in the server log.
+    """
+    from ogx.core.routers.web_search import WebSearchRouter
+
+    class FailingProvider(FakeWebSearchProvider):
+        async def search(self, provider_id, query, **kwargs):
+            raise RuntimeError("Failed to query Fake Search: the API key is missing or invalid.")
+
+    failing = FailingProvider("fake", available=True)
+    router = WebSearchRouter(make_table({"fake": failing}))
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError, match="Failed to query Fake Search"):
+            await router.search(None, "query")
+
+    assert "Failed to perform web search" in caplog.text
+    assert "fake" in caplog.text
+    assert "the API key is missing or invalid" in caplog.text
+
+
+async def test_web_search_missing_per_request_key_is_quiet(caplog):
+    """A web search backend without a per-request key falls back to its config key
+    without logging an error: requests without provider data are the normal case.
+    The non-quiet path (other provider families) still logs."""
+    from ogx.core.request_headers import RequestProviderDataContext
+    from ogx.providers.registry.web_search import available_providers as ws_providers
+    from ogx.providers.remote.web_search.tavily_search import TavilySearchConfig
+    from ogx.providers.remote.web_search.tavily_search.tavily_search import TavilySearchWebSearchImpl
+
+    specs = {spec.provider_type: spec for spec in ws_providers()}
+    tavily = TavilySearchWebSearchImpl(TavilySearchConfig())
+    tavily.__provider_id__ = "tavily"
+    tavily.__provider_spec__ = specs["remote::tavily-search"]
+
+    with RequestProviderDataContext({"__test_id": "some-test::tavily-search"}):
+        with caplog.at_level(logging.ERROR):
+            # No config key either: the quiet lookup returns None and logs nothing
+            assert tavily._get_api_key() is None
+            assert "Error parsing provider data" not in caplog.text
+
+            # The same lookup without quiet still surfaces the validation failure
+            assert tavily.get_request_provider_data() is None
+            assert "Error parsing provider data" in caplog.text
 
 
 def test_legacy_tool_runtime_web_search_providers_translate_to_web_search():
