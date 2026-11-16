@@ -37,7 +37,7 @@ from ogx_api.openai_responses import (
     OpenAIResponseInputToolMCP,
     OpenAIResponseMessage,
     OpenAIResponseText,
-    OpenAIResponseTextFormat,
+    OpenAIResponseTextFormatText,
 )
 from ogx_api.responses.models import CreateResponseRequest
 from ogx_api.tools import ToolDef, ToolInvocationResult
@@ -386,7 +386,7 @@ async def test_create_openai_response_with_truncation_auto_streaming(
         created_at=1234567890,
         model=model,
         status="completed",
-        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        text=OpenAIResponseText(format=OpenAIResponseTextFormatText()),
         input=[OpenAIResponseMessage(id="msg-1", role="user", content="First question - old context")],
         output=[OpenAIResponseMessage(id="msg-2", role="assistant", content="First answer")],
         messages=[
@@ -490,7 +490,7 @@ async def test_create_openai_response_with_prompt_cache_key_and_previous_respons
         created_at=1234567890,
         model="meta-llama/Llama-3.1-8B-Instruct",
         status="completed",
-        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        text=OpenAIResponseText(format=OpenAIResponseTextFormatText()),
         input=[OpenAIResponseMessage(id="msg-1", role="user", content="First question")],
         output=[OpenAIResponseMessage(id="msg-2", role="assistant", content="First answer")],
         messages=[
