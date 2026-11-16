@@ -458,9 +458,12 @@ jobs:
           # Don't commit here - upload as artifacts instead
           skip-commit: 'true'
 
-      # Upload recordings as artifacts for the companion workflow to commit
+      # Upload recordings as artifacts for the companion workflow to commit.
+      # always() so a failed test phase still uploads the recordings the passed
+      # tests produced (a plain condition would skip the step after any failure,
+      # discarding them and forcing a full re-record on the next dispatch).
       - name: Upload recordings as artifacts
-        if: steps.should_run.outputs.run == 'true'
+        if: always() && steps.should_run.outputs.run == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: recordings-${{ matrix.provider.setup }}-${{ matrix.provider.suite }}-${{ github.run_id }}-${{ github.run_attempt || '1' }}
