@@ -51,6 +51,10 @@ def test_response_non_streaming_web_search(request, responses_client, text_model
         model=text_model_id,
         input=case.input,
         tools=case.tools,
+        # The lane model is a small local model that does not reliably choose
+        # the tool on its own; forcing the call keeps the record/replay chain
+        # deterministic (same pattern as the messages tool round-trip test).
+        tool_choice="required",
         stream=False,
     )
     assert len(response.output) > 1
@@ -72,6 +76,7 @@ def test_response_streaming_web_search(request, responses_client, text_model_id,
         model=text_model_id,
         input=case.input,
         tools=case.tools,
+        tool_choice="required",
         stream=True,
     )
 
@@ -102,11 +107,12 @@ def test_response_streaming_web_search(request, responses_client, text_model_id,
 def test_response_multi_turn_streaming_web_search(request, responses_client, text_model_id):
     """Test streaming web_search across multiple turns."""
     _require_backend(request)
-    # First turn with web search
+    # First turn with web search (tool call forced: see the non-streaming test)
     response = responses_client.responses.create(
         model=text_model_id,
         input="What is the latest Python version?",
         tools=[{"type": "web_search", "search_context_size": "low"}],
+        tool_choice="required",
         stream=True,
     )
 
@@ -161,6 +167,7 @@ def test_web_search_placeholder(responses_client, text_model_id):
         model=text_model_id,
         input="What is the latest version of Python?",
         tools=[{"type": "web_search"}],
+        tool_choice="required",
         stream=False,
     )
     assert response.status == "completed"
