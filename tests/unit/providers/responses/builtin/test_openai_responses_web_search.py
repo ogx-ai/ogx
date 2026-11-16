@@ -144,3 +144,31 @@ async def test_unregistered_web_search_tool_is_rejected_with_400_before_the_resp
     assert http_exc is not None
     assert http_exc.status_code == 400
     mock_inference_api.openai_chat_completion.assert_not_called()
+
+
+@pytest.mark.parametrize("stream", [True, False], ids=["streaming", "non_streaming"])
+@pytest.mark.parametrize("tool_type", WebSearchToolTypes)
+async def test_empty_web_search_router_is_rejected_with_400_before_the_response_starts(
+    openai_responses_impl, mock_inference_api, tool_type, stream
+):
+    # The web_search auto-router is wired in-process even when no web_search
+    # providers are configured, so the API is an empty router rather than None.
+    # The request must fail pre-stream instead of mid-stream when tool_def(None)
+    # is fetched after response.created has been sent.
+    openai_responses_impl.web_search_api.available_providers.return_value = []
+
+    with pytest.raises(InvalidParameterError, match="web_search") as exc_info:
+        await openai_responses_impl.create_openai_response(
+            CreateResponseRequest(
+                input="What is the capital of Ireland?",
+                model="meta-llama/Llama-3.1-8B-Instruct",
+                stream=stream,
+                store=False,
+                tools=[OpenAIResponseInputToolWebSearch(type=tool_type)],
+            )
+        )
+
+    http_exc = try_translate_to_http_exception(exc_info.value)
+    assert http_exc is not None
+    assert http_exc.status_code == 400
+    mock_inference_api.openai_chat_completion.assert_not_called()

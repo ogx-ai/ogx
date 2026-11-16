@@ -951,9 +951,11 @@ class OpenAIResponsesImpl:
                                 "Authorization credentials must be passed via the 'authorization' parameter, not 'headers'.",
                             )
 
-        # Resolve the web search tool here so a missing provider is a 400 before any stream starts.
+        # Resolve the web search tool here so a missing or provider-less web_search
+        # API is a 400 before any stream starts: the auto-router exists even when no
+        # web_search providers are configured, so a non-None API can still be empty.
         if request.tools and any(tool.type in WebSearchToolTypes for tool in request.tools):
-            if self.web_search_api is None:
+            if self.web_search_api is None or not self.web_search_api.available_providers():
                 raise InvalidParameterError(
                     "tools",
                     "web_search",
