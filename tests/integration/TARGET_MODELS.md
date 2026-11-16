@@ -16,6 +16,7 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `responses` | `gpt` | `responses` only; Responses coverage: 117/131 (89%) |
 | `responses` | `azure` | `responses` only; Responses coverage: 112/131 (85%) |
 | `reasoning` | `gpt` | 4 roots; Responses coverage: 117/131 (89%) |
+| `responses` | `watsonx` | `responses` only; Responses coverage: 48/131 (37%) |
 | `inference` | `vllm` | `inference` only |
 | `inference` | `sglang` | `inference` only |
 | `reasoning` | `vllm` | 4 roots; Responses coverage: 3/131 (2%) |
@@ -60,6 +61,7 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `typesafe` | — | — | — | — | `systemone` | — |
 | `vllm` | vllm/Qwen/Qwen3-0.6B | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `inference`, `reasoning`, `messages` | — |
 | `vllm-systemone` | — | — | — | — | `systemone` | — |
+| `watsonx` | watsonx/meta-llama/llama-3-3-70b-instruct | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `responses` | — |
 
 ## Additional Named Setups
 
@@ -75,7 +77,6 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `tgi` | tgi/Qwen/Qwen3-0.6B | — | — | — | — | — |
 | `together` | together/meta-llama/Llama-3.3-70B-Instruct-Turbo-Free | — | together/togethercomputer/m2-bert-80M-32k-retrieval | — | — | — |
 | `vertexai` | vertexai/publishers/google/models/gemini-2.0-flash | vertexai/publishers/google/models/gemini-2.0-flash | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | — | — |
-| `watsonx` | watsonx/meta-llama/llama-3-3-70b-instruct | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | — | — |
 
 ## Responses Coverage Summary
 
@@ -85,6 +86,7 @@ This section is derived from the same replay recordings used to generate `docs/d
 |----------|--------|---------|----------|
 | OpenAI | 117 | 117 | 89% |
 | Azure | 112 | 112 | 85% |
+| WatsonX | 48 | 48 | 37% |
 | Ollama | 4 | 4 | 3% |
 | vLLM | 3 | 3 | 2% |
 

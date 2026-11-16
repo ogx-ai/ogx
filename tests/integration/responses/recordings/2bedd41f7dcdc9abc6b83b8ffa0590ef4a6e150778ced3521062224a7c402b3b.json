@@ -1,0 +1,61 @@
+{
+  "test_id": "tests/integration/responses/test_responses_errors.py::TestResponsesAPIStreamingErrors::test_non_vision_model_returns_error_for_image_input[txt=watsonx/meta-llama/llama-3-3-70b-instruct]",
+  "request": {
+    "method": "POST",
+    "url": "https://us-south.ml.cloud.ibm.com/ml/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "meta-llama/llama-3-3-70b-instruct",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Describe this image"
+            },
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "https://example.com/test.jpg",
+                "detail": "auto"
+              }
+            }
+          ]
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "extra_body": {
+        "project_id": "1461945d-7925-4b82-b90b-ecd907a98d77"
+      }
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "meta-llama/llama-3-3-70b-instruct",
+    "provider_metadata": {
+      "openai_sdk_version": "2.5.0"
+    }
+  },
+  "response": {
+    "body": null,
+    "is_streaming": false,
+    "is_exception": true,
+    "exception_data": {
+      "category": "provider_sdk",
+      "provider": "openai",
+      "type": "BadRequestError",
+      "message": "Error code: 400 - {'message': \"400 Json document validation error: The value 'messages[].content.image_url.url' is not valid for the 'https://example.com/test.jpg' field. Reason: Url must be a base64 encoded image and cannot start with 'http'\", 'status': 400, 'error': {'message': \"Json document validation error: The value 'messages[].content.image_url.url' is not valid for the 'https://example.com/test.jpg' field. Reason: Url must be a base64 encoded image and cannot start with 'http'\", 'type': 'invalid_request_error', 'param': None, 'code': 'json_validation_error'}, 'code': 'json_validation_error', 'param': None, 'type': 'invalid_request_error', 'more_info': 'https://cloud.ibm.com/apidocs/watsonx-ai#chat-completions', 'trace': 'f8af660a143ffe26e1d53920e1399473'}",
+      "status_code": 400,
+      "body": {
+        "message": "Json document validation error: The value 'messages[].content.image_url.url' is not valid for the 'https://example.com/test.jpg' field. Reason: Url must be a base64 encoded image and cannot start with 'http'",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "json_validation_error"
+      }
+    },
+    "exception_message": "Error code: 400 - {'message': \"400 Json document validation error: The value 'messages[].content.image_url.url' is not valid for the 'https://example.com/test.jpg' field. Reason: Url must be a base64 encoded image and cannot start with 'http'\", 'status': 400, 'error': {'message': \"Json document validation error: The value 'messages[].content.image_url.url' is not valid for the 'https://example.com/test.jpg' field. Reason: Url must be a base64 encoded image and cannot start with 'http'\", 'type': 'invalid_request_error', 'param': None, 'code': 'json_validation_error'}, 'code': 'json_validation_error', 'param': None, 'type': 'invalid_request_error', 'more_info': 'https://cloud.ibm.com/apidocs/watsonx-ai#chat-completions', 'trace': 'f8af660a143ffe26e1d53920e1399473'}"
+  },
+  "id_normalization_mapping": {}
+}

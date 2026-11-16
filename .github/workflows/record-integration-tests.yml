@@ -36,7 +36,7 @@ on:
         description: 'Comma-separated list of providers to record'
         type: string
         required: false
-        default: 'gpt,azure,fireworks'
+        default: 'gpt,azure,watsonx,fireworks'
       suite:
         description: 'Test suite override (default: per-provider from matrix)'
         type: string
@@ -274,6 +274,8 @@ jobs:
           - setup: gpt
             suite: reasoning
           - setup: azure
+            suite: responses
+          - setup: watsonx
             suite: responses
           - setup: gemini
             suite: interactions
