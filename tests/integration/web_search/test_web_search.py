@@ -24,6 +24,12 @@ def _require_backend(request):
         pytest.skip("No web search backend API key is set; run under a web-search-* setup")
 
 
+# The questions must be unanswerable from the lane model's parametric
+# knowledge: the small local model skips the web_search call and answers
+# directly for questions it "knows" (the latest Python version failed this
+# way ~1 in 3 times in record runs), while it reliably searches for facts it
+# does not know (the expert-count questions called the tool 12/12 without
+# any forced tool choice).
 web_search_test_cases = [
     pytest.param(
         ResponsesTestCase(
@@ -35,9 +41,9 @@ web_search_test_cases = [
     ),
     pytest.param(
         ResponsesTestCase(
-            input="What is the latest version of Python?",
+            input="How many experts does the Llama 4 Scout model have?",
             tools=[{"type": "web_search_2025_08_26"}],
-            expected="python",
+            expected="16",
         ),
         id="web_search_2025_08_26_type",
     ),
@@ -51,10 +57,6 @@ def test_response_non_streaming_web_search(request, responses_client, text_model
         model=text_model_id,
         input=case.input,
         tools=case.tools,
-        # The lane model is a small local model that does not reliably choose
-        # the tool on its own; forcing the call keeps the record/replay chain
-        # deterministic (same pattern as the messages tool round-trip test).
-        tool_choice="required",
         stream=False,
     )
     assert len(response.output) > 1
@@ -76,7 +78,6 @@ def test_response_streaming_web_search(request, responses_client, text_model_id,
         model=text_model_id,
         input=case.input,
         tools=case.tools,
-        tool_choice="required",
         stream=True,
     )
 
@@ -107,12 +108,11 @@ def test_response_streaming_web_search(request, responses_client, text_model_id,
 def test_response_multi_turn_streaming_web_search(request, responses_client, text_model_id):
     """Test streaming web_search across multiple turns."""
     _require_backend(request)
-    # First turn with web search (tool call forced: see the non-streaming test)
+    # First turn with web search
     response = responses_client.responses.create(
         model=text_model_id,
-        input="What is the latest Python version?",
+        input="How many experts does the Llama 4 Maverick model have?",
         tools=[{"type": "web_search", "search_context_size": "low"}],
-        tool_choice="required",
         stream=True,
     )
 
@@ -122,7 +122,7 @@ def test_response_multi_turn_streaming_web_search(request, responses_client, tex
     validator.assert_basic_event_sequence()
     validator.assert_response_consistency()
     validator.assert_has_tool_calls()
-    validator.assert_content_quality("python")
+    validator.assert_content_quality("128")
     validator.assert_has_incremental_content()
 
     final_chunk = chunks[-1]
@@ -136,7 +136,7 @@ def test_response_multi_turn_streaming_web_search(request, responses_client, tex
     # Second turn.  No tools needed, should use context from first turn.
     response = responses_client.responses.create(
         model=text_model_id,
-        input="What are the key features of this version?",
+        input="How many of that model's parameters are active during inference?",
         previous_response_id=final_chunk.response.id,
         stream=True,
     )
@@ -165,9 +165,8 @@ def test_web_search_placeholder(responses_client, text_model_id):
 
     response = responses_client.responses.create(
         model=text_model_id,
-        input="What is the latest version of Python?",
+        input="How many experts does the Llama 4 Maverick model have?",
         tools=[{"type": "web_search"}],
-        tool_choice="required",
         stream=False,
     )
     assert response.status == "completed"
