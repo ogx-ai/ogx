@@ -587,11 +587,6 @@ from .vector_io import (
     VectorStoreTable,
 )
 from .vector_stores import VectorStore, VectorStoreInput
-from .web_search import (
-    WEB_SEARCH_PLACEHOLDER_PROVIDER_ID,
-    WebSearch,
-    WebSearchResult,
-)
 from .version import (
     OGX_API_V1,
     OGX_API_V1ALPHA,
@@ -1098,12 +1093,9 @@ __all__ = [
     "VectorStoreNotFoundError",
     "VectorStoresProtocolPrivate",
     "VersionInfo",
-    "WEB_SEARCH_PLACEHOLDER_PROVIDER_ID",
-    "WebSearch",
     "WebSearchActionFind",
     "WebSearchActionOpenPage",
     "WebSearchActionSearch",
-    "WebSearchResult",
     "WebSearchSource",
     "WebSearchToolTypes",
     "WeightedRanker",

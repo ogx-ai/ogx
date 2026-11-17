@@ -25,6 +25,7 @@ from ogx.core.jobs.runtime import get_job_runtime
 from ogx.core.store import DistributionRegistry
 from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.log import get_logger
+from ogx.web_search import WebSearch
 from ogx_api import (
     OGX_API_V1ALPHA,
     Admin,
@@ -53,7 +54,6 @@ from ogx_api import (
     ToolRuntime,
     VectorIO,
     VectorStore,
-    WebSearch,
 )
 from ogx_api import (
     Providers as ProvidersAPI,

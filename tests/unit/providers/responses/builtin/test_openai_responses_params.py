@@ -23,10 +23,10 @@ from ogx.providers.remote.inference.openai.openai import OpenAIInferenceAdapter
 from ogx.providers.utils.responses.responses_store import (
     _OpenAIResponseObjectWithInputAndMessages,
 )
+from ogx.web_search import WebSearchResult
 from ogx_api import (
     ResponseStreamOptions,
     ResponseTruncation,
-    WebSearchResult,
 )
 from ogx_api.inference import (
     OpenAIAssistantMessageParam,

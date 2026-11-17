@@ -38,6 +38,7 @@ from ogx.providers.utils.responses.responses_store import (
     _OpenAIResponseObjectWithInputAndMessages,
 )
 from ogx.providers.utils.tools.mcp import MCPSessionManager
+from ogx.web_search import WebSearch
 from ogx_api import (
     AddItemsRequest,
     ConflictError,
@@ -87,7 +88,6 @@ from ogx_api import (
     ToolGroups,
     ToolRuntime,
     VectorIO,
-    WebSearch,
     WebSearchToolTypes,
 )
 from ogx_api.inference import OpenAIChatCompletionRequestWithExtraBody, ServiceTier

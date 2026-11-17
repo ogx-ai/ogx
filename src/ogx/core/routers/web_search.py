@@ -9,7 +9,8 @@ from typing import Any
 
 from ogx.log import get_logger
 from ogx.telemetry.tool_runtime_metrics import tool_duration, tool_invocations_total
-from ogx_api import ToolDef, WebSearch, WebSearchResult
+from ogx.web_search import WebSearch, WebSearchResult
+from ogx_api import ToolDef
 
 from ..routing_tables.web_search import WebSearchRoutingTable
 

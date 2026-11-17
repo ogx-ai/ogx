@@ -6,7 +6,8 @@
 
 import pytest
 
-from ogx_api import InvalidParameterError, WebSearchResult, WebSearchSource
+from ogx.web_search import WebSearchResult
+from ogx_api import InvalidParameterError, WebSearchSource
 from ogx_api.openai_responses import (
     OpenAIResponseInputToolWebSearch,
     WebSearchToolTypes,

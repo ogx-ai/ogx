@@ -21,6 +21,7 @@ from ogx.core.storage.datatypes import (
     StorageConfig,
 )
 from ogx.log import LoggingConfig
+from ogx.web_search import WebSearch
 from ogx_api import (
     Api,
     ConnectorInput,
@@ -35,7 +36,6 @@ from ogx_api import (
     VectorIO,
     VectorStore,
     VectorStoreInput,
-    WebSearch,
 )
 
 OGX_BUILD_CONFIG_VERSION = 2

@@ -6,7 +6,8 @@
 
 from typing import Any
 
-from ogx_api import ToolDef, WebSearch, WebSearchResult
+from ogx.web_search import WebSearch, WebSearchResult
+from ogx_api import ToolDef
 
 from .config import PlaceholderWebSearchConfig
 

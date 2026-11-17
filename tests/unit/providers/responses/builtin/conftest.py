@@ -14,7 +14,8 @@ from ogx.providers.inline.responses.builtin.responses.openai_responses import (
 from ogx.providers.utils.responses.responses_store import (
     ResponsesStore,
 )
-from ogx_api import Connectors, WebSearch
+from ogx.web_search import WebSearch
+from ogx_api import Connectors
 from ogx_api.tools import ToolGroups, ToolRuntime
 
 

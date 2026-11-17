@@ -75,7 +75,6 @@ from ogx_api.validators import validate_embeddings_input_is_text
 from ogx_api.vector_io import VectorIO
 from ogx_api.vector_stores import VectorStore
 from ogx_api.version import OGX_API_V1, OGX_API_V1ALPHA, OGX_API_V1BETA
-from ogx_api.web_search import WebSearch
 
 __all__ = [
     # Core provider machinery
@@ -136,7 +135,6 @@ __all__ = [
     "ToolRuntime",
     "ToolStore",
     "VectorIO",
-    "WebSearch",
     # Shared resource/value types (canonical home in ogx_api.types)
     "Model",
     "ToolGroup",

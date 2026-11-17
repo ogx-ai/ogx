@@ -11,8 +11,8 @@ import pytest
 from ogx.core.routing_tables.web_search import WebSearchRoutingTable
 from ogx.providers.inline.web_search.placeholder import PlaceholderWebSearchConfig
 from ogx.providers.inline.web_search.placeholder.placeholder import PlaceholderWebSearchImpl
+from ogx.web_search import WebSearchResult
 from ogx_api import ToolDef
-from ogx_api.web_search import WebSearchResult
 
 
 class FakeWebSearchProvider:

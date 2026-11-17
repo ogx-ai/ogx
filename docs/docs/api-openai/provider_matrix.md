@@ -19,9 +19,9 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 107 | 107 | 0 | 85% |
+| azure | 109 | 109 | 0 | 85% |
 | ollama | 4 | 4 | 0 | 3% |
-| openai | 112 | 112 | 0 | 89% |
+| openai | 114 | 114 | 0 | 89% |
 | vllm | 3 | 3 | 0 | 2% |
 
 ## Provider Details
@@ -104,6 +104,8 @@ Models, endpoints, and versions used during test recordings.
 | cancel completed response fails | ✅ | — | ✅ | — |
 | incomplete details length | ✅ | — | ✅ | — |
 | incomplete details length streaming | ✅ | — | ✅ | — |
+| incomplete details max iterations exceeded | ✅ | — | ✅ | — |
+| incomplete details max iterations exceeded streaming | ✅ | — | ✅ | — |
 | incomplete details null when completed | ✅ | — | ✅ | — |
 | reasoning effort | ⏭️ | — | ✅ | — |
 | reasoning effort streaming | ⏭️ | — | ✅ | — |

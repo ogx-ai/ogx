@@ -15,11 +15,11 @@ from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCallFunction,
 )
 
+from ogx.web_search import WebSearchResult
 from ogx_api import (
     ContextLengthExceededError,
     InternalServerError,
     OpenAISystemMessageParam,
-    WebSearchResult,
 )
 from ogx_api.openai_responses import (
     OpenAIResponseError,

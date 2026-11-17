@@ -11,7 +11,8 @@ import httpx2
 
 from ogx.core.request_headers import NeedsRequestProviderData
 from ogx.providers.utils.common.web_search import check_search_response
-from ogx_api import ToolDef, WebSearch, WebSearchResult, WebSearchSource
+from ogx.web_search import WebSearch, WebSearchResult, WebSearchSource
+from ogx_api import ToolDef
 
 from .config import NimbleSearchConfig
 

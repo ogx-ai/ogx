@@ -21,6 +21,7 @@ from ogx.telemetry.constants import (
     RESPONSES_PARAMETER_USAGE_TOTAL,
     RESPONSES_TOOL_TYPES_USED_TOTAL,
 )
+from ogx.web_search import WebSearch
 from ogx_api import (
     CancelResponseRequest,
     CompactResponseRequest,
@@ -43,7 +44,6 @@ from ogx_api import (
     ToolGroups,
     ToolRuntime,
     VectorIO,
-    WebSearch,
     WebSearchToolTypes,
 )
 

@@ -20,9 +20,9 @@ from ogx.providers.inline.responses.builtin.responses.tool_executor import ToolE
 from ogx.providers.utils.responses.responses_store import (
     _OpenAIResponseObjectWithInputAndMessages,
 )
+from ogx.web_search import WebSearchResult
 from ogx_api import (
     GetConnectorRequest,
-    WebSearchResult,
 )
 from ogx_api.openai_responses import (
     OpenAIResponseInputToolFileSearch,

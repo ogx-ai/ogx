@@ -6,7 +6,8 @@
 
 from typing import Any, cast
 
-from ogx_api import ToolDef, WebSearch, WebSearchResult
+from ogx.web_search import WebSearch, WebSearchResult
+from ogx_api import ToolDef
 
 from .common import CommonRoutingTableImpl
 

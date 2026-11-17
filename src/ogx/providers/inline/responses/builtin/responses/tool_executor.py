@@ -14,6 +14,7 @@ from opentelemetry import trace
 
 from ogx.core.datatypes import VectorStoresConfig
 from ogx.log import get_logger
+from ogx.web_search import WebSearch
 from ogx_api import (
     ImageContentItem,
     InvalidParameterError,
@@ -43,7 +44,6 @@ from ogx_api import (
     ToolInvocationResult,
     ToolRuntime,
     VectorIO,
-    WebSearch,
     WebSearchActionSearch,
     WebSearchSource,
 )
