@@ -449,6 +449,9 @@ jobs:
           AWS_BEARER_TOKEN_BEDROCK: ${{ matrix.provider.setup == 'bedrock' && secrets.AWS_BEARER_TOKEN_BEDROCK || '' }}
           AWS_DEFAULT_REGION: ${{ matrix.provider.setup == 'bedrock' && 'us-west-2' || '' }}
         with:
+          # Lanes may pin a run config via `stack_config` in their matrix entry
+          # (e.g. the web-search-* lanes use the web-search.yaml run config); the
+          # default stays server:ci-tests.
           stack-config: ${{ matrix.provider.stack_config || 'server:ci-tests' }}
           setup: ${{ matrix.provider.setup }}
           inference-mode: ${{ inputs.inference_mode || 'record-if-missing' }}
