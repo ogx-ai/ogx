@@ -19,9 +19,9 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 108 | 108 | 0 | 85% |
+| azure | 107 | 107 | 0 | 85% |
 | ollama | 4 | 4 | 0 | 3% |
-| openai | 114 | 114 | 0 | 90% |
+| openai | 112 | 112 | 0 | 89% |
 | vllm | 3 | 3 | 0 | 2% |
 
 ## Provider Details
@@ -42,6 +42,7 @@ Models, endpoints, and versions used during test recordings.
 | include logprobs non streaming | ✅ | — | ⏭️ | — |
 | include logprobs streaming | ✅ | — | ⏭️ | — |
 | include logprobs with function tools | ✅ | — | ⏭️ | — |
+| include logprobs with web search | ✅ | — | ⏭️ | — |
 | non streaming basic | ✅ | — | ✅ | — |
 | non streaming image | ✅ | — | ✅ | — |
 | non streaming multi turn | ✅ | — | ✅ | — |
@@ -103,8 +104,6 @@ Models, endpoints, and versions used during test recordings.
 | cancel completed response fails | ✅ | — | ✅ | — |
 | incomplete details length | ✅ | — | ✅ | — |
 | incomplete details length streaming | ✅ | — | ✅ | — |
-| incomplete details max iterations exceeded | ✅ | — | ✅ | — |
-| incomplete details max iterations exceeded streaming | ✅ | — | ✅ | — |
 | incomplete details null when completed | ✅ | — | ✅ | — |
 | reasoning effort | ⏭️ | — | ✅ | — |
 | reasoning effort streaming | ⏭️ | — | ✅ | — |
