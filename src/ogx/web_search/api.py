@@ -10,12 +10,6 @@ from ogx_api.tools.models import ToolDef
 
 from .models import WebSearchResult
 
-# Provider id of the no-backend fallback. It is always available, so with the
-# default configuration (placeholder listed last) web search resolves to this
-# provider whenever no other provider is available, and clients that send the
-# web_search tool unconditionally degrade gracefully.
-WEB_SEARCH_PLACEHOLDER_PROVIDER_ID = "placeholder"
-
 
 class WebSearch(Protocol):
     """Web search API, routed by provider_id.
