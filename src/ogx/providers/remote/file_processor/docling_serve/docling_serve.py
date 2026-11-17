@@ -126,7 +126,7 @@ class DoclingServeFileProcessor:
                 continue
 
             chunk_window = str(raw_chunk.chunk_index)
-            chunk_id = generate_chunk_id(document_id, text, chunk_window)
+            chunk_id = generate_chunk_id(document_id=document_id, chunk_text=text, chunk_window=chunk_window)
             metadata: dict[str, Any] = {
                 "document_id": document_id,
                 **document_metadata,
@@ -291,7 +291,7 @@ class DoclingServeFileProcessor:
         if not md_content or not md_content.strip():
             return []
 
-        chunk_id = generate_chunk_id(document_id, md_content)
+        chunk_id = generate_chunk_id(document_id=document_id, chunk_text=md_content)
         return [
             Chunk(
                 content=md_content,
@@ -349,7 +349,7 @@ class DoclingServeFileProcessor:
         if not md_content or not md_content.strip():
             return []
 
-        chunk_id = generate_chunk_id(document_id, md_content)
+        chunk_id = generate_chunk_id(document_id=document_id, chunk_text=md_content)
         return [
             Chunk(
                 content=md_content,

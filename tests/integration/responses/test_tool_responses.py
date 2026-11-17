@@ -29,7 +29,6 @@ from .helpers import (
     assert_text_contains,
     new_vector_store,
     normalize_text,
-    setup_mcp_tools,
     skip_if_provider_is_vertexai,
     skip_if_text_model_prefix,
     upload_file,
@@ -225,13 +224,17 @@ def test_response_sequential_file_search(
     assert final_message[-1].status == "completed"
 
 
+# Port must match the connector URL configured in ci-tests/config.yaml
+CONNECTOR_MCP_PORT = 5199
+
+
 @pytest.mark.parametrize("case", mcp_tool_test_cases)
 def test_response_non_streaming_mcp_tool(responses_client, client_with_models, text_model_id, case, caplog):
     skip_if_provider_is_vertexai(
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
-    with make_mcp_server() as mcp_server_info:
-        tools = setup_mcp_tools(case.tools, mcp_server_info)
+    with make_mcp_server(port=CONNECTOR_MCP_PORT) as _mcp_server_info:
+        tools = case.tools
 
         response = responses_client.responses.create(
             model=text_model_id,
@@ -265,8 +268,8 @@ def test_response_non_streaming_mcp_tool(responses_client, client_with_models, t
         text_content = message.content[0].text
         assert_text_contains(text_content, "-100")
 
-    with make_mcp_server(required_auth_token="test-token") as mcp_server_info:
-        tools = setup_mcp_tools(case.tools, mcp_server_info)
+    with make_mcp_server(port=CONNECTOR_MCP_PORT, required_auth_token="test-token") as _mcp_server_info:
+        tools = [dict(t) for t in case.tools]
 
         exc_type = (
             AuthenticationRequiredError
@@ -301,8 +304,8 @@ def test_response_sequential_mcp_tool(responses_client, client_with_models, text
     skip_if_provider_is_vertexai(
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
-    with make_mcp_server() as mcp_server_info:
-        tools = setup_mcp_tools(case.tools, mcp_server_info)
+    with make_mcp_server(port=CONNECTOR_MCP_PORT) as _mcp_server_info:
+        tools = case.tools
 
         response = responses_client.responses.create(
             model=text_model_id,
@@ -348,10 +351,6 @@ def test_response_sequential_mcp_tool(responses_client, client_with_models, text
         assert normalize_text("boiling point") in normalize_text(text_content) or "-100" in text_content, (
             f"Expected 'boiling point' or tool result '-100' in response: {text_content}"
         )
-
-
-# Port must match the connector URL configured in ci-tests/config.yaml
-CONNECTOR_MCP_PORT = 5199
 
 
 def test_response_connector_resolution_mcp_tool(responses_client, client_with_models, text_model_id):
@@ -412,8 +411,8 @@ def test_response_mcp_tool_approval(responses_client, client_with_models, text_m
     skip_if_provider_is_vertexai(
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
-    with make_mcp_server() as mcp_server_info:
-        tools = setup_mcp_tools(case.tools, mcp_server_info)
+    with make_mcp_server(port=CONNECTOR_MCP_PORT) as _mcp_server_info:
+        tools = [dict(t) for t in case.tools]
         for tool in tools:
             tool["require_approval"] = "always"
 
@@ -821,8 +820,8 @@ def test_response_non_streaming_multi_turn_tool_execution(responses_client, clie
     skip_if_provider_is_vertexai(
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
-    with make_mcp_server(tools=dependency_tools()) as mcp_server_info:
-        tools = setup_mcp_tools(case.tools, mcp_server_info)
+    with make_mcp_server(port=CONNECTOR_MCP_PORT, tools=dependency_tools()) as _mcp_server_info:
+        tools = case.tools
 
         response = responses_client.responses.create(
             input=case.input,
@@ -868,8 +867,8 @@ def test_response_streaming_multi_turn_tool_execution(responses_client, client_w
     skip_if_provider_is_vertexai(
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
-    with make_mcp_server(tools=dependency_tools()) as mcp_server_info:
-        tools = setup_mcp_tools(case.tools, mcp_server_info)
+    with make_mcp_server(port=CONNECTOR_MCP_PORT, tools=dependency_tools()) as _mcp_server_info:
+        tools = case.tools
 
         stream = responses_client.responses.create(
             input=case.input,
@@ -1023,11 +1022,11 @@ def test_max_tool_calls_with_mcp_tools(responses_client, client_with_models, tex
     skip_if_provider_is_vertexai(
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
-    with make_mcp_server(tools=dependency_tools()) as mcp_server_info:
+    with make_mcp_server(port=CONNECTOR_MCP_PORT, tools=dependency_tools()) as _mcp_server_info:
         input = "Get the experiment ID for 'boiling_point' and get the user ID for 'charlie'"
         max_tool_calls = [1, 5]
         tools = [
-            {"type": "mcp", "server_label": "localmcp", "server_url": mcp_server_info["server_url"]},
+            {"type": "mcp", "server_label": "localmcp", "connector_id": "test-mcp-connector"},
         ]
 
         # First create a response that triggers mcp tools without max_tool_calls
@@ -1167,10 +1166,10 @@ def test_parallel_tool_calls_with_function_tools(responses_client, client_with_m
 def test_parallel_tool_calls_with_mcp_tools(responses_client, client_with_models, text_model_id):
     """Test handling of parallel_tool_calls with mcp tools in responses."""
     skip_if_provider_is_vertexai(client_with_models, text_model_id, "does not respect parallel_tool_calls=False")
-    with make_mcp_server(tools=dependency_tools()) as mcp_server_info:
+    with make_mcp_server(port=CONNECTOR_MCP_PORT, tools=dependency_tools()) as _mcp_server_info:
         input = "Get the experiment ID for 'boiling_point' and get the user ID for 'charlie'"
         tools = [
-            {"type": "mcp", "server_label": "localmcp", "server_url": mcp_server_info["server_url"]},
+            {"type": "mcp", "server_label": "localmcp", "connector_id": "test-mcp-connector"},
         ]
 
         # First create a response that triggers mcp tools with parallel_tool_calls enabled

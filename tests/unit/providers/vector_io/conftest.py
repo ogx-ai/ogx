@@ -53,11 +53,11 @@ def sample_chunks():
     sample = [
         Chunk(
             content=f"Sentence {i} from document {j}",
-            chunk_id=generate_chunk_id(f"document-{j}", f"Sentence {i} from document {j}"),
+            chunk_id=generate_chunk_id(document_id=f"document-{j}", chunk_text=f"Sentence {i} from document {j}"),
             metadata={"document_id": f"document-{j}"},
             chunk_metadata=ChunkMetadata(
                 document_id=f"document-{j}",
-                chunk_id=generate_chunk_id(f"document-{j}", f"Sentence {i} from document {j}"),
+                chunk_id=generate_chunk_id(document_id=f"document-{j}", chunk_text=f"Sentence {i} from document {j}"),
                 created_timestamp=int(time.time()),
                 updated_timestamp=int(time.time()),
                 content_token_count=5,

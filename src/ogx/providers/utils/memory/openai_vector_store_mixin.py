@@ -49,6 +49,7 @@ from ogx_api import (
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAICreateVectorStoreFileBatchRequestWithExtraBody,
     OpenAICreateVectorStoreRequestWithExtraBody,
+    OpenAIEmbeddingData,
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIFileObject,
     OpenAISearchVectorStoreRequest,
@@ -1429,17 +1430,22 @@ class OpenAIVectorStoreMixin(ABC):
 
                 # Generate embeddings for all chunks before insertion
 
-                # Prepare embedding request for all chunks
+                # Embed in batches: one embeddings request takes at most 2048 inputs,
+                # and a large file can produce more chunks than that.
                 chunk_texts = [interleaved_content_as_str(c.content) for c in chunks]
-                params = OpenAIEmbeddingsRequestWithExtraBody(
-                    model=embedding_model,
-                    input=chunk_texts,
-                    dimensions=embedding_dimension,
-                )
-                resp = await self.inference_api.openai_embeddings(params)
+                batch_size = self.vector_stores_config.file_ingestion_params.embedding_batch_size
+                embeddings_data: list[OpenAIEmbeddingData] = []
+                for start in range(0, len(chunk_texts), batch_size):
+                    params = OpenAIEmbeddingsRequestWithExtraBody(
+                        model=embedding_model,
+                        input=chunk_texts[start : start + batch_size],
+                        dimensions=embedding_dimension,
+                    )
+                    resp = await self.inference_api.openai_embeddings(params)
+                    embeddings_data.extend(resp.data)
 
                 # Create EmbeddedChunk instances from chunks and their embeddings
-                for chunk, data in zip(chunks, resp.data, strict=False):
+                for chunk, data in zip(chunks, embeddings_data, strict=False):
                     # Ensure embedding is a list of floats
                     embedding = data.embedding
                     if isinstance(embedding, str):

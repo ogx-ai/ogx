@@ -42,6 +42,7 @@ from ogx_api import (
     AddItemsRequest,
     ConflictError,
     Connectors,
+    ContextLengthExceededError,
     ConversationItem,
     CreateResponseRequest,
     Files,
@@ -1031,6 +1032,8 @@ class OpenAIResponsesImpl:
                         # context window exceeded). Use the error code to pick the right HTTP status.
                         if error_code == "invalid_prompt":
                             raise InvalidParameterError("model", request.model, error_message)
+                        if error_code == "context_length_exceeded":
+                            raise ContextLengthExceededError(error_message)
                         raise InternalServerError(error_message)
                     case _:
                         pass  # Other event types don't have .response
