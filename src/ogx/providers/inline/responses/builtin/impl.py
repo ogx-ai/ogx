@@ -21,6 +21,7 @@ from ogx.telemetry.constants import (
     RESPONSES_PARAMETER_USAGE_TOTAL,
     RESPONSES_TOOL_TYPES_USED_TOTAL,
 )
+from ogx.web_search import WebSearch
 from ogx_api import (
     CancelResponseRequest,
     CompactResponseRequest,
@@ -112,6 +113,7 @@ class BuiltinResponsesImpl(Responses):
         connectors_api: Connectors,
         policy: list[AccessRule],
         skills_api: "Skills | None" = None,
+        web_search_api: WebSearch | None = None,
     ):
         self.config = config
         self.inference_api = inference_api
@@ -125,6 +127,7 @@ class BuiltinResponsesImpl(Responses):
         self.policy = policy
         self.connectors_api = connectors_api
         self.skills_api = skills_api
+        self.web_search_api = web_search_api
 
     async def initialize(self) -> None:
         self.responses_store = ResponsesStore(self.config.persistence.responses, self.policy)
@@ -145,6 +148,7 @@ class BuiltinResponsesImpl(Responses):
             vector_stores_config=self.config.vector_stores_config,
             connectors_api=self.connectors_api,
             skills_api=self.skills_api,
+            web_search_api=self.web_search_api,
             compaction_config=self.config.compaction_config,
             memory_config=self.config.memory_config,
         )

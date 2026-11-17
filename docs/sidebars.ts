@@ -230,14 +230,23 @@ const sidebars: SidebarsConfig = {
           link: { type: 'doc', id: 'providers/tool_runtime/index' },
           items: [
             'providers/tool_runtime/inline_file-search',
-            'providers/tool_runtime/remote_bing-search',
-            'providers/tool_runtime/remote_brave-search',
-            'providers/tool_runtime/remote_exa-search',
-            'providers/tool_runtime/remote_model-context-protocol',
-            'providers/tool_runtime/remote_nimble-search',
-            'providers/tool_runtime/remote_searchapi-search',
-            'providers/tool_runtime/remote_serply-search',
-            'providers/tool_runtime/remote_tavily-search'
+            'providers/tool_runtime/remote_model-context-protocol'
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Web Search',
+          collapsed: false,
+          link: { type: 'doc', id: 'providers/web_search/index' },
+          items: [
+            'providers/web_search/inline_placeholder',
+            'providers/web_search/remote_bing-search',
+            'providers/web_search/remote_brave-search',
+            'providers/web_search/remote_exa-search',
+            'providers/web_search/remote_nimble-search',
+            'providers/web_search/remote_searchapi-search',
+            'providers/web_search/remote_serply-search',
+            'providers/web_search/remote_tavily-search'
           ],
         },
         {

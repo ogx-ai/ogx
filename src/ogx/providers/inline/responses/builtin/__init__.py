@@ -30,6 +30,7 @@ async def get_provider_impl(
         deps[Api.connectors],
         policy,
         skills_api=deps.get(Api.skills),
+        web_search_api=deps.get(Api.web_search),
     )
     await impl.initialize()
     return impl

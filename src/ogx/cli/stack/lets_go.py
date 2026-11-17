@@ -292,10 +292,10 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
         ("remote::exa-search", "exa-search"),
         ("remote::searchapi-search", "searchapi-search"),
     ]
-    tool_runtime_registry = get_provider_registry().get(Api.tool_runtime, {})
+    web_search_registry = get_provider_registry().get(Api.web_search, {})
     existing_web_search: set[str] = {
         p.provider_type
-        for p in run_config.providers["tool_runtime"]
+        for p in run_config.providers.get("web_search", [])
         if p.provider_type in {pt for pt, _ in _web_search_order}
     }
 
@@ -308,7 +308,7 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
             added = True
             continue
 
-        spec = tool_runtime_registry.get(provider_type)
+        spec = web_search_registry.get(provider_type)
         if spec is None:
             continue
 
@@ -332,7 +332,9 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
             cprint(f"  ✗ {provider_id} (web search) — failed to construct config with env vars", color="yellow")
             continue  # noqa S112 -- exception is reported to the user via cprint before continuing
 
-        run_config.providers["tool_runtime"].append(
+        if "web_search" not in run_config.providers:
+            run_config.providers["web_search"] = []
+        run_config.providers["web_search"].append(
             Provider(
                 provider_id=provider_id,
                 provider_type=provider_type,
@@ -343,7 +345,9 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
         added = True
 
     if not added:
-        run_config.providers["tool_runtime"].append(
+        if "web_search" not in run_config.providers:
+            run_config.providers["web_search"] = []
+        run_config.providers["web_search"].append(
             Provider(provider_id="placeholder", provider_type="inline::placeholder")
         )
         if all_env_vars:
@@ -354,6 +358,11 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
             )
         else:
             cprint("  ✓ web search (built-in placeholder)", color="yellow")
+
+    # Add web_search to APIs if not already present. A config without an `apis:` list
+    # serves every provider-backed API, so there is nothing to add there.
+    if run_config.apis is not None and "web_search" not in run_config.apis:
+        run_config.apis.append("web_search")
 
     cprint("  ✓ inline::file-search (built-in)", color="green")
     cprint("  ✓ inline::builtin responses (built-in)", color="green")

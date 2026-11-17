@@ -159,8 +159,10 @@ jobs:
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             PROVIDERS="$INPUT_PROVIDERS"
           else
-            # Auto-trigger on PR: only secret-free providers (no secrets exposed to any PR)
-            PROVIDERS="ollama,ollama-reasoning,ollama-systemone,llama-cpp-server,llama-cpp-server-systemone,vllm,vllm-systemone,sglang,sglang-systemone,text-embeddings-inference"
+            # Auto-trigger on PR: only secret-free providers (no secrets exposed to any PR).
+            # web-search-placeholder is keyless (the Tavily key is scoped to the
+            # web-search-tavily lane, which stays dispatch-only), so it runs here too.
+            PROVIDERS="ollama,ollama-reasoning,ollama-systemone,llama-cpp-server,llama-cpp-server-systemone,vllm,vllm-systemone,sglang,sglang-systemone,text-embeddings-inference,web-search-placeholder"
           fi
 
           {
@@ -296,11 +298,6 @@ jobs:
           # placeholder lanes are active; the commented lanes are re-enabled by
           # uncommenting the entry (and the matching env key below) once the
           # corresponding secret exists.
-          #
-          # Note: the web_search suite and the web-search.yaml run config land in
-          # main together with the web_search API work; dispatch these lanes with
-          # pr_number against that PR (or after it merges) so the checked-out
-          # code provides them.
           - setup: web-search-tavily
             suite: web_search
             stack_config: server:ci-tests::web-search.yaml
@@ -439,18 +436,17 @@ jobs:
           META_API_KEY: ${{ matrix.provider.setup == 'meta' && secrets.META_API_KEY || '' }}
           DEEPSEEK_API_KEY: ${{ matrix.provider.setup == 'deepseek' && secrets.DEEPSEEK_API_KEY || '' }}
           # Web search backends: each web-search-* lane records against its own
-          # backend, so the key is only set for that lane; the gpt/azure/vertexai
-          # lanes keep the key for the responses/messages suites, which still
-          # invoke web search through the tool runtime on main. Only Tavily is
-          # provisioned as a repo secret; the commented keys are re-enabled with
-          # their matrix entries.
+          # backend, so the key is only set for that lane. The responses/messages
+          # suites no longer invoke web search (they use the placeholder), so no
+          # other lane needs a search key. Only Tavily is provisioned as a repo
+          # secret; the commented keys are re-enabled with their matrix entries.
           # BRAVE_SEARCH_API_KEY: ${{ matrix.provider.setup == 'web-search-brave' && secrets.BRAVE_SEARCH_API_KEY || '' }}
           # BING_API_KEY: ${{ matrix.provider.setup == 'web-search-bing' && secrets.BING_API_KEY || '' }}
           # EXA_API_KEY: ${{ matrix.provider.setup == 'web-search-exa' && secrets.EXA_API_KEY || '' }}
           # NIMBLE_API_KEY: ${{ matrix.provider.setup == 'web-search-nimble' && secrets.NIMBLE_API_KEY || '' }}
           # SERPLY_API_KEY: ${{ matrix.provider.setup == 'web-search-serply' && secrets.SERPLY_API_KEY || '' }}
           # SEARCHAPI_API_KEY: ${{ matrix.provider.setup == 'web-search-searchapi' && secrets.SEARCHAPI_API_KEY || '' }}
-          TAVILY_SEARCH_API_KEY: ${{ (contains(fromJSON('["gpt","azure","vertexai"]'), matrix.provider.setup) || matrix.provider.setup == 'web-search-tavily') && secrets.TAVILY_SEARCH_API_KEY || '' }}
+          TAVILY_SEARCH_API_KEY: ${{ matrix.provider.setup == 'web-search-tavily' && secrets.TAVILY_SEARCH_API_KEY || '' }}
           AWS_BEDROCK_BEARER_TOKEN: ${{ matrix.provider.setup == 'bedrock' && secrets.AWS_BEARER_TOKEN_BEDROCK || '' }}
           AWS_BEARER_TOKEN_BEDROCK: ${{ matrix.provider.setup == 'bedrock' && secrets.AWS_BEARER_TOKEN_BEDROCK || '' }}
           AWS_DEFAULT_REGION: ${{ matrix.provider.setup == 'bedrock' && 'us-west-2' || '' }}

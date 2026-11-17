@@ -25,6 +25,7 @@ from ogx.core.jobs.runtime import get_job_runtime
 from ogx.core.store import DistributionRegistry
 from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.log import get_logger
+from ogx.web_search import WebSearch
 from ogx_api import (
     OGX_API_V1ALPHA,
     Admin,
@@ -96,6 +97,8 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.messages: Messages,
         Api.interactions: Interactions,
         Api.skills: Skills,
+        Api.web_search: WebSearch,
+        Api.web_search_providers: WebSearch,
     }
 
     if external_apis:

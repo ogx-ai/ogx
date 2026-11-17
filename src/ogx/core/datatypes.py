@@ -21,6 +21,7 @@ from ogx.core.storage.datatypes import (
     StorageConfig,
 )
 from ogx.log import LoggingConfig
+from ogx.web_search import WebSearch
 from ogx_api import (
     Api,
     ConnectorInput,
@@ -96,7 +97,7 @@ RoutableObjectWithProvider = Annotated[
     Field(discriminator="type"),
 ]
 
-RoutedProtocol = Inference | VectorIO | ToolRuntime
+RoutedProtocol = Inference | VectorIO | ToolRuntime | WebSearch
 
 
 # Example: /inference, /vector_io
@@ -996,6 +997,47 @@ can be instantiated multiple times (with different configs) if necessary.
             self.apis = [a for a in self.apis if a != "systemone"]
             if "inference" not in self.apis:
                 self.apis.append("inference")
+        return self
+
+    @model_validator(mode="after")
+    def normalize_tool_runtime_web_search_to_web_search(self) -> "StackConfig":
+        """Move web-search providers configured under ``tool_runtime`` to ``web_search``.
+
+        Web search backends were historically tool_runtime providers; they are now
+        first-class providers of the web_search API. Existing configs keep working:
+        at read time their entries are translated, and ``web_search`` is added to the
+        served APIs so the translated providers are reachable.
+        """
+        import warnings
+
+        legacy_types = {
+            "remote::brave-search",
+            "remote::bing-search",
+            "remote::tavily-search",
+            "remote::exa-search",
+            "remote::nimble-search",
+            "remote::serply-search",
+            "remote::searchapi-search",
+            "inline::placeholder",
+        }
+        tool_runtime_providers = self.providers.get("tool_runtime") or []
+        to_move = [p for p in tool_runtime_providers if p.provider_type in legacy_types]
+        if not to_move:
+            return self
+
+        warnings.warn(
+            "Web search providers configured under 'tool_runtime' are deprecated; "
+            "move them to a 'web_search' section. Affected provider types: "
+            + ", ".join(sorted({p.provider_type for p in to_move})),
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        self.providers["tool_runtime"] = [p for p in tool_runtime_providers if p.provider_type not in legacy_types]
+        self.providers["web_search"] = [*self.providers.get("web_search", []), *to_move]
+
+        if self.apis and "web_search" not in self.apis:
+            self.apis.append("web_search")
         return self
 
     @model_validator(mode="after")

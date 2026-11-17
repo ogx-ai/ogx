@@ -106,6 +106,7 @@ class Api(Enum, metaclass=DynamicApiMeta):
     :cvar interactions: Google Interactions API compatibility layer
     :cvar containers: Sandboxed container management for code/shell tool execution
     :cvar container_runtime: Backend runtime for containers (Docker/Podman, Kubernetes)
+    :cvar web_search: Web search backends, routed per request by provider_id
     :cvar skills: Versioned skill bundle management
     :cvar inspect: Built-in system inspection and introspection
     """
@@ -117,10 +118,12 @@ class Api(Enum, metaclass=DynamicApiMeta):
     vector_io = "vector_io"
     tool_runtime = "tool_runtime"
     container_runtime = "container_runtime"
+    web_search = "web_search"
 
     models = "models"
     vector_stores = "vector_stores"  # only used for routing table
     tool_groups = "tool_groups"
+    web_search_providers = "web_search_providers"  # only used for routing table
     files = "files"
     file_processors = "file_processors"
     prompts = "prompts"

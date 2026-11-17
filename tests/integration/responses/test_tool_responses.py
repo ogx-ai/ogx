@@ -23,7 +23,6 @@ from .fixtures.test_cases import (
     mcp_tool_test_cases,
     multi_turn_tool_execution_streaming_test_cases,
     multi_turn_tool_execution_test_cases,
-    web_search_test_cases,
 )
 from .helpers import (
     assert_text_contains,
@@ -42,28 +41,6 @@ def _skip_tool_tests_for_unreliable_tool_calling(request):
     """Skip all tool tests for models with unreliable tool calling."""
     skip_if_text_model_prefix(request, "watsonx/", "WatsonX does not reliably support tool calling")
     skip_if_text_model_prefix(request, "bedrock/", "Bedrock GPT-OSS does not reliably support tool calling")
-
-
-@pytest.mark.parametrize("case", web_search_test_cases)
-def test_response_non_streaming_web_search(responses_client, client_with_models, text_model_id, case):
-    skip_if_provider_is_vertexai(
-        client_with_models, text_model_id, "web search response content differs from expected keywords"
-    )
-    response = responses_client.responses.create(
-        model=text_model_id,
-        input=case.input,
-        tools=case.tools,
-        stream=False,
-    )
-    assert len(response.output) > 1
-    for output in response.output[:-1]:
-        assert output.type == "web_search_call"
-        assert output.status == "completed"
-    assert response.output[-1].type == "message"
-    assert response.output[-1].status == "completed"
-    assert response.output[-1].role == "assistant"
-    assert len(response.output[-1].content) > 0
-    assert_text_contains(response.output_text, case.expected)
 
 
 @pytest.mark.parametrize("case", file_search_test_cases)
@@ -1213,88 +1190,3 @@ def test_parallel_tool_calls_with_mcp_tools(responses_client, client_with_models
 
         # Verify we have a valid parallel_tool_calls field
         assert not response2.parallel_tool_calls
-
-
-@pytest.mark.parametrize("case", web_search_test_cases)
-def test_response_streaming_web_search(responses_client, client_with_models, text_model_id, case):
-    """Test streaming behavior with web_search tool."""
-    skip_if_provider_is_vertexai(
-        client_with_models, text_model_id, "web search response content differs from expected keywords"
-    )
-    response = responses_client.responses.create(
-        model=text_model_id,
-        input=case.input,
-        tools=case.tools,
-        stream=True,
-    )
-
-    chunks = list(response)
-    validator = StreamingValidator(chunks)
-    validator.assert_basic_event_sequence()
-    validator.assert_response_consistency()
-    validator.assert_has_tool_calls()
-    validator.assert_content_quality(case.expected)
-    validator.assert_has_incremental_content()
-
-    final_chunk = chunks[-1]
-    assert hasattr(final_chunk, "response")
-
-    assert hasattr(final_chunk.response, "output")
-    assert len(final_chunk.response.output) > 0
-
-    web_search_calls = [item for item in final_chunk.response.output if item.type == "web_search_call"]
-    assert len(web_search_calls) > 0, "Response should contain web_search_call"
-    assert web_search_calls[0].status == "completed"
-
-    messages = [item for item in final_chunk.response.output if item.type == "message"]
-    assert len(messages) > 0
-    assert messages[0].status == "completed"
-    assert messages[0].role == "assistant"
-
-
-def test_response_multi_turn_streaming_web_search(responses_client, client_with_models, text_model_id):
-    """Test streaming web_search across multiple turns."""
-    skip_if_provider_is_vertexai(client_with_models, text_model_id, "web search streaming lacks terminal event")
-    # First turn with web search
-    response = responses_client.responses.create(
-        model=text_model_id,
-        input="What is the latest Python version?",
-        tools=[{"type": "web_search", "search_context_size": "low"}],
-        stream=True,
-    )
-
-    chunks = list(response)
-    validator = StreamingValidator(chunks)
-
-    validator.assert_basic_event_sequence()
-    validator.assert_response_consistency()
-    validator.assert_has_tool_calls()
-    validator.assert_content_quality("python")
-    validator.assert_has_incremental_content()
-
-    final_chunk = chunks[-1]
-    assert hasattr(final_chunk, "response")
-    assert len(final_chunk.response.output) > 0
-
-    web_search_calls = [item for item in final_chunk.response.output if item.type == "web_search_call"]
-    assert len(web_search_calls) > 0, "First turn should contain web_search_call"
-    assert web_search_calls[0].status == "completed"
-
-    # Second turn.  No tools needed, should use context from first turn.
-    response = responses_client.responses.create(
-        model=text_model_id,
-        input="What are the key features of this version?",
-        previous_response_id=final_chunk.response.id,
-        stream=True,
-    )
-
-    chunks = list(response)
-    validator = StreamingValidator(chunks)
-
-    validator.assert_basic_event_sequence()
-    validator.assert_response_consistency()
-    validator.assert_has_incremental_content()
-
-    final_chunk = chunks[-1]
-    assert hasattr(final_chunk, "response")
-    assert len(final_chunk.response.output_text) > 0
