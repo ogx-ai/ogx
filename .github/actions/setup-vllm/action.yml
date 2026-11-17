@@ -24,6 +24,13 @@ runs:
         SUITE="${{ inputs.suite }}"
         mkdir -p "$WORKDIR"
 
+        # uv pip install run from inside the project applies the project's dependency
+        # constraints to the resolution even with --python pointing at this isolated
+        # venv, so a project pin (e.g. a transformers floor) can make the vLLM wheel
+        # unsatisfiable. Run from $WORKDIR, outside the project, so the server venv
+        # resolves its own self-consistent dependency set.
+        cd "$WORKDIR"
+
         # Fail loudly if an artifact on disk doesn't match its pinned sha256. TLS
         # protects the download in transit; pinning the content also catches a
         # swapped or re-uploaded asset.

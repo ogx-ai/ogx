@@ -43,7 +43,7 @@ def sample_chunks(embedding_dimension):
 
     embedded_chunks = []
     for _i, (content, doc_id) in enumerate(chunks_data):
-        chunk_id = generate_chunk_id(doc_id, content)
+        chunk_id = generate_chunk_id(document_id=doc_id, chunk_text=content)
         embedding = np.random.random(int(embedding_dimension)).tolist()  # Generate deterministic dummy embeddings
         embedded_chunk = EmbeddedChunk(
             content=content,
@@ -274,7 +274,7 @@ def test_query_returns_valid_object_when_identical_to_embedding_in_vdb(
 
     from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 
-    chunk_id = generate_chunk_id("doc1", "duplicate")
+    chunk_id = generate_chunk_id(document_id="doc1", chunk_text="duplicate")
     chunks_with_embeddings = [
         EmbeddedChunk(
             content="duplicate",

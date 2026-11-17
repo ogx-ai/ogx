@@ -1,0 +1,55 @@
+{
+  "test_id": "tests/integration/inference/test_provider_error_recording.py::TestProviderErrorRecording::test_provider_rejects_invalid_base64_image[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "What is in this image?"
+            },
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "data:image/png;base64,not_valid_base64_data!!!"
+              }
+            }
+          ]
+        }
+      ],
+      "max_tokens": 4096
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "Qwen/Qwen3-0.6B",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0",
+      "vllm_server_version": "0.32.0"
+    }
+  },
+  "response": {
+    "body": null,
+    "is_streaming": false,
+    "is_exception": true,
+    "exception_data": {
+      "category": "provider_sdk",
+      "provider": "openai",
+      "type": "BadRequestError",
+      "message": "Error code: 400 - {'error': {'message': 'Qwen/Qwen3-0.6B is not a multimodal model', 'type': 'BadRequestError', 'param': None, 'code': 400}}",
+      "status_code": 400,
+      "body": {
+        "message": "Qwen/Qwen3-0.6B is not a multimodal model",
+        "type": "BadRequestError",
+        "param": null,
+        "code": 400
+      }
+    },
+    "exception_message": "Error code: 400 - {'error': {'message': 'Qwen/Qwen3-0.6B is not a multimodal model', 'type': 'BadRequestError', 'param': None, 'code': 400}}"
+  },
+  "id_normalization_mapping": {}
+}

@@ -9,10 +9,7 @@ The `ogxai/distribution-watsonx` distribution consists of the following provider
 | API | Provider(s) |
 |-----|-------------|
 | responses | `inline::builtin` |
-| datasetio | `remote::huggingface`, `inline::localfs` |
-| eval | `inline::builtin` |
 | inference | `remote::watsonx`, `inline::sentence-transformers` |
-| scoring | `inline::basic`, `inline::llm-as-judge`, `inline::braintrust` |
 | tool_runtime | `remote::brave-search`, `remote::tavily-search`, `inline::file-search`, `remote::model-context-protocol` |
 | vector_io | `inline::faiss` |
 

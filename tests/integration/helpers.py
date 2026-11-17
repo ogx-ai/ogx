@@ -9,6 +9,8 @@ import unicodedata
 import pytest
 from ogx_client import OgxClient, ProviderInfo
 
+from ogx.providers.utils.inference.models_dev_registry import supports_reasoning
+
 
 def normalize_text(text: str) -> str:
     """Normalize Unicode text for comparison by stripping diacritical marks and non-ASCII characters.
@@ -58,3 +60,16 @@ def provider_from_model(client_with_models: OgxClient, model_id: str) -> Provide
     if provider_id not in providers:
         pytest.fail(f"Failed to resolve provider for model '{model_id}' — provider '{provider_id}' is not registered")
     return providers[provider_id]
+
+
+def is_ollama_reasoning_model(client: OgxClient, model_id: str) -> bool:
+    """Whether *model_id* is served by Ollama and reasons by default (e.g. qwen3.5:0.8b).
+
+    The legacy /v1/completions endpoint has no reasoning control at all, and
+    Ollama thinking models answer it with reasoning that exhausts the budget
+    and empty content. The completion tests raise the token budget for these
+    models (ollama_reasoning_completion_max_tokens); this check keeps them
+    running unchanged against non-reasoning Ollama models.
+    """
+    provider_type = provider_from_model(client, model_id).provider_type
+    return provider_type == "remote::ollama" and supports_reasoning(model_id)

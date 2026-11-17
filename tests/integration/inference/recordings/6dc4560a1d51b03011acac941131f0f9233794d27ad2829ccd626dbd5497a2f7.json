@@ -1,0 +1,81 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_with_tool_choice_none[txt=sglang/Qwen/Qwen3-0.6B-inference:chat_completion:tool_calling]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:30000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Pretend you are a weather assistant."
+        },
+        {
+          "role": "user",
+          "content": "What's the weather like in San Francisco, CA?"
+        }
+      ],
+      "max_tokens": 4096,
+      "stream": false,
+      "reasoning_effort": "low"
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "Qwen/Qwen3-0.6B",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-6dc4560a1d51",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "\n\nThe weather in San Francisco, CA, is generally mild and variable. You may experience rainfall, especially during the afternoon, and occasional thunderstorms. Temperatures range between **68\u00b0F (20\u00b0C)** and **85\u00b0F (30\u00b0C)**. For the latest updates, I recommend checking the National Weather Service or a local weather app.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "\nOkay, the user is asking about the weather in San Francisco, CA. I need to provide accurate and up-to-date information. Let me think. San Francisco has a mix of weather patterns. It's known for rainy days, especially in the afternoon, and sometimes thunderstorms. The temperature varies between 68\u00b0F and 85\u00b0F. I should mention the typical weather conditions. Also, it's important to note that the weather can change quickly, so the user might need the current forecast. I should keep the response clear and helpful, maybe include the current temperature and a brief summary. Let me check if there's any specific data I need, but since the user hasn't asked for specific details, a general answer should suffice.\n"
+            },
+            "matched_stop": 151645
+          }
+        ],
+        "created": 0,
+        "model": "Qwen/Qwen3-0.6B",
+        "object": "chat.completion",
+        "metadata": {
+          "weight_version": "default",
+          "weight_versions": [
+            {
+              "version": "default",
+              "start": 0,
+              "end": 225
+            }
+          ]
+        },
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 225,
+          "prompt_tokens": 33,
+          "total_tokens": 258,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "reasoning_tokens": 152
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -17,7 +17,7 @@ from starlette.testclient import TestClient
 from ogx.core.server.fastapi_router_registry import build_fastapi_router
 from ogx.core.server.server import global_exception_handler
 from ogx.telemetry.constants import RESPONSES_PARAMETER_USAGE_TOTAL
-from ogx_api import Api, Responses
+from ogx_api import Api, ContextLengthExceededError, Responses
 from ogx_api.openai_responses import (
     ListOpenAIResponseInputItem,
     ListOpenAIResponseObject,
@@ -117,7 +117,25 @@ def test_create_response_maps_value_error_to_400():
     resp = client.post("/v1/responses", json={"input": "hi", "model": "test", "stream": False})
 
     assert resp.status_code == 400
-    assert resp.json()["detail"] == "not found"
+    assert resp.json()["error"]["message"] == "not found"
+
+
+def test_create_response_maps_context_length_to_400_with_code():
+    """A prompt over the model's window is the caller's to fix: 400, with OpenAI's error code."""
+    app = FastAPI()
+    app.add_exception_handler(Exception, global_exception_handler)
+    impl = AsyncMock(spec=Responses)
+    impl.create_openai_response.side_effect = ContextLengthExceededError("too long")
+
+    router = build_fastapi_router(Api.responses, impl)
+    assert router is not None
+    app.include_router(router)
+
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.post("/v1/responses", json={"input": "hi", "model": "test", "stream": False})
+
+    assert resp.status_code == 400
+    assert resp.json()["error"] == {"message": "too long", "code": "context_length_exceeded"}
 
 
 async def test_create_response_returns_json_for_non_streaming():
@@ -335,7 +353,7 @@ def test_get_response_maps_value_error_to_400():
     resp = client.get("/v1/responses/nonexistent")
 
     assert resp.status_code == 400
-    assert "not found" in resp.json()["detail"].lower()
+    assert "not found" in resp.json()["error"]["message"].lower()
 
 
 async def test_list_responses_returns_list():
@@ -441,7 +459,7 @@ def test_delete_response_maps_value_error_to_400():
     resp = client.delete("/v1/responses/nonexistent")
 
     assert resp.status_code == 400
-    assert "not found" in resp.json()["detail"].lower()
+    assert "not found" in resp.json()["error"]["message"].lower()
 
 
 def test_openapi_create_response_advertises_form_urlencoded_request_body():
@@ -702,7 +720,7 @@ def test_exception_translating_route_converts_value_error_to_400():
 
     assert resp.status_code == 400
     assert resp.headers["content-type"] == "application/json"
-    assert resp.json()["detail"] == "bad input value"
+    assert resp.json()["error"]["message"] == "bad input value"
 
 
 def test_unknown_exception_propagates_to_global_handler():
@@ -752,7 +770,7 @@ def test_consecutive_value_errors_keep_connection_alive():
     # Second request on the same connection — must NOT get a connection error
     resp2 = client.post("/v1/responses", json={"input": "hi", "model": "test", "stream": False})
     assert resp2.status_code == 400
-    assert resp2.json()["detail"] == "bad request"
+    assert resp2.json()["error"]["message"] == "bad request"
 
 
 def test_parameter_usage_records_only_explicitly_provided_params():

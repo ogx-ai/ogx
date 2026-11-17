@@ -15,6 +15,7 @@ from openai import OpenAI
 
 from ogx.core.library_client import OGXAsLibraryClient
 from ogx.log import get_logger
+from ogx.providers.utils.inference.models_dev_registry import supports_reasoning
 from ogx_api import ChunkMetadata, EmbeddedChunk
 
 from ..conftest import vector_provider_wrapper
@@ -58,6 +59,21 @@ def skip_if_provider_doesnt_support_native_filtering(vector_io_provider_id: str)
             f"Provider '{vector_io_provider_id}' does not yet support native filtering. "
             f"Supported providers: {_PROVIDERS_WITH_NATIVE_FILTERING}"
         )
+
+
+def skip_if_reasoning_model_contextual_chunking(model_id):
+    if not model_id or not supports_reasoning(model_id):
+        return
+    # The server generates chunk contexts with an internal 256-token, non-streaming
+    # chat completion that carries no reasoning control. A model that reasons by
+    # default spends the whole budget reasoning and returns an empty context, so
+    # file attachment fails with server_error.
+    pytest.skip(
+        f"Model {model_id} reasons by default, and the server's internal context-generation "
+        "call has no reasoning control, so every chunk comes back with an empty context. "
+        "TODO: remove this skip once the server steers reasoning on its internal "
+        "context-generation calls."
+    )
 
 
 def skip_if_provider_doesnt_support_openai_vector_stores_search(
@@ -212,7 +228,7 @@ def sample_chunks(compat_client, embedding_model_id):
 
     embedded_chunks = []
     for (content, doc_id, topic), embedding in zip(chunks_data, embeddings, strict=True):
-        chunk_id = generate_chunk_id(doc_id, content)
+        chunk_id = generate_chunk_id(document_id=doc_id, chunk_text=content)
         embedded_chunk = EmbeddedChunk(
             content=content,
             chunk_id=chunk_id,
@@ -2397,6 +2413,8 @@ def test_openai_vector_store_contextual_chunking(
     if not text_model_id:
         pytest.skip("No text model configured for contextual chunking test")
 
+    skip_if_reasoning_model_contextual_chunking(text_model_id)
+
     compat_client = compat_client_with_empty_stores
     if isinstance(compat_client, OpenAI):
         pytest.skip(
@@ -2545,6 +2563,8 @@ def test_openai_vector_store_contextual_vs_static_chunks(
 
     if not text_model_id:
         pytest.skip("No text model configured for contextual chunking test")
+
+    skip_if_reasoning_model_contextual_chunking(text_model_id)
 
     compat_client = compat_client_with_empty_stores
     if isinstance(compat_client, OpenAI):

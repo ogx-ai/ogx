@@ -17,9 +17,9 @@ __all__ = [
     "new_vector_store",
     "provider_from_model",
     "skip_if_provider_is_vertexai",
+    "skip_if_text_model_prefix",
     "upload_file",
     "wait_for_file_attachment",
-    "setup_mcp_tools",
     "extract_text_content",
     "langchain_chat",
 ]
@@ -32,6 +32,31 @@ def skip_if_provider_is_vertexai(client_with_models, model_id, reason=""):
         if reason:
             msg += f": {reason}"
         pytest.skip(msg)
+
+
+def is_gpt_5_nano(model_id) -> bool:
+    return bool(model_id) and model_id.rsplit("/", 1)[-1] == "gpt-5-nano"
+
+
+# gpt-5-nano rejects the logprobs and top_p parameters in chat completions
+# ("You are not allowed to request logprobs from this model" / "Unsupported
+# parameter: 'top_p'"), so tests exercising those parameters skip for it.
+def skip_if_gpt_nano_limited_params(model_id, param):
+    if is_gpt_5_nano(model_id):
+        pytest.skip(f"Model {model_id} does not support {param}.")
+
+
+def skip_if_text_model_prefix(request, prefix, reason):
+    """Skip the test when the text model ID starts with the given provider prefix.
+
+    Intended for module-level autouse fixtures that exclude a whole file for
+    models that cannot reliably run a category of tests (e.g. WatsonX and
+    Bedrock GPT-OSS tool calling).
+    """
+    if "text_model_id" in request.fixturenames:
+        text_model_id = request.getfixturevalue("text_model_id")
+        if text_model_id and text_model_id.startswith(prefix):
+            pytest.skip(reason)
 
 
 def new_vector_store(openai_client, name, embedding_model, embedding_dimension):
@@ -80,19 +105,6 @@ def wait_for_file_attachment(compat_client, vector_store_id, file_id):
     assert file_attach_response.status == "completed", f"Expected file to be attached, got {file_attach_response}"
     assert not file_attach_response.last_error
     return file_attach_response
-
-
-def setup_mcp_tools(tools, mcp_server_info):
-    """Replace placeholder MCP server URLs with actual server info."""
-    # Create a deep copy to avoid modifying the original test case
-    import copy
-
-    tools_copy = copy.deepcopy(tools)
-
-    for tool in tools_copy:
-        if tool["type"] == "mcp" and tool["server_url"] == "<FILLED_BY_TEST_RUNNER>":
-            tool["server_url"] = mcp_server_info["server_url"]
-    return tools_copy
 
 
 def extract_text_content(content: str | list[str] | list[dict]):

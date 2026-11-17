@@ -48,7 +48,7 @@ External Service or Local Computation
 
 ### Detailed Flow Example: Chat Completion
 
-1. Client sends `POST /v1/chat/completions` with `model: "ollama/llama3.2:3b-instruct-fp16"`.
+1. Client sends `POST /v1/chat/completions` with `model: "ollama/qwen3.5:0.8b"`.
 2. `server.py` dispatches to the inference FastAPI router.
 3. The `InferenceRouter` (`core/routers/inference.py`) calls `routing_table.get_provider_impl(model_id)`.
 4. `CommonRoutingTableImpl` looks up the model in `DistributionRegistry`, finds it belongs to provider `ollama`.

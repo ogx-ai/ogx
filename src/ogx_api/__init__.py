@@ -97,6 +97,7 @@ from .common.errors import (
     ConnectorToolNotFoundError,
     ConversationItemNotFoundError,
     ConversationNotFoundError,
+    ContextLengthExceededError,
     InternalServerError,
     InvalidParameterError,
     PromptNotFoundError,
@@ -419,6 +420,7 @@ from .openai_responses import (
     OpenAIResponseInputToolFileSearch,
     OpenAIResponseInputToolFunction,
     OpenAIResponseInputToolMCP,
+    OpenAIResponseInputToolNamespace,
     OpenAIResponseInputToolWebSearch,
     WebSearchFilters,
     WebSearchUserLocation,
@@ -745,6 +747,7 @@ __all__ = [
     "InsertChunksRequest",
     "Inspect",
     "InspectProviderRequest",
+    "ContextLengthExceededError",
     "InternalServerError",
     "Admin",
     "Int4QuantizationConfig",
@@ -891,6 +894,7 @@ __all__ = [
     "OpenAIResponseInputToolFileSearch",
     "OpenAIResponseInputToolFunction",
     "OpenAIResponseInputToolMCP",
+    "OpenAIResponseInputToolNamespace",
     "OpenAIResponseInputToolWebSearch",
     "WebSearchFilters",
     "WebSearchUserLocation",
@@ -1089,7 +1093,6 @@ __all__ = [
     "VectorStoreNotFoundError",
     "VectorStoresProtocolPrivate",
     "VersionInfo",
-    "ViolationLevel",
     "WebSearchActionFind",
     "WebSearchActionOpenPage",
     "WebSearchActionSearch",
@@ -1123,6 +1126,4 @@ __all__ = [
     "AnthropicUsage",
     # Validators
     "validate_embeddings_input_is_text",
-    # helpers
-    "remove_null_from_anyof",
 ]

@@ -285,6 +285,11 @@ providers:
     config:
       api_key: ${env.SERPLY_API_KEY:=}
       max_results: 3
+  - provider_id: searchapi-search
+    provider_type: remote::searchapi-search
+    config:
+      api_key: ${env.SEARCHAPI_API_KEY:=}
+      max_results: 3
   - provider_id: file-search
     provider_type: inline::file-search
   - provider_id: model-context-protocol
@@ -425,6 +430,7 @@ vector_stores:
   file_ingestion_params:
     default_chunk_size_tokens: 512
     default_chunk_overlap_tokens: 128
+    embedding_batch_size: 256
   chunk_retrieval_params:
     chunk_multiplier: 5
     max_tokens_in_context: 4000
