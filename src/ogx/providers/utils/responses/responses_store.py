@@ -752,9 +752,10 @@ class ResponsesStore:
 
         items = items[start_index:end_index]
 
-        # Apply limit
+        # Apply limit. A `before` cursor asks for the page immediately preceding it,
+        # so keep the items closest to the cursor rather than the head of the list.
         if limit is not None:
-            items = items[:limit]
+            items = items[-limit:] if before and limit > 0 else items[:limit]
 
         items = _apply_include_filter(items, include)
 
