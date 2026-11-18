@@ -91,6 +91,13 @@ Line three."""
         assert "Line one." in manifest.instructions
         assert "Line three." in manifest.instructions
 
+    def test_utf8_bom_before_frontmatter(self):
+        content = "\ufeff---\nname: bom-skill\ndescription: Saved with a BOM\n---\nInstructions."
+        manifest = parse_skill_manifest(content)
+        assert manifest.name == "bom-skill"
+        assert manifest.description == "Saved with a BOM"
+        assert manifest.instructions == "Instructions."
+
     @pytest.mark.parametrize(
         "frontmatter",
         [
