@@ -248,11 +248,6 @@ def _add_responses_and_web_search(run_config: StackConfig) -> None:
 
     These are only added after confirming an embedding model is available.
     """
-    # Add tool_runtime to APIs if not already present. A config without an `apis:` list
-    # serves every provider-backed API, so there is nothing to add there.
-    if run_config.apis is not None and "tool_runtime" not in run_config.apis:
-        run_config.apis.append("tool_runtime")
-
     # Add responses API with builtin provider
     if "responses" not in run_config.providers:
         run_config.providers["responses"] = []

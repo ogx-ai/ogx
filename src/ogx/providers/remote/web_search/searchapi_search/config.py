@@ -9,13 +9,13 @@ from typing import Any
 
 from pydantic import Field, SecretStr, model_validator
 
-from ogx.providers.utils.common.http import BaseToolRuntimeConfig
+from ogx.providers.utils.common.http import BaseWebSearchConfig
 
 # One Google results page; the Google engine behind SearchApi caps `num` at 10.
 MAX_RESULTS_CEILING = 10
 
 
-class SearchApiSearchConfig(BaseToolRuntimeConfig):
+class SearchApiSearchConfig(BaseWebSearchConfig):
     """Configuration for the SearchApi Search web search backend."""
 
     api_key: SecretStr | None = Field(

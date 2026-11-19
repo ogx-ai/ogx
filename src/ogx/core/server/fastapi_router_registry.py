@@ -32,7 +32,6 @@ logger = get_logger(__name__, category="core")
 # Api enum values that don't match their package name in ogx_api
 _API_TO_PACKAGE: dict[str, str] = {
     "inspect": "inspect_api",
-    "tool_groups": "tools",
 }
 
 
@@ -41,7 +40,7 @@ def _discover_router_factories() -> dict[str, Callable[[Any], APIRouter]]:
 
     For each Api enum value, try to import
     `ogx_api.<package>.fastapi_routes.create_router`.
-    APIs without a fastapi_routes module (e.g. vector_stores, tool_runtime)
+    APIs without a fastapi_routes module (e.g. vector_stores)
     are silently skipped.
     """
     factories: dict[str, Callable[[Any], APIRouter]] = {}

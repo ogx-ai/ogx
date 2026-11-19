@@ -79,7 +79,7 @@ def test_get_router_routes_collects_admin_router_routes() -> None:
     assert router is not None
 
     paths = {route.path for route in get_router_routes(router)}
-    assert "/v1/admin/tools" in paths
+    assert "/v1alpha/admin/providers" in paths
     assert "/v1alpha/admin/connectors" in paths
 
 

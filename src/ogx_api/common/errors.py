@@ -157,13 +157,6 @@ class VectorStoreNotFoundError(ResourceNotFoundError):
         super().__init__(vector_store_name, resource_type="Vector Store", client_command="vector_dbs.list")
 
 
-class ToolGroupNotFoundError(ResourceNotFoundError):
-    """raised when OGX cannot find a referenced tool group"""
-
-    def __init__(self, toolgroup_name: str) -> None:
-        super().__init__(toolgroup_name, resource_type="Tool Group", client_command="toolgroups.list")
-
-
 class ConversationNotFoundError(ResourceNotFoundError):
     """raised when OGX cannot find a referenced conversation"""
 

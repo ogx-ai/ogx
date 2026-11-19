@@ -8,7 +8,7 @@ import time
 from typing import Any
 
 from ogx.log import get_logger
-from ogx.telemetry.tool_runtime_metrics import tool_duration, tool_invocations_total
+from ogx.telemetry.tool_metrics import tool_duration, tool_invocations_total
 from ogx.web_search import WebSearch, WebSearchResult
 from ogx_api import ToolDef
 
@@ -21,8 +21,7 @@ class WebSearchRouter(WebSearch):
     """Router for the web_search API.
 
     Dispatches each request to the selected backend via the routing table
-    (routing key: provider_id) and records the same tool-invocation metrics
-    as the tool_runtime router.
+    (routing key: provider_id) and records tool-invocation metrics.
     """
 
     def __init__(self, routing_table: WebSearchRoutingTable) -> None:

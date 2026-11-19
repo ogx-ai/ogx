@@ -1198,8 +1198,6 @@ async def test_file_search_uses_default_search_mode_from_config(mock_vector_io_a
         chunk_retrieval_params=ChunkRetrievalParams(default_search_mode="hybrid"),
     )
     tool_executor = ToolExecutor(
-        tool_groups_api=None,  # type: ignore
-        tool_runtime_api=None,  # type: ignore
         vector_io_api=mock_vector_io_api,
         vector_stores_config=hybrid_config,
         mcp_session_manager=None,
@@ -1220,8 +1218,6 @@ async def test_file_search_uses_default_search_mode_from_config(mock_vector_io_a
     mock_vector_io_api.openai_search_vector_store.reset_mock()
     default_config = VectorStoresConfig()
     tool_executor_default = ToolExecutor(
-        tool_groups_api=None,  # type: ignore
-        tool_runtime_api=None,  # type: ignore
         vector_io_api=mock_vector_io_api,
         vector_stores_config=default_config,
         mcp_session_manager=None,
@@ -1277,8 +1273,6 @@ async def test_file_search_results_include_chunk_metadata_attributes(mock_vector
 
     # Create tool executor with mock vector_io
     tool_executor = ToolExecutor(
-        tool_groups_api=None,  # type: ignore
-        tool_runtime_api=None,  # type: ignore
         vector_io_api=mock_vector_io_api,
         vector_stores_config=VectorStoresConfig(),
         mcp_session_manager=None,
@@ -1343,8 +1337,6 @@ async def test_file_search_works_without_explicit_vector_stores_config(mock_vect
     )
 
     tool_executor = ToolExecutor(
-        tool_groups_api=None,  # type: ignore
-        tool_runtime_api=None,  # type: ignore
         vector_io_api=mock_vector_io_api,
         mcp_session_manager=None,
     )

@@ -9,13 +9,13 @@ from typing import Any
 
 from pydantic import Field, SecretStr, model_validator
 
-from ogx.providers.utils.common.http import BaseToolRuntimeConfig
+from ogx.providers.utils.common.http import BaseWebSearchConfig
 
 # The Google engine behind Serply caps `num` at 10 per page.
 MAX_RESULTS_CEILING = 10
 
 
-class SerplySearchConfig(BaseToolRuntimeConfig):
+class SerplySearchConfig(BaseWebSearchConfig):
     """Configuration for the Serply Search web search backend."""
 
     api_key: SecretStr | None = Field(

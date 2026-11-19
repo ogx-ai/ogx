@@ -16,25 +16,12 @@ from ogx.providers.utils.responses.responses_store import (
 )
 from ogx.web_search import WebSearch
 from ogx_api import Connectors
-from ogx_api.tools import ToolGroups, ToolRuntime
 
 
 @pytest.fixture
 def mock_inference_api():
     inference_api = AsyncMock()
     return inference_api
-
-
-@pytest.fixture
-def mock_tool_groups_api():
-    tool_groups_api = AsyncMock(spec=ToolGroups)
-    return tool_groups_api
-
-
-@pytest.fixture
-def mock_tool_runtime_api():
-    tool_runtime_api = AsyncMock(spec=ToolRuntime)
-    return tool_runtime_api
 
 
 @pytest.fixture
@@ -85,8 +72,6 @@ def mock_web_search_api():
 @pytest.fixture
 def openai_responses_impl(
     mock_inference_api,
-    mock_tool_groups_api,
-    mock_tool_runtime_api,
     mock_responses_store,
     mock_vector_io_api,
     mock_conversations_api,
@@ -97,8 +82,6 @@ def openai_responses_impl(
 ):
     return OpenAIResponsesImpl(
         inference_api=mock_inference_api,
-        tool_groups_api=mock_tool_groups_api,
-        tool_runtime_api=mock_tool_runtime_api,
         responses_store=mock_responses_store,
         vector_io_api=mock_vector_io_api,
         moderation_endpoint=None,

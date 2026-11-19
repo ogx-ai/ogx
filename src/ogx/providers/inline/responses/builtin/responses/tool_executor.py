@@ -39,9 +39,7 @@ from ogx_api import (
     OpenAIResponseOutputMessageWebSearchToolCall,
     OpenAIToolMessageParam,
     TextContentItem,
-    ToolGroups,
     ToolInvocationResult,
-    ToolRuntime,
     VectorIO,
     WebSearchActionSearch,
     WebSearchSource,
@@ -120,15 +118,11 @@ class ToolExecutor:
 
     def __init__(
         self,
-        tool_groups_api: ToolGroups,
-        tool_runtime_api: ToolRuntime,
         vector_io_api: VectorIO,
         vector_stores_config: VectorStoresConfig | None = None,
         mcp_session_manager=None,
         web_search_api: WebSearch | None = None,
     ):
-        self.tool_groups_api = tool_groups_api
-        self.tool_runtime_api = tool_runtime_api
         self.vector_io_api = vector_io_api
         self.vector_stores_config = vector_stores_config or VectorStoresConfig()
         self.web_search_api = web_search_api
@@ -414,16 +408,9 @@ class ToolExecutor:
                         },
                     )
             else:
-                attributes = {
-                    "tool_name": function_name,
-                }
-                # TODO: follow semantic conventions for Open Telemetry tool spans
-                # https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/#execute-tool-span
-                with tracer.start_as_current_span("invoke_tool", attributes=attributes):
-                    result = await self.tool_runtime_api.invoke_tool(
-                        tool_name=function_name,
-                        kwargs=tool_kwargs,
-                    )
+                # Only MCP, file_search, and web_search tool calls reach the executor: the
+                # streaming loop rejects anything else before dispatch.
+                raise ValueError(f"Failed to invoke tool {function_name}: no tool handler for this tool type")
         except InvalidParameterError:
             # A rejected client parameter is not a tool failure to report inside a successful
             # response: propagate it so the Responses layer turns it into a 400.

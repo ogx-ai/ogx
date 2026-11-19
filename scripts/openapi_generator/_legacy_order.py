@@ -233,8 +233,6 @@ LEGACY_SCHEMA_ORDER = [
     "URL",
     "ToolDef",
     "ListToolDefsResponse",
-    "ToolGroup",
-    "ListToolGroupsResponse",
     "Chunk",
     "ChunkMetadata",
     "InsertChunksRequest",
@@ -272,7 +270,6 @@ LEGACY_SCHEMA_ORDER = [
     "RerankResponse",
     "RegisterModelRequest",
     "ParamType",
-    "RegisterToolGroupRequest",
 ]
 
 LEGACY_RESPONSE_ORDER = ["BadRequest400", "TooManyRequests429", "InternalServerError500", "DefaultError"]
@@ -351,8 +348,6 @@ LEGACY_TAGS = [
         "name": "Providers",
         "x-displayName": "Providers",
     },
-    {"description": "", "name": "ToolGroups"},
-    {"description": "", "name": "ToolRuntime"},
     {
         "description": "Tool listing and management.",
         "name": "Tools",
@@ -365,29 +360,6 @@ LEGACY_TAGS = [
         "name": "Responses",
         "x-displayName": "Responses",
     },
-]
-
-LEGACY_TAG_ORDER = [
-    "Admin",
-    "Agents",
-    "Batches",
-    "Connectors",
-    "Conversations",
-    "File Processors",
-    "Files",
-    "Inference",
-    "Inspect",
-    "Interactions",
-    "Messages",
-    "Models",
-    "Prompts",
-    "Providers",
-    "Responses",
-    "ToolGroups",
-    "ToolRuntime",
-    "Tools",
-    "Vector Stores",
-    "VectorIO",
 ]
 
 LEGACY_TAG_GROUPS = [
@@ -409,8 +381,6 @@ LEGACY_TAG_GROUPS = [
             "Prompts",
             "Providers",
             "Responses",
-            "ToolGroups",
-            "ToolRuntime",
             "Tools",
             "Vector Stores",
             "VectorIO",

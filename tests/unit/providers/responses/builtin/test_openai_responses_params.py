@@ -246,8 +246,6 @@ async def test_params_passed_through_full_chain_to_backend_service(
 
     openai_responses_impl = OpenAIResponsesImpl(
         inference_api=openai_adapter,
-        tool_groups_api=AsyncMock(),
-        tool_runtime_api=AsyncMock(),
         responses_store=mock_responses_store,
         vector_io_api=AsyncMock(),
         moderation_endpoint=None,

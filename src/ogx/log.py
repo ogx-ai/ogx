@@ -104,7 +104,6 @@ CATEGORIES = [
     "files",
     "file_processors",
     "vector_io",
-    "tool_runtime",
     "cli",
     "tests",
     "telemetry",

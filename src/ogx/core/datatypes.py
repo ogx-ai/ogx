@@ -30,9 +30,7 @@ from ogx_api import (
     ModelInput,
     ProviderSpec,
     Resource,
-    ToolGroup,
     ToolGroupInput,
-    ToolRuntime,
     VectorIO,
     VectorStore,
     VectorStoreInput,
@@ -84,20 +82,14 @@ class VectorStoreWithOwner(VectorStore, ResourceWithOwner):
     pass
 
 
-class ToolGroupWithOwner(ToolGroup, ResourceWithOwner):
-    """A ToolGroup resource extended with ownership information for access control."""
-
-    pass
-
-
-RoutableObject = Model | VectorStore | ToolGroup
+RoutableObject = Model | VectorStore
 
 RoutableObjectWithProvider = Annotated[
-    ModelWithOwner | VectorStoreWithOwner | ToolGroupWithOwner,
+    ModelWithOwner | VectorStoreWithOwner,
     Field(discriminator="type"),
 ]
 
-RoutedProtocol = Inference | VectorIO | ToolRuntime | WebSearch
+RoutedProtocol = Inference | VectorIO | WebSearch
 
 
 # Example: /inference, /vector_io
@@ -830,8 +822,9 @@ class RegisteredResources(BaseModel):
     def _warn_deprecated_tool_groups(self) -> Self:
         if self.tool_groups:
             warnings.warn(
-                "'registered_resources.tool_groups' is deprecated and will be removed in a future release. "
-                "Built-in tool groups are now auto-registered based on configured tool_runtime providers. "
+                "'registered_resources.tool_groups' was removed and has no effect. "
+                "Tool groups no longer exist: MCP tools are served by the Responses API, "
+                "optionally via MCP connectors. "
                 "Please remove 'tool_groups' from your configuration.",
                 DeprecationWarning,
                 stacklevel=2,
@@ -1064,6 +1057,40 @@ can be instantiated multiple times (with different configs) if necessary.
         )
 
         self.providers["tool_runtime"] = [p for p in tool_runtime_providers if p.provider_type != "inline::file-search"]
+        return self
+
+    @model_validator(mode="after")
+    def normalize_removed_tool_runtime_providers(self) -> "StackConfig":
+        """Drop all remaining ``tool_runtime`` providers.
+
+        The tool_runtime API has no providers left: file search runs built into
+        the Responses API over the vector stores API, and MCP tools are served
+        by the Responses API directly, optionally via MCP connectors. Existing
+        configs keep loading: the entries are dropped at read time, with a
+        warning prompting cleanup.
+        """
+        import warnings
+
+        tool_runtime_providers = self.providers.get("tool_runtime") or []
+        if tool_runtime_providers:
+            warnings.warn(
+                "The 'tool_runtime' API and its providers were removed. File search "
+                "runs built into the Responses API over the vector stores API, and MCP "
+                "tools are served by the Responses API, optionally via MCP connectors. "
+                "Remove the 'tool_runtime' section from your configuration. Affected "
+                "provider types: " + ", ".join(sorted({p.provider_type for p in tool_runtime_providers})),
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
+        if self.apis:
+            stripped_apis = [a for a in self.apis if a not in ("tool_runtime", "tool_groups")]
+            if len(stripped_apis) != len(self.apis):
+                self.apis = stripped_apis
+        # Drop the section entirely: the Api enum no longer has a tool_runtime
+        # member, so a leftover key (even empty) would fail Api() coercion in
+        # the resolver.
+        self.providers.pop("tool_runtime", None)
         return self
 
     @model_validator(mode="after")

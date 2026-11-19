@@ -243,12 +243,13 @@ def test_legacy_tool_runtime_web_search_providers_translate_to_web_search():
         ("searchapi", "remote::searchapi-search"),
         ("placeholder", "inline::placeholder"),
     ]
-    # Non-web-search tool_runtime providers stay put
-    assert [(p.provider_id, p.provider_type) for p in config.providers["tool_runtime"]] == [
-        ("mcp", "remote::model-context-protocol"),
-    ]
+    # No tool_runtime providers remain: the MCP entry is dropped by the
+    # removed-tool_runtime normalizer
+    assert "tool_runtime" not in config.providers
     # The translated providers must be reachable over the HTTP surface
     assert "web_search" in config.apis
+    # The retired APIs are stripped from the served list
+    assert "tool_runtime" not in config.apis
 
 
 def test_legacy_config_without_apis_list_is_untouched_by_translation():
@@ -282,23 +283,45 @@ def test_removed_file_search_provider_is_dropped_from_tool_runtime():
             },
         )
 
-    # The removed provider is dropped; other tool_runtime providers stay put
-    assert [p.provider_type for p in config.providers["tool_runtime"]] == ["remote::model-context-protocol"]
+    # The removed providers are dropped
+    assert "tool_runtime" not in config.providers
     # Nothing is moved to another API section
     assert "web_search" not in config.providers
 
 
-def test_config_without_file_search_provider_is_untouched():
+def test_removed_mcp_provider_is_dropped_from_tool_runtime():
+    """A config still listing the removed MCP provider loads, with the entry dropped."""
+    from ogx.core.datatypes import Provider, StackConfig
+
+    with pytest.warns(DeprecationWarning, match="tool_runtime"):
+        config = StackConfig(
+            distro_name="test",
+            apis=["tool_runtime", "responses"],
+            providers={
+                "tool_runtime": [
+                    Provider(provider_id="mcp", provider_type="remote::model-context-protocol"),
+                ],
+            },
+        )
+
+    assert "tool_runtime" not in config.providers
+    # The retired APIs are stripped from the served list
+    assert config.apis == ["responses"]
+    # Nothing is moved to another API section
+    assert "web_search" not in config.providers
+
+
+def test_config_without_tool_runtime_providers_is_untouched():
     from ogx.core.datatypes import Provider, StackConfig
 
     config = StackConfig(
         distro_name="test",
         providers={
-            "tool_runtime": [Provider(provider_id="mcp", provider_type="remote::model-context-protocol")],
+            "inference": [Provider(provider_id="reference", provider_type="inline::reference")],
         },
     )
 
-    assert [p.provider_type for p in config.providers["tool_runtime"]] == ["remote::model-context-protocol"]
+    assert "tool_runtime" not in config.providers
 
 
 def test_generated_starter_config_keeps_legacy_shape_and_translates_on_load():
@@ -322,9 +345,11 @@ def test_generated_starter_config_keeps_legacy_shape_and_translates_on_load():
         "remote::serply-search",
         "remote::searchapi-search",
     ]
-    # Non-web-search tool_runtime providers stay put
-    assert [p.provider_type for p in config.providers["tool_runtime"]] == ["remote::model-context-protocol"]
+    # No tool_runtime providers remain: the MCP entry is dropped by the
+    # removed-tool_runtime normalizer
+    assert "tool_runtime" not in config.providers
     assert "web_search" in config.apis
+    assert "tool_runtime" not in config.apis
 
 
 async def test_legacy_tool_runtime_config_resolves_web_search_router():

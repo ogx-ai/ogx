@@ -30,7 +30,6 @@ remote/
     watsonx/           # IBM WatsonX
   vector_io/           # Remote vector storage (chroma, elasticsearch, milvus, pgvector, qdrant, weaviate, etc.)
   files/               # Remote file storage (openai, s3)
-  tool_runtime/        # Remote tool runtimes (mcp)
   web_search/          # Web search backends (bing, brave, exa, nimble, searchapi, serply, tavily)
   __init__.py
 ```

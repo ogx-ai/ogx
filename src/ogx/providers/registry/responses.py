@@ -41,8 +41,6 @@ def available_providers() -> list[ProviderSpec]:
             api_dependencies=[
                 Api.inference,
                 Api.vector_io,
-                Api.tool_runtime,
-                Api.tool_groups,
                 Api.conversations,
                 Api.prompts,
                 Api.files,

@@ -15,7 +15,7 @@ from .common import CommonRoutingTableImpl
 class WebSearchRoutingTable(CommonRoutingTableImpl, WebSearch):
     """Routing table for the web_search API.
 
-    Unlike the models / vector_stores / tool_groups tables, web-search
+    Unlike the models / vector_stores tables, web-search
     backends are static config, not registered resources: the routing key is
     the provider_id itself. Lookups are therefore a direct
     ``impls_by_provider_id`` access with no ``dist_registry`` entry
