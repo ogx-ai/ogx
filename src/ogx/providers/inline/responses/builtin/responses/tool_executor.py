@@ -4,7 +4,6 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import asyncio
 import json
 import re
 from collections.abc import AsyncIterator
@@ -12,6 +11,7 @@ from typing import Any
 
 from opentelemetry import trace
 
+from ogx.core import file_search
 from ogx.core.datatypes import VectorStoresConfig
 from ogx.log import get_logger
 from ogx.web_search import WebSearch
@@ -37,7 +37,6 @@ from ogx_api import (
     OpenAIResponseOutputMessageFileSearchToolCall,
     OpenAIResponseOutputMessageFileSearchToolCallResults,
     OpenAIResponseOutputMessageWebSearchToolCall,
-    OpenAISearchVectorStoreRequest,
     OpenAIToolMessageParam,
     TextContentItem,
     ToolGroups,
@@ -230,127 +229,21 @@ class ToolExecutor:
         response_file_search_tool: OpenAIResponseInputToolFileSearch,
     ) -> ToolInvocationResult:
         """Execute file search using vector_stores.search API with filters support."""
-        search_results = []
-
-        # Create search tasks for all vector stores
-        async def search_single_store(vector_store_id):
-            try:
-                search_mode = self.vector_stores_config.chunk_retrieval_params.default_search_mode
-
-                search_response = await self.vector_io_api.openai_search_vector_store(
-                    vector_store_id=vector_store_id,
-                    request=OpenAISearchVectorStoreRequest(
-                        query=query,
-                        filters=response_file_search_tool.filters,
-                        max_num_results=response_file_search_tool.max_num_results,
-                        ranking_options=response_file_search_tool.ranking_options,
-                        rewrite_query=False,
-                        search_mode=search_mode,
-                    ),
-                )
-                return search_response.data
-            except InvalidParameterError:
-                # The caller sent a parameter this store cannot honour (e.g. ranking_options.hybrid_search
-                # on a provider that cannot apply the weights). That is the client's to fix, so let it
-                # reach responses.create as an error instead of degrading to an empty, indistinguishable
-                # result. Genuine store failures below still degrade to no results from that store.
-                raise
-            except Exception as e:
-                logger.warning("Failed to search vector store", vector_store_id=vector_store_id, error=str(e))
-                return []
-
-        # Run all searches in parallel using gather
-        search_tasks = [search_single_store(vid) for vid in response_file_search_tool.vector_store_ids]
-        all_results = await asyncio.gather(*search_tasks)
-
-        # Flatten results
-        for results in all_results:
-            search_results.extend(results)
-
-        # Get templates from vector stores config, fallback to constants
-
-        enable_annotations = self.vector_stores_config.annotation_prompt_params.enable_annotations
-
-        # Get templates
-        header_template = self.vector_stores_config.file_search_params.header_template
-        footer_template = self.vector_stores_config.file_search_params.footer_template
-        context_template = self.vector_stores_config.context_prompt_params.context_template
-
-        # Get annotation templates (use defaults if annotations disabled)
-        if enable_annotations:
-            chunk_annotation_template = self.vector_stores_config.annotation_prompt_params.chunk_annotation_template
-            annotation_instruction_template = (
-                self.vector_stores_config.annotation_prompt_params.annotation_instruction_template
-            )
-        else:
-            # Use defaults from VectorStoresConfig when annotations disabled
-            default_config = VectorStoresConfig()
-            chunk_annotation_template = default_config.annotation_prompt_params.chunk_annotation_template
-            annotation_instruction_template = default_config.annotation_prompt_params.annotation_instruction_template
-
-        content_items = []
-        content_items.append(TextContentItem(text=header_template.format(num_chunks=len(search_results))))
-
-        unique_files = set()
-        for i, result_item in enumerate(search_results):
-            chunk_text = result_item.content[0].text if result_item.content else ""
-            # Get file_id from attributes if result_item.file_id is empty
-            file_id = result_item.file_id or (
-                result_item.attributes.get("document_id") if result_item.attributes else None
-            )
-            metadata_text = f"document_id: {file_id}, score: {result_item.score}"
-            if result_item.attributes:
-                metadata_text += f", attributes: {result_item.attributes}"
-
-            text_content = chunk_annotation_template.format(
-                index=i + 1, metadata_text=metadata_text, file_id=file_id, chunk_text=chunk_text
-            )
-            content_items.append(TextContentItem(text=text_content))
-            unique_files.add(file_id)
-
-        content_items.append(TextContentItem(text=footer_template))
-
-        annotation_instruction = ""
-        if unique_files:
-            annotation_instruction = annotation_instruction_template
-
-        content_items.append(
-            TextContentItem(
-                text=context_template.format(
-                    query=query, num_chunks=len(search_results), annotation_instruction=annotation_instruction
-                )
-            )
+        search_results = await file_search.search_files(
+            self.vector_io_api,
+            response_file_search_tool.vector_store_ids,
+            query,
+            filters=response_file_search_tool.filters,
+            max_num_results=response_file_search_tool.max_num_results,
+            ranking_options=response_file_search_tool.ranking_options,
+            search_mode=self.vector_stores_config.chunk_retrieval_params.default_search_mode,
         )
-
-        # handling missing attributes for old versions
-        # Iterate in descending score order so that when a model doesn't cite inline and
-        # extract_citations_from_text falls back to a single file, it picks the most relevant
-        # one: dict insertion order determines which file_id lands first.
-        citation_files = {}
-        for result in sorted(search_results, key=lambda r: r.score, reverse=True):
-            file_id = result.file_id
-            if not file_id and result.attributes:
-                file_id = result.attributes.get("document_id")
-
-            filename = result.filename
-            if not filename and result.attributes:
-                filename = result.attributes.get("filename")
-            if not filename:
-                filename = "unknown"
-
-            if file_id not in citation_files:
-                citation_files[file_id] = filename
+        citation_files = file_search.build_citation_files(search_results)
 
         # Cast to proper InterleavedContent type (list invariance)
         return ToolInvocationResult(
-            content=content_items,  # type: ignore[arg-type]
-            metadata={
-                "document_ids": [r.file_id for r in search_results],
-                "chunks": [r.content[0].text if r.content else "" for r in search_results],
-                "scores": [r.score for r in search_results],
-                "attributes": [r.attributes or {} for r in search_results],
-                "citation_files": citation_files,
-            },
+            content=file_search.build_content_items(query, search_results, self.vector_stores_config),  # type: ignore[arg-type]
+            metadata=file_search.build_metadata(search_results, citation_files),
         )
 
     async def _emit_progress_events(

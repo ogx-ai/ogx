@@ -243,18 +243,11 @@ def _remove_api(run_config: StackConfig, api: str) -> None:
         run_config.apis = [a for a in run_config.apis if a != api]
 
 
-def _add_file_search_and_responses(run_config: StackConfig) -> None:
-    """Add file-search and responses providers to the stack config.
+def _add_responses_and_web_search(run_config: StackConfig) -> None:
+    """Add the responses and web_search providers to the stack config.
 
     These are only added after confirming an embedding model is available.
     """
-    # Add tool_runtime API with file-search provider
-    if "tool_runtime" not in run_config.providers:
-        run_config.providers["tool_runtime"] = []
-    if not any(p.provider_type == "inline::file-search" for p in run_config.providers["tool_runtime"]):
-        run_config.providers["tool_runtime"].append(
-            Provider(provider_id="file-search", provider_type="inline::file-search")
-        )
     # Add tool_runtime to APIs if not already present. A config without an `apis:` list
     # serves every provider-backed API, so there is nothing to add there.
     if run_config.apis is not None and "tool_runtime" not in run_config.apis:
@@ -364,7 +357,6 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
     if run_config.apis is not None and "web_search" not in run_config.apis:
         run_config.apis.append("web_search")
 
-    cprint("  ✓ inline::file-search (built-in)", color="green")
     cprint("  ✓ inline::builtin responses (built-in)", color="green")
 
 
@@ -446,8 +438,8 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
             f"  ✓ Default embedding model → {args.default_embedding_model} ({args.default_embedding_dimension}d)",
             color="green",
         )
-        # Add file-search and responses now that embedding model is confirmed
-        _add_file_search_and_responses(run_config)
+        # Add responses and web search now that embedding model is confirmed
+        _add_responses_and_web_search(run_config)
     elif "vector_io" in run_config.providers:
         detected_result = (
             autodetect_embedding if autodetect_embedding is not None else await _detect_embedding_model(run_config)
@@ -484,8 +476,8 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
                     f"  ✓ Auto-detected embedding model → {detected.provider_id}/{detected.model_id} ({embedding_dimension}d)",
                     color="green",
                 )
-                # Add file-search and responses now that embedding model is confirmed
-                _add_file_search_and_responses(run_config)
+                # Add responses and web search now that embedding model is confirmed
+                _add_responses_and_web_search(run_config)
         else:
             cprint(
                 "  ✗ No embedding model detected — vector stores, file-search, and responses disabled.",
@@ -681,7 +673,7 @@ async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[Qualifi
             detected_embedding = _pick_embedding_from_models(models, provider_type.split("::")[-1])
 
     # Inline providers require no external service — always include them.
-    # Note: file-search and responses require an embedding model, so they are added later
+    # Note: responses require an embedding model, so they are added later
     # after confirming an embedding model is available (either user-provided or auto-detected)
     inline_providers = [
         "files=inline::localfs",

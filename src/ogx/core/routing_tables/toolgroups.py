@@ -33,7 +33,7 @@ def parse_toolgroup_from_toolgroup_name_pair(toolgroup_name_with_maybe_tool_name
     Returns:
         The tool group name if a slash separator is found, or None for plain tool group names.
     """
-    # handle the case like "builtin::file_search/file_search"
+    # handle the case like "my-tool-group/my-tool"
     parts = toolgroup_name_with_maybe_tool_name.split("/")
     if len(parts) == 2:
         return parts[0]

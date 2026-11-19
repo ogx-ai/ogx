@@ -227,7 +227,6 @@ const sidebars: SidebarsConfig = {
           collapsed: false,
           link: { type: 'doc', id: 'providers/tool_runtime/index' },
           items: [
-            'providers/tool_runtime/inline_file-search',
             'providers/tool_runtime/remote_model-context-protocol'
           ],
         },
