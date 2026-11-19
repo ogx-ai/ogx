@@ -172,7 +172,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Compute package version
         id: version
@@ -314,7 +314,7 @@ jobs:
         if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'pypi'
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Install uv
         if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'pypi'
@@ -513,8 +513,8 @@ jobs:
     needs: build-package
     strategy:
       matrix:
-        # Test 3.13 only on push to main, releases, and scheduled runs
-        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.12"]') || fromJSON('["3.12", "3.13"]') }}
+        # Test 3.14 only on push to main, releases, and scheduled runs
+        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.13"]') || fromJSON('["3.13", "3.14"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

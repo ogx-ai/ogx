@@ -191,7 +191,7 @@ jobs:
 
       - name: Build container image
         run: |
-          BASE_IMAGE=$(yq -r '.distribution_spec.container_image // "python:3.12-slim"' src/ogx/distributions/ci-tests/config.yaml)
+          BASE_IMAGE=$(yq -r '.distribution_spec.container_image // "python:3.14-slim"' src/ogx/distributions/ci-tests/config.yaml)
           BUILD_ARGS=(--build-arg "INSTALL_MODE=editable" --build-arg "DISTRO_NAME=ci-tests")
           BUILD_ARGS+=(--build-arg "BASE_IMAGE=$BASE_IMAGE")
           BUILD_ARGS+=(--build-arg "RUN_CONFIG_PATH=/workspace/src/ogx/distributions/ci-tests/config.yaml")
