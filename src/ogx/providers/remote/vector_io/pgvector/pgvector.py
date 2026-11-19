@@ -69,6 +69,13 @@ def _quote_ident(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
+def _vector_store_table_name(vector_store_id: str) -> str:
+    # Sanitize the table name by replacing hyphens with underscores
+    # SQL doesn't allow hyphens in table names, and vector_store.identifier may contain hyphens
+    # when created with patterns like "test-vector-db-{uuid4()}"
+    return f"vs_{sanitize_collection_name(vector_store_id)}"
+
+
 async def check_extension_version(conn: asyncpg.Connection) -> str | None:
     """Query the installed pgvector extension version.
 
@@ -190,11 +197,7 @@ class PGVectorIndex(EmbeddingIndex):
         try:
             pool = await self._get_pool()
             async with pool.acquire() as conn:
-                # Sanitize the table name by replacing hyphens with underscores
-                # SQL doesn't allow hyphens in table names, and vector_store.identifier may contain hyphens
-                # when created with patterns like "test-vector-db-{uuid4()}"
-                sanitized_identifier = sanitize_collection_name(self.vector_store.identifier)
-                self.table_name = f"vs_{sanitized_identifier}"
+                self.table_name = _vector_store_table_name(self.vector_store.identifier)
                 self._quoted_table = _quote_ident(self.table_name)
 
                 await conn.execute(
@@ -926,10 +929,12 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         self.cache[vector_store.identifier] = index
 
     async def unregister_vector_store(self, vector_store_id: str) -> None:
-        # Remove provider index and cache
-        if vector_store_id in self.cache:
-            await self.cache[vector_store_id].index.delete()
-            del self.cache[vector_store_id]
+        # Drop the table by name rather than through the cached index: another replica may have
+        # created the store, so this one may never have loaded it.
+        self.cache.pop(vector_store_id, None)
+        pool = await self._ensure_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(f"DROP TABLE IF EXISTS {_quote_ident(_vector_store_table_name(vector_store_id))}")
 
         # Delete vector DB metadata from KV store
         if self.kvstore is None:
@@ -937,7 +942,6 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         await self.kvstore.delete(key=f"{VECTOR_DBS_PREFIX}{vector_store_id}")
 
         # Delete vector store metadata from PGVector metadata_store table
-        pool = await self._ensure_pool()
         await remove_vector_store_metadata(pool, vector_store_id)
 
     async def insert_chunks(self, request: InsertChunksRequest) -> None:

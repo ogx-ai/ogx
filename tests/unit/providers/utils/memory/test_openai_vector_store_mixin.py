@@ -4,14 +4,18 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from ogx.core.access_control.access_control import default_policy
 from ogx.core.access_control.datatypes import Action
 from ogx.core.datatypes import TenancyConfig, TenancyMode
-from ogx.core.storage.sqlstore.authorized_sqlstore import set_default_tenancy_config
+from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore, set_default_tenancy_config
+from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
+from ogx.core.storage.sqlstore.sqlstore import SqliteSqlStoreConfig
 from ogx.providers.utils.memory.openai_vector_store_mixin import (
     OPENAI_VECTOR_STORES_FILE_BATCHES_PREFIX,
     OPENAI_VECTOR_STORES_FILES_CONTENTS_PREFIX,
@@ -23,7 +27,9 @@ from ogx.providers.utils.memory.openai_vector_store_mixin import (
     OpenAIVectorStoreMixin,
 )
 from ogx_api import (
+    OpenAICreateVectorStoreRequestWithExtraBody,
     OpenAIUpdateVectorStoreRequest,
+    ResourceNotFoundError,
     VectorStoreChunkingStrategyAuto,
     VectorStoreNotFoundError,
 )
@@ -54,6 +60,31 @@ def _make_full_store_info(store_id: str, name: str) -> dict:
         "metadata": {},
         "file_ids": [],
     }
+
+
+def _make_kvstore(data: dict[str, str]) -> AsyncMock:
+    """Build a mock KVStore populated with the given key-value pairs."""
+    kv = AsyncMock()
+
+    async def _set(key: str, value: str, expiration=None) -> None:
+        data[key] = value
+
+    async def _delete(key: str) -> None:
+        data.pop(key, None)
+
+    kv.set = AsyncMock(side_effect=_set)
+    kv.get = AsyncMock(side_effect=lambda key: data.get(key))
+    kv.delete = AsyncMock(side_effect=_delete)
+
+    def _values_in_range(start: str, end: str) -> list[str]:
+        return [v for k, v in sorted(data.items()) if start <= k < end]
+
+    def _keys_in_range(start: str, end: str) -> list[str]:
+        return [k for k in sorted(data.keys()) if start <= k < end]
+
+    kv.values_in_range = AsyncMock(side_effect=_values_in_range)
+    kv.keys_in_range = AsyncMock(side_effect=_keys_in_range)
+    return kv
 
 
 class MockVectorStoreMixin(OpenAIVectorStoreMixin):
@@ -100,10 +131,7 @@ class TestOpenAIVectorStoreMixin:
 
     @pytest.fixture
     def mock_kvstore(self):
-        kv = AsyncMock()
-        kv.set = AsyncMock()
-        kv.get = AsyncMock(return_value=None)
-        return kv
+        return _make_kvstore({})
 
     async def test_missing_file_processor_api_returns_failed_status(
         self, mock_inference_api, mock_files_api, mock_kvstore
@@ -202,7 +230,7 @@ class TestOpenAIVectorStoreMixin:
             file_processor_api=mock_file_processor_api,
         )
         vector_store_id = "test_vector_store"
-        store_info = _make_store_info()
+        store_info = _make_full_store_info(vector_store_id, "store")
         store_info["metadata"] = {"embedding_model": "ollama/nomic-embed-text", "embedding_dimension": "2"}
         mixin.openai_vector_stores[vector_store_id] = store_info
 
@@ -216,7 +244,7 @@ class TestOpenAIVectorStoreMixin:
         expected_bytes = len(text.encode("utf-8"))
         assert result.status == "completed"
         assert result.usage_bytes == expected_bytes
-        assert mixin.openai_vector_stores[vector_store_id]["usage_bytes"] == expected_bytes
+        assert (await mixin.openai_retrieve_vector_store(vector_store_id)).usage_bytes == expected_bytes
 
     @pytest.mark.parametrize(
         "failing_step",
@@ -250,7 +278,7 @@ class TestOpenAIVectorStoreMixin:
             mixin.insert_chunks = AsyncMock(side_effect=RuntimeError("insert failed"))
 
         vector_store_id = "test_vector_store"
-        store_info = _make_store_info()
+        store_info = _make_full_store_info(vector_store_id, "store")
         store_info["metadata"] = {"embedding_model": "ollama/nomic-embed-text", "embedding_dimension": "2"}
         mixin.openai_vector_stores[vector_store_id] = store_info
 
@@ -263,7 +291,7 @@ class TestOpenAIVectorStoreMixin:
 
         assert result.status == "failed"
         assert result.usage_bytes == 0
-        assert mixin.openai_vector_stores[vector_store_id]["usage_bytes"] == 0
+        assert (await mixin.openai_retrieve_vector_store(vector_store_id)).usage_bytes == 0
 
     def _make_attach_mixin(self, mock_inference_api, mock_files_api, mock_kvstore, num_chunks):
         mock_file_processor_api = AsyncMock()
@@ -358,26 +386,6 @@ def _fake_embeddings(params):
 class TestKVStoreToSQLMigration:
     """Tests for automatic KVStore-to-SQL migration during initialization."""
 
-    def _make_kvstore(self, data: dict[str, str]) -> AsyncMock:
-        """Build a mock KVStore populated with the given key-value pairs."""
-        kv = AsyncMock()
-
-        async def _set(key: str, value: str, expiration=None) -> None:
-            data[key] = value
-
-        kv.set = AsyncMock(side_effect=_set)
-        kv.get = AsyncMock(side_effect=lambda key: data.get(key))
-
-        def _values_in_range(start: str, end: str) -> list[str]:
-            return [v for k, v in sorted(data.items()) if start <= k < end]
-
-        def _keys_in_range(start: str, end: str) -> list[str]:
-            return [k for k in sorted(data.keys()) if start <= k < end]
-
-        kv.values_in_range = AsyncMock(side_effect=_values_in_range)
-        kv.keys_in_range = AsyncMock(side_effect=_keys_in_range)
-        return kv
-
     def _make_sql_store(self, existing_rows: list | None = None) -> AsyncMock:
         """Build a mock SqlStore backing the AuthorizedSqlStore."""
         sql = AsyncMock()
@@ -399,7 +407,7 @@ class TestKVStoreToSQLMigration:
         store_info = {"id": "vs_abc", "name": "test", "status": "completed"}
         kv_data = {f"{OPENAI_VECTOR_STORES_PREFIX}vs_abc": json.dumps(store_info)}
 
-        kvstore = self._make_kvstore(kv_data)
+        kvstore = _make_kvstore(kv_data)
         sql_store = self._make_sql_store()
         metadata_store = self._make_metadata_store(sql_store)
 
@@ -431,7 +439,7 @@ class TestKVStoreToSQLMigration:
             store_info = {"id": "vs_abc", "name": "test", "status": "completed"}
             kv_data = {f"{OPENAI_VECTOR_STORES_PREFIX}vs_abc": json.dumps(store_info)}
 
-            kvstore = self._make_kvstore(kv_data)
+            kvstore = _make_kvstore(kv_data)
             sql_store = self._make_sql_store()
             metadata_store = self._make_metadata_store(sql_store)
 
@@ -463,7 +471,7 @@ class TestKVStoreToSQLMigration:
     async def test_migration_requires_default_tenant_for_multi_tenancy(self):
         set_default_tenancy_config(TenancyConfig(mode=TenancyMode.MULTI))
         try:
-            kvstore = self._make_kvstore({f"{OPENAI_VECTOR_STORES_PREFIX}vs_abc": json.dumps({"id": "vs_abc"})})
+            kvstore = _make_kvstore({f"{OPENAI_VECTOR_STORES_PREFIX}vs_abc": json.dumps({"id": "vs_abc"})})
             sql_store = self._make_sql_store()
             metadata_store = self._make_metadata_store(sql_store)
 
@@ -482,7 +490,7 @@ class TestKVStoreToSQLMigration:
             set_default_tenancy_config(TenancyConfig())
 
     async def test_migration_skipped_when_migration_marker_exists(self):
-        kvstore = self._make_kvstore(
+        kvstore = _make_kvstore(
             {
                 f"{OPENAI_VECTOR_STORES_PREFIX}vs_abc": json.dumps({"id": "vs_abc"}),
                 OPENAI_VECTOR_STORES_SQL_MIGRATION_KEY: "1",
@@ -504,7 +512,7 @@ class TestKVStoreToSQLMigration:
         sql_store.upsert.assert_not_called()
 
     async def test_migration_skipped_when_kvstore_is_empty(self):
-        kvstore = self._make_kvstore({})
+        kvstore = _make_kvstore({})
         sql_store = self._make_sql_store()
         metadata_store = self._make_metadata_store(sql_store)
 
@@ -534,7 +542,7 @@ class TestKVStoreToSQLMigration:
             f"{OPENAI_VECTOR_STORES_FILES_CONTENTS_PREFIX}vs_1:file_a:1": json.dumps(chunk_1),
         }
 
-        kvstore = self._make_kvstore(kv_data)
+        kvstore = _make_kvstore(kv_data)
         sql_store = self._make_sql_store()
         metadata_store = self._make_metadata_store(sql_store)
 
@@ -573,7 +581,7 @@ class TestKVStoreToSQLMigration:
             f"{OPENAI_VECTOR_STORES_FILE_BATCHES_PREFIX}batch_1": json.dumps(batch_info),
         }
 
-        kvstore = self._make_kvstore(kv_data)
+        kvstore = _make_kvstore(kv_data)
         sql_store = self._make_sql_store()
         metadata_store = self._make_metadata_store(sql_store)
 
@@ -659,6 +667,7 @@ class TestMetadataStoreEnforcement:
         metadata_store.fetch_one = AsyncMock(side_effect=_fetch_one)
         metadata_store.update = AsyncMock()
         metadata_store.delete = AsyncMock()
+        metadata_store.sql_store.fetch_all = AsyncMock(return_value=MagicMock(data=[]))
 
         mixin = MockVectorStoreMixin(
             inference_api=AsyncMock(),
@@ -689,14 +698,6 @@ class TestMetadataStoreEnforcement:
 
     async def test_delete_vector_store_file_uses_delete_authorization_only(self):
         store_info = _make_full_store_info("vs_allowed", "allowed")
-        store_info["file_ids"] = ["file_1"]
-        store_info["file_counts"] = {
-            "total": 1,
-            "completed": 1,
-            "cancelled": 0,
-            "failed": 0,
-            "in_progress": 0,
-        }
         file_info = {
             "id": "file_1",
             "object": "vector_store.file",
@@ -738,74 +739,7 @@ class TestMetadataStoreEnforcement:
 
         assert result.deleted is True
         assert actions == [Action.DELETE]
-        assert mixin.openai_vector_stores["vs_allowed"]["file_ids"] == []
         metadata_store.delete.assert_awaited()
-        metadata_store.upsert.assert_awaited()
-
-    @pytest.mark.parametrize(
-        ("store_usage_bytes", "file_usage_bytes", "expected_usage_bytes"),
-        [
-            pytest.param(150, 100, 50, id="decrements_by_files_usage_bytes"),
-            pytest.param(20, 100, 0, id="clamps_at_zero_when_store_total_is_stale"),
-        ],
-    )
-    async def test_delete_vector_store_file_decrements_usage_bytes(
-        self, store_usage_bytes, file_usage_bytes, expected_usage_bytes
-    ):
-        """Deleting a file must give back its share of the store's usage_bytes, without going
-        negative if the store's total was ever undercounted (#6542, #6550)."""
-        store_info = _make_full_store_info("vs_allowed", "allowed")
-        store_info["file_ids"] = ["file_1"]
-        store_info["usage_bytes"] = store_usage_bytes
-        store_info["file_counts"] = {
-            "total": 1,
-            "completed": 1,
-            "cancelled": 0,
-            "failed": 0,
-            "in_progress": 0,
-        }
-        file_info = {
-            "id": "file_1",
-            "object": "vector_store.file",
-            "usage_bytes": file_usage_bytes,
-            "created_at": 1,
-            "vector_store_id": "vs_allowed",
-            "status": "completed",
-            "chunking_strategy": {"type": "auto"},
-        }
-
-        async def _fetch_one(table, where, action=Action.READ):
-            if action == Action.DELETE:
-                return {"store_data": store_info}
-            return None
-
-        async def _raw_fetch_all(table, **kwargs):
-            if table == TABLE_VECTOR_STORE_FILES:
-                return MagicMock(data=[{"file_data": file_info}])
-            if table == TABLE_VECTOR_STORE_FILE_CONTENTS:
-                return MagicMock(data=[])
-            return MagicMock(data=[])
-
-        metadata_store = MagicMock()
-        metadata_store.fetch_one = AsyncMock(side_effect=_fetch_one)
-        metadata_store.sql_store = MagicMock()
-        metadata_store.sql_store.fetch_all = AsyncMock(side_effect=_raw_fetch_all)
-        metadata_store.delete = AsyncMock()
-        metadata_store.upsert = AsyncMock()
-
-        mixin = MockVectorStoreMixin(
-            inference_api=AsyncMock(),
-            files_api=AsyncMock(),
-            metadata_store=metadata_store,
-        )
-
-        await mixin.openai_delete_vector_store_file("vs_allowed", "file_1")
-
-        # In-memory cache reflects the new total...
-        assert mixin.openai_vector_stores["vs_allowed"]["usage_bytes"] == expected_usage_bytes
-        # ...and so does what was actually persisted, not just the in-memory copy.
-        persisted = metadata_store.upsert.await_args.kwargs["data"]["store_data"]
-        assert persisted["usage_bytes"] == expected_usage_bytes
 
     async def test_initialize_succeeds_when_policy_and_metadata_store_set(self):
         metadata_store = MagicMock()
@@ -873,7 +807,7 @@ class TestBeforeCursorPagination:
     """A `before` cursor must return the page immediately preceding it, not the head of the list."""
 
     async def test_list_vector_stores_before_returns_previous_page(self):
-        mixin = MockVectorStoreMixin(inference_api=AsyncMock(), files_api=AsyncMock())
+        mixin = MockVectorStoreMixin(inference_api=AsyncMock(), files_api=AsyncMock(), kvstore=_make_kvstore({}))
         for i in range(1, 7):
             store_info = _make_full_store_info(f"vs_{i}", f"store {i}")
             store_info["created_at"] = i
@@ -906,11 +840,222 @@ class TestBeforeCursorPagination:
             }
             for i, file_id in enumerate(file_ids, start=1)
         }
-        mixin.openai_vector_stores["vs_1"] = {"id": "vs_1", "file_ids": file_ids}
-        mixin._load_openai_vector_store_file = AsyncMock(side_effect=lambda store_id, file_id: files[file_id])
+        mixin.openai_vector_stores["vs_1"] = {"id": "vs_1"}
+        mixin._load_openai_vector_store_files = AsyncMock(return_value=list(files.values()))
 
         previous_page = await mixin.openai_list_files_in_vector_store(
             vector_store_id="vs_1", limit=2, order="desc", before="file_2"
         )
         assert [file.id for file in previous_page.data] == ["file_4", "file_3"]
         assert previous_page.has_more is True
+
+
+class TestFileRowsAcrossWorkers:
+    """Two mixins share one metadata store but keep their own in-memory state, as server replicas do."""
+
+    @pytest.fixture
+    async def metadata_store(self, tmp_path):
+        sql_store = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=str(tmp_path / "vector_stores.db")))
+        store = AuthorizedSqlStore(sql_store, default_policy(), TenancyMode.DISABLED, None)
+        return store
+
+    @pytest.fixture
+    async def workers(self, metadata_store):
+        a, b = self._worker(metadata_store), self._worker(metadata_store)
+        await a._create_metadata_tables()
+        return a, b
+
+    @staticmethod
+    def _worker(metadata_store: AuthorizedSqlStore) -> MockVectorStoreMixin:
+        files_api = AsyncMock()
+        files_api.openai_retrieve_file = AsyncMock(side_effect=lambda req: MagicMock(filename=f"{req.file_id}.txt"))
+
+        async def _process_file(req):
+            chunk_id = f"{req.file_id}-chunk-0"
+            return MagicMock(
+                chunks=[
+                    Chunk(
+                        content=f"text of {req.file_id}",
+                        chunk_id=chunk_id,
+                        metadata={"document_id": req.file_id},
+                        chunk_metadata=ChunkMetadata(document_id=req.file_id, chunk_id=chunk_id),
+                    )
+                ]
+            )
+
+        file_processor_api = AsyncMock()
+        file_processor_api.process_file = AsyncMock(side_effect=_process_file)
+
+        inference_api = AsyncMock()
+        inference_api.openai_embeddings = AsyncMock(
+            side_effect=lambda params: MagicMock(data=[MagicMock(embedding=[0.1, 0.2]) for _ in params.input])
+        )
+        return MockVectorStoreMixin(
+            inference_api=inference_api,
+            files_api=files_api,
+            file_processor_api=file_processor_api,
+            metadata_store=metadata_store,
+        )
+
+    @staticmethod
+    async def _create_store(worker: MockVectorStoreMixin) -> str:
+        store = await worker.openai_create_vector_store(
+            OpenAICreateVectorStoreRequestWithExtraBody(
+                name="store", embedding_model="test-model", embedding_dimension=2, provider_id="test"
+            )
+        )
+        return store.id
+
+    @staticmethod
+    def _hold_processing(worker: MockVectorStoreMixin, started: asyncio.Event, release: asyncio.Event) -> None:
+        process_file = worker.file_processor_api.process_file.side_effect
+
+        async def _held(req):
+            started.set()
+            await release.wait()
+            return await process_file(req)
+
+        worker.file_processor_api.process_file.side_effect = _held
+
+    @staticmethod
+    async def _rows(metadata_store: AuthorizedSqlStore, table: str, store_id: str) -> list:
+        result = await metadata_store.sql_store.fetch_all(table=table, where={"store_id": store_id})
+        return result.data
+
+    async def test_detaches_on_two_workers_both_take_effect(self, workers):
+        a, b = workers
+        store_id = await self._create_store(a)
+        await a.openai_attach_file_to_vector_store(store_id, OpenAIAttachFileRequest(file_id="file-1"))
+        await a.openai_attach_file_to_vector_store(store_id, OpenAIAttachFileRequest(file_id="file-2"))
+
+        both_detaching = asyncio.Barrier(2)
+
+        async def _wait_for_other_detach(request):
+            await both_detaching.wait()
+
+        a.delete_chunks = _wait_for_other_detach
+        b.delete_chunks = _wait_for_other_detach
+        await asyncio.gather(
+            a.openai_delete_vector_store_file(store_id, "file-1"),
+            b.openai_delete_vector_store_file(store_id, "file-2"),
+        )
+
+        listed = await b.openai_list_files_in_vector_store(store_id)
+        assert listed.data == []
+        store = await a.openai_retrieve_vector_store(store_id)
+        assert store.file_counts.total == 0
+        assert store.usage_bytes == 0
+
+    async def test_attaches_on_two_workers_are_both_listed(self, workers):
+        a, b = workers
+        store_id = await self._create_store(a)
+
+        both_processing = asyncio.Barrier(2)
+        for worker in (a, b):
+            process_file = worker.file_processor_api.process_file.side_effect
+
+            async def _wait_for_other_attach(req, process_file=process_file):
+                await both_processing.wait()
+                return await process_file(req)
+
+            worker.file_processor_api.process_file.side_effect = _wait_for_other_attach
+
+        await asyncio.gather(
+            a.openai_attach_file_to_vector_store(store_id, OpenAIAttachFileRequest(file_id="file-1")),
+            b.openai_attach_file_to_vector_store(store_id, OpenAIAttachFileRequest(file_id="file-2")),
+        )
+
+        listed = await a.openai_list_files_in_vector_store(store_id)
+        assert sorted(f.id for f in listed.data) == ["file-1", "file-2"]
+        store = await b.openai_retrieve_vector_store(store_id)
+        assert store.file_counts.total == 2
+        assert store.file_counts.completed == 2
+        assert store.usage_bytes == len(b"text of file-1") + len(b"text of file-2")
+
+    async def test_attach_in_progress_is_listed_on_another_worker(self, workers):
+        a, b = workers
+        store_id = await self._create_store(a)
+        started, release = asyncio.Event(), asyncio.Event()
+        self._hold_processing(a, started, release)
+
+        attach = asyncio.create_task(
+            a.openai_attach_file_to_vector_store(store_id, OpenAIAttachFileRequest(file_id="file-1"))
+        )
+        await started.wait()
+        try:
+            listed = await b.openai_list_files_in_vector_store(store_id)
+            assert [(f.id, f.status) for f in listed.data] == [("file-1", "in_progress")]
+            store = await b.openai_retrieve_vector_store(store_id)
+            assert store.file_counts.in_progress == 1
+            assert store.file_counts.total == 1
+        finally:
+            release.set()
+            await attach
+
+    async def test_file_detached_during_its_attach_stays_detached(self, workers, metadata_store):
+        a, b = workers
+        store_id = await self._create_store(a)
+        started, release = asyncio.Event(), asyncio.Event()
+        self._hold_processing(a, started, release)
+
+        attach = asyncio.create_task(
+            a.openai_attach_file_to_vector_store(store_id, OpenAIAttachFileRequest(file_id="file-1"))
+        )
+        await started.wait()
+        await b.openai_delete_vector_store_file(store_id, "file-1")
+        release.set()
+        await attach
+
+        assert (await a.openai_list_files_in_vector_store(store_id)).data == []
+        assert await self._rows(metadata_store, TABLE_VECTOR_STORE_FILE_CONTENTS, store_id) == []
+
+    async def test_detaching_a_file_gives_back_its_usage_bytes(self, workers):
+        """The store's usage_bytes drops by the detached file's share (#6542, #6550)."""
+        a, b = workers
+        store_id = await self._create_store(a)
+        await a.openai_attach_file_to_vector_store(store_id, OpenAIAttachFileRequest(file_id="file-1"))
+        await a.openai_attach_file_to_vector_store(store_id, OpenAIAttachFileRequest(file_id="file-22"))
+
+        await b.openai_delete_vector_store_file(store_id, "file-1")
+
+        store = await a.openai_retrieve_vector_store(store_id)
+        assert store.usage_bytes == len(b"text of file-22")
+        assert store.file_counts.total == 1
+
+    async def test_deleting_a_store_removes_its_file_rows(self, workers, metadata_store):
+        a, b = workers
+        store_id = await self._create_store(a)
+        await a.openai_attach_file_to_vector_store(store_id, OpenAIAttachFileRequest(file_id="file-1"))
+
+        await b.openai_delete_vector_store(store_id)
+
+        assert await self._rows(metadata_store, TABLE_VECTOR_STORE_FILES, store_id) == []
+        assert await self._rows(metadata_store, TABLE_VECTOR_STORE_FILE_CONTENTS, store_id) == []
+
+    async def test_store_deleted_during_an_attach_leaves_nothing_behind(self, workers, metadata_store):
+        a, b = workers
+        store_id = await self._create_store(a)
+        started, release = asyncio.Event(), asyncio.Event()
+        self._hold_processing(a, started, release)
+
+        attach = asyncio.create_task(
+            a.openai_attach_file_to_vector_store(store_id, OpenAIAttachFileRequest(file_id="file-1"))
+        )
+        await started.wait()
+        await b.openai_delete_vector_store(store_id)
+        release.set()
+        await attach
+
+        with pytest.raises(VectorStoreNotFoundError):
+            await a.openai_retrieve_vector_store(store_id)
+        assert await self._rows(metadata_store, TABLE_VECTOR_STORE_FILES, store_id) == []
+        assert await self._rows(metadata_store, TABLE_VECTOR_STORE_FILE_CONTENTS, store_id) == []
+
+    async def test_file_missing_from_a_store_is_not_found(self, workers):
+        a, _ = workers
+        store_id = await self._create_store(a)
+
+        with pytest.raises(ResourceNotFoundError):
+            await a.openai_retrieve_vector_store_file(store_id, "file-missing")
+        with pytest.raises(ResourceNotFoundError):
+            await a.openai_delete_vector_store_file(store_id, "file-missing")
