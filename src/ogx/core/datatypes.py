@@ -1041,6 +1041,32 @@ can be instantiated multiple times (with different configs) if necessary.
         return self
 
     @model_validator(mode="after")
+    def normalize_removed_file_search_tool_runtime(self) -> "StackConfig":
+        """Drop the removed ``inline::file-search`` provider from ``tool_runtime``.
+
+        The file-search tool runtime no longer exists: file search runs built
+        into the Responses API on top of the vector stores API and requires no
+        tool_runtime provider. Existing configs keep loading: the entries are
+        dropped at read time, with a warning prompting cleanup.
+        """
+        import warnings
+
+        tool_runtime_providers = self.providers.get("tool_runtime") or []
+        if not any(p.provider_type == "inline::file-search" for p in tool_runtime_providers):
+            return self
+
+        warnings.warn(
+            "The 'inline::file-search' tool_runtime provider was removed; file search "
+            "now runs built into the Responses API over the vector stores API. "
+            "Remove the entry from your 'tool_runtime' section.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        self.providers["tool_runtime"] = [p for p in tool_runtime_providers if p.provider_type != "inline::file-search"]
+        return self
+
+    @model_validator(mode="after")
     def validate_server_stores(self) -> "StackConfig":
         backend_map = self.storage.backends
         stores = self.storage.stores

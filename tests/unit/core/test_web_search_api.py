@@ -231,7 +231,7 @@ def test_legacy_tool_runtime_web_search_providers_translate_to_web_search():
             providers={
                 "tool_runtime": [
                     Provider(provider_id="brave", provider_type="remote::brave-search"),
-                    Provider(provider_id="file-search", provider_type="inline::file-search"),
+                    Provider(provider_id="mcp", provider_type="remote::model-context-protocol"),
                     Provider(provider_id="searchapi", provider_type="remote::searchapi-search"),
                     Provider(provider_id="placeholder", provider_type="inline::placeholder"),
                 ],
@@ -245,7 +245,7 @@ def test_legacy_tool_runtime_web_search_providers_translate_to_web_search():
     ]
     # Non-web-search tool_runtime providers stay put
     assert [(p.provider_id, p.provider_type) for p in config.providers["tool_runtime"]] == [
-        ("file-search", "inline::file-search"),
+        ("mcp", "remote::model-context-protocol"),
     ]
     # The translated providers must be reachable over the HTTP surface
     assert "web_search" in config.apis
@@ -265,6 +265,40 @@ def test_legacy_config_without_apis_list_is_untouched_by_translation():
 
     assert config.apis is None
     assert [p.provider_type for p in config.providers["web_search"]] == ["remote::tavily-search"]
+
+
+def test_removed_file_search_provider_is_dropped_from_tool_runtime():
+    """A config still listing the removed file-search provider loads, with the entry dropped."""
+    from ogx.core.datatypes import Provider, StackConfig
+
+    with pytest.warns(DeprecationWarning, match="inline::file-search"):
+        config = StackConfig(
+            distro_name="test",
+            providers={
+                "tool_runtime": [
+                    Provider(provider_id="file-search", provider_type="inline::file-search"),
+                    Provider(provider_id="mcp", provider_type="remote::model-context-protocol"),
+                ],
+            },
+        )
+
+    # The removed provider is dropped; other tool_runtime providers stay put
+    assert [p.provider_type for p in config.providers["tool_runtime"]] == ["remote::model-context-protocol"]
+    # Nothing is moved to another API section
+    assert "web_search" not in config.providers
+
+
+def test_config_without_file_search_provider_is_untouched():
+    from ogx.core.datatypes import Provider, StackConfig
+
+    config = StackConfig(
+        distro_name="test",
+        providers={
+            "tool_runtime": [Provider(provider_id="mcp", provider_type="remote::model-context-protocol")],
+        },
+    )
+
+    assert [p.provider_type for p in config.providers["tool_runtime"]] == ["remote::model-context-protocol"]
 
 
 def test_generated_starter_config_keeps_legacy_shape_and_translates_on_load():
@@ -289,10 +323,7 @@ def test_generated_starter_config_keeps_legacy_shape_and_translates_on_load():
         "remote::searchapi-search",
     ]
     # Non-web-search tool_runtime providers stay put
-    assert [p.provider_type for p in config.providers["tool_runtime"]] == [
-        "inline::file-search",
-        "remote::model-context-protocol",
-    ]
+    assert [p.provider_type for p in config.providers["tool_runtime"]] == ["remote::model-context-protocol"]
     assert "web_search" in config.apis
 
 

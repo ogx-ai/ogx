@@ -43,12 +43,14 @@ The tool requires an API key which can be provided either in the configuration o
 
 ### File Search (RAG)
 
-The file search tool enables retrieval-augmented generation by searching through vector stores. Configure the `inline::file-search` provider in your `tool_runtime` providers and the `builtin::file_search` tool group will be auto-registered.
+The file search tool enables retrieval-augmented generation by searching through vector stores. It is a built-in tool of the Responses API: pass `{"type": "file_search", "vector_store_ids": [...]}` in the request's `tools`, and the model's queries are executed against the configured vector stores (`Api.vector_io`) with the results formatted into the model's context with citations.
 
 Features:
 - Vector store based document retrieval
-- Configurable query generation
-- Context retrieval with token limits
+- Filtered and ranked search (`filters`, `ranking_options`)
+- Multi-store fan-out with per-store failure degradation
+
+Configurations that still list the `inline::file-search` provider under `tool_runtime` keep loading: the entry is dropped at read time with a deprecation warning. Remove it from your configuration; no provider is needed for file search.
 
 ### Memory Alpha
 

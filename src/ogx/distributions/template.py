@@ -33,6 +33,15 @@ from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.providers.utils.inference.model_registry import ProviderModelEntry
 from ogx_api import ConnectorInput, ConnectorType, ModelType
 
+# Provider types removed from the registry that some distribution templates
+# still list, pending a cleanup follow-up. Codegen emits their config entries
+# verbatim (no config block, since there is no spec to resolve one from); at
+# runtime the StackConfig normalizer drops the entries with a deprecation
+# warning. Any other unknown provider type still fails codegen.
+_REMOVED_PROVIDER_TYPES = {
+    "inline::file-search",
+}
+
 
 def filter_empty_values(obj: Any) -> Any:
     """Recursively filter out specific empty values from a dictionary or list.
@@ -175,7 +184,21 @@ class RunConfigSettings(BaseModel):
                         if spec := registry.get(provider.provider_type):
                             break
                 if spec is None:
-                    raise ValueError(f"Unknown provider type: {provider.provider_type} for API: {api_str}")
+                    if provider.provider_type not in _REMOVED_PROVIDER_TYPES:
+                        raise ValueError(f"Unknown provider type: {provider.provider_type} for API: {api_str}")
+                    # The provider was removed from the registry, but the distro config
+                    # keeps the entry until a cleanup follow-up. No spec exists to
+                    # resolve a config class or sample config from, so emit the entry
+                    # verbatim (no config block). At runtime the StackConfig normalizer
+                    # drops the entry with a deprecation warning.
+                    provider_configs[api_str].append(
+                        Provider(
+                            provider_id=provider.provider_type.split("::")[-1],
+                            provider_type=provider.provider_type,
+                            config={},
+                        ).model_dump(exclude_none=True)
+                    )
+                    continue
                 provider_id = provider.provider_type.split("::")[-1]
                 config_class = spec.config_class
                 assert config_class is not None, (

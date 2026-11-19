@@ -11,7 +11,6 @@ inline/
   inference/           # Local inference (sentence-transformers, transformers)
   ios/                 # iOS on-device inference
   vector_io/           # Vector storage (sqlite-vec, faiss, chroma, milvus, qdrant)
-  tool_runtime/        # Tool runtime (file-search RAG)
   files/               # File storage and management
   file_processor/      # File processing (text extraction, etc.)
   skills/              # Skills API (versioned skill bundle management)
