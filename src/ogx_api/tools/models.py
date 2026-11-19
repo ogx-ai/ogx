@@ -23,7 +23,6 @@ from ogx_api.schema_utils import json_schema_type
 class ToolDef(BaseModel):
     """Tool definition used in runtime contexts."""
 
-    toolgroup_id: str | None = Field(default=None, description="The ID of the tool group this tool belongs to.")
     name: str = Field(..., description="The name of the tool.")
     description: str | None = Field(default=None, description="A human-readable description of what the tool does.")
     input_schema: dict[str, Any] | None = Field(
