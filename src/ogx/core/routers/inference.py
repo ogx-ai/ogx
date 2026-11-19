@@ -61,6 +61,7 @@ from ogx_api import (
     RoutingTable,
 )
 from ogx_api.inference.models import RerankRequest
+from ogx_api.inference.systemone import SystemOneRequest, SystemOneResponse
 from ogx_api.messages.models import (
     AnthropicCountTokensRequest,
     AnthropicCountTokensResponse,
@@ -201,6 +202,22 @@ class InferenceRouter(Inference):
         params.model = provider_resource_id
         return await provider.rerank(params)
 
+    async def judge(
+        self,
+        params: SystemOneRequest,
+    ) -> SystemOneResponse:
+        request_model_id = params.model
+        provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.systemone)
+        inference_model_type_used_total.add(
+            1, {"type": "systemone", "model": request_model_id, "provider": provider.__provider_id__}
+        )
+        params.model = provider_resource_id
+        response = await provider.judge(params)
+        # Providers respond with their internal model id, so rewrite it to the fully qualified
+        # model id the client requested (mirrors the non-streaming completion path below).
+        response.model = request_model_id
+        return response
+
     async def openai_completion(
         self,
         params: Annotated[OpenAICompletionRequestWithExtraBody, Body(...)],
@@ -258,10 +275,12 @@ class InferenceRouter(Inference):
                 TypeAdapter(OpenAIChatCompletionToolParam).validate_python(tool)
 
         # Some providers make tool calls even when tool_choice is "none"
-        # so just clear them both out to avoid unexpected tool calls
+        # so just clear them both out to avoid unexpected tool calls.
+        # parallel_tool_calls is dropped too: it is invalid without tools.
         if params.tool_choice == "none" and params.tools is not None:
             params.tool_choice = None
             params.tools = None
+            params.parallel_tool_calls = None
 
         if params.stream:
             response_stream = await provider.openai_chat_completion(params)

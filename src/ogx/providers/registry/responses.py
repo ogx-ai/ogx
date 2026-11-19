@@ -15,7 +15,7 @@ from ogx_api import (
 # NOTE: For specific kvstore implementations, use config.pip_packages instead.
 # This is the union of all dependencies for cases where the specific kvstore type
 # is not known at declaration time (e.g., provider registries).
-KVSTORE_DEPS = ["aiosqlite", "asyncpg", "redis", "pymongo>=4.18.1"]  # CVE-2026-88029: query-operator injection
+KVSTORE_DEPS = ["aiosqlite", "asyncpg", "redis", "pymongo>=4.18.2"]  # CVE-2026-88029: query-operator injection
 
 
 def available_providers() -> list[ProviderSpec]:
@@ -48,7 +48,7 @@ def available_providers() -> list[ProviderSpec]:
                 Api.files,
                 Api.connectors,
             ],
-            optional_api_dependencies=[Api.skills],
+            optional_api_dependencies=[Api.skills, Api.web_search],
             description="Meta's reference implementation of an agent system that can use tools, access vector databases, and perform complex reasoning tasks.",
         ),
     ]

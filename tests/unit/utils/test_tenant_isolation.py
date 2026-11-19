@@ -10,12 +10,13 @@ from unittest.mock import patch
 import pytest
 
 from ogx.core.access_control.access_control import default_policy
+from ogx.core.access_control.datatypes import AccessRule, Action, Scope
 from ogx.core.datatypes import TenancyMode, User
 from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
 from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
 from ogx.core.storage.sqlstore.sqlstore import SqliteSqlStoreConfig
 from ogx_api import ConflictError
-from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
+from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, DeleteOperation
 
 
 def _make_store(
@@ -23,9 +24,10 @@ def _make_store(
     db_name: str,
     tenancy_mode: TenancyMode = TenancyMode.MULTI,
     default_tenant_id: str | None = None,
+    policy: list[AccessRule] | None = None,
 ) -> AuthorizedSqlStore:
     base = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=f"{tmp_dir}/{db_name}"))
-    return AuthorizedSqlStore(base, default_policy(), tenancy_mode, default_tenant_id)
+    return AuthorizedSqlStore(base, policy if policy is not None else default_policy(), tenancy_mode, default_tenant_id)
 
 
 @patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
@@ -93,6 +95,56 @@ async def test_tenant_a_cannot_delete_tenant_b(mock_user):
 
         mock_user.return_value = bob
         await store.delete("docs", where={"id": "a1"})
+
+        mock_user.return_value = alice
+        row = await store.fetch_one("docs", where={"id": "a1"})
+        assert row is not None
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_tenant_a_cannot_delete_many_tenant_b_sql_optimized_policy(mock_user):
+    """Cross-tenant delete_many must be denied under the default (SQL-optimized) policy."""
+    with TemporaryDirectory() as tmp:
+        store = _make_store(tmp, "tenant_delete_many_sql.db")
+        await store.create_table("docs", {"id": ColumnType.STRING, "title": ColumnType.STRING})
+
+        alice = User("alice", {"roles": ["admin"]}, tenant_id="tenant-a")
+        bob = User("bob", {"roles": ["admin"]}, tenant_id="tenant-b")
+
+        mock_user.return_value = alice
+        await store.insert("docs", {"id": "a1", "title": "Keep me"})
+
+        mock_user.return_value = bob
+        await store.delete_many([DeleteOperation(table="docs", where={"id": "a1"})])
+
+        mock_user.return_value = alice
+        row = await store.fetch_one("docs", where={"id": "a1"})
+        assert row is not None
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_tenant_a_cannot_delete_many_tenant_b_custom_policy_fallback(mock_user):
+    """Cross-tenant delete_many must be denied even under a custom, non-SQL-optimizable policy.
+
+    #6723: the SQL-optimized path's owner-based ABAC clause happened to mask this bug (bob
+    isn't a1's owner, so the ABAC clause alone already excluded it), but a role-based custom
+    policy -- which grants bob access on its own terms, independent of ownership -- does not,
+    so this path is where delete_many previously applied no tenant filter at all and deleted
+    across the tenant boundary.
+    """
+    with TemporaryDirectory() as tmp:
+        admin_policy = [AccessRule(permit=Scope(actions=list(Action)), when=["user with admin in roles"])]
+        store = _make_store(tmp, "tenant_delete_many_custom.db", policy=admin_policy)
+        await store.create_table("docs", {"id": ColumnType.STRING, "title": ColumnType.STRING})
+
+        alice = User("alice", {"roles": ["admin"]}, tenant_id="tenant-a")
+        bob = User("bob", {"roles": ["admin"]}, tenant_id="tenant-b")
+
+        mock_user.return_value = alice
+        await store.insert("docs", {"id": "a1", "title": "Keep me"})
+
+        mock_user.return_value = bob
+        await store.delete_many([DeleteOperation(table="docs", where={"id": "a1"})])
 
         mock_user.return_value = alice
         row = await store.fetch_one("docs", where={"id": "a1"})

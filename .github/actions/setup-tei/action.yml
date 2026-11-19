@@ -7,11 +7,11 @@ runs:
       shell: bash
       run: |
         echo "Starting Text-Embeddings-Inference server..."
-        # cpu-1.9 is the CPU build; the un-suffixed tags are CUDA builds that
+        # cpu-1.9.4 is the CPU build; the un-suffixed tags are CUDA builds that
         # require nvidia-smi and fail on CPU-only runners.
         docker run -d --name tei -p 8080:80 \
           -e MODEL_ID=nomic-ai/nomic-embed-text-v1.5 \
-          ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
+          ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.4
         echo "Verifying Text-Embeddings-Inference status..."
         # The model is downloaded and loaded during first boot, so allow time
         timeout 300 bash -c 'while ! curl -s -L http://127.0.0.1:8080/health; do sleep 2 && echo "."; done'

@@ -20,6 +20,7 @@ from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pydantic import ValidationError
 
 from ogx.core.request_headers import PROVIDER_DATA_VAR
 from ogx.core.routers.inference import InferenceRouter, _normalize_provider_data_key
@@ -29,11 +30,14 @@ from ogx_api import (
     ListChatCompletionMessagesRequest,
     ListChatCompletionsRequest,
     ModelType,
+    ModelTypeError,
     OpenAICompletion,
     OpenAICompletionRequestWithExtraBody,
     RerankData,
     RerankResponse,
     RoutingTable,
+    SystemOneRequest,
+    SystemOneResponse,
 )
 from ogx_api.inference import RerankRequest
 from ogx_api.inference.models import (
@@ -80,6 +84,25 @@ def mock_llm_routing_table():
 
     mock_provider = MagicMock()
     mock_provider.__provider_id__ = "test_provider"
+
+    routing_table.get_object_by_identifier = AsyncMock(return_value=mock_model)
+    routing_table.get_provider_impl = AsyncMock(return_value=mock_provider)
+
+    return routing_table, mock_provider
+
+
+@pytest.fixture
+def mock_systemone_routing_table():
+    """Create a mock routing table with a SystemOne (judgment) model and provider."""
+    routing_table = MagicMock(spec=RoutingTable)
+
+    mock_model = MagicMock()
+    mock_model.identifier = "typesafe/jev-latest"
+    mock_model.model_type = ModelType.systemone
+    mock_model.provider_resource_id = "jev-latest"
+
+    mock_provider = MagicMock()
+    mock_provider.__provider_id__ = "typesafe"
 
     routing_table.get_object_by_identifier = AsyncMock(return_value=mock_model)
     routing_table.get_provider_impl = AsyncMock(return_value=mock_provider)
@@ -298,6 +321,82 @@ async def test_rerank_calls_provider_correctly(mock_routing_table):
     assert result == expected_response
 
 
+async def test_judge_calls_provider_correctly(mock_systemone_routing_table):
+    """InferenceRouter.judge() routes a SystemOne judgment to the model's provider.
+
+    Validates the model is resolved as ModelType.systemone, the request model id is rewritten to
+    the provider resource id for the provider call, and the response model is rewritten back to
+    the fully-qualified id the client requested (so the provider's internal id isn't leaked).
+    """
+    routing_table, mock_provider = mock_systemone_routing_table
+    router = InferenceRouter(routing_table=routing_table)
+
+    expected_response = SystemOneResponse(
+        model="jev-latest",
+        answers={"billing": {"type": "noul", "noul": 0.9}},
+        usage={"input_tokens": 12, "output_tokens": 4},
+    )
+    mock_provider.judge = AsyncMock(return_value=expected_response)
+
+    request = SystemOneRequest(
+        model="typesafe/jev-latest",
+        state="I was charged twice. Please help.",
+        questions={"billing": {"type": "noul", "instructions": "Is this about billing?"}},
+    )
+
+    result = await router.judge(request)
+
+    mock_provider.judge.assert_called_once()
+    called_request = mock_provider.judge.call_args.args[0]
+    assert isinstance(called_request, SystemOneRequest)
+    assert called_request.model == "jev-latest", "Model should be rewritten to the provider resource id"
+    # The provider returns its internal id ("jev-latest"); the router must rewrite the response
+    # model back to the fully-qualified id the client requested so the provider id isn't leaked.
+    assert result.model == "typesafe/jev-latest", "Response model must be the requested id, not the provider id"
+    assert result.answers == expected_response.answers
+    assert result.usage == expected_response.usage
+
+
+async def test_judge_rejects_non_systemone_model(mock_systemone_routing_table):
+    """A model that is not ModelType.systemone is rejected before the provider is called."""
+    routing_table, mock_provider = mock_systemone_routing_table
+    routing_table.get_object_by_identifier = AsyncMock(
+        return_value=MagicMock(
+            identifier="typesafe/gpt-4o",
+            model_type=ModelType.llm,
+            provider_resource_id="gpt-4o",
+        )
+    )
+    router = InferenceRouter(routing_table=routing_table)
+
+    request = SystemOneRequest(
+        model="typesafe/gpt-4o",
+        state="state",
+        questions={"billing": {"type": "noul", "instructions": "Is this billing?"}},
+    )
+
+    with pytest.raises(ModelTypeError):
+        await router.judge(request)
+    mock_provider.judge.assert_not_called()
+
+
+def test_systemone_choice_criteria_is_bounded_to_255():
+    """A `choice` question accepts up to 255 options but rejects 256."""
+
+    def _choice_request(n_options: int) -> SystemOneRequest:
+        return SystemOneRequest(
+            model="m",
+            state="s",
+            questions={
+                "q": {"type": "choice", "instructions": "pick", "criteria": {str(i): None for i in range(n_options)}}
+            },
+        )
+
+    assert _choice_request(255).questions["q"].type == "choice"
+    with pytest.raises(ValidationError):
+        _choice_request(256)
+
+
 def _make_chat_completion(
     model: str = "test_provider/test-llm-model",
 ) -> OpenAIChatCompletion:
@@ -358,6 +457,35 @@ async def test_openai_chat_completion_non_streaming_without_store(
     assert response.choices[0].message.content == "Hello world"
     # Provider was called with its resource id, not the fully qualified id.
     assert mock_provider.openai_chat_completion.call_args.args[0].model == "test-llm-model"
+
+
+async def test_openai_chat_completion_tool_choice_none_clears_tools_and_parallel_tool_calls(
+    mock_llm_routing_table: tuple[MagicMock, MagicMock],
+) -> None:
+    """tool_choice='none' clears tools (some providers call tools anyway).
+
+    parallel_tool_calls must be cleared along with the tools: it is invalid
+    without tools and OpenAI rejects such requests.
+    """
+    routing_table, mock_provider = mock_llm_routing_table
+    router = InferenceRouter(routing_table=routing_table)
+
+    mock_provider.openai_chat_completion = AsyncMock(return_value=_make_chat_completion())
+
+    params = OpenAIChatCompletionRequestWithExtraBody(
+        model="test_provider/test-llm-model",
+        messages=[{"role": "user", "content": "Say hello"}],
+        tools=[{"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object"}}}],
+        tool_choice="none",
+        parallel_tool_calls=True,
+    )
+
+    await router.openai_chat_completion(params)
+
+    forwarded = mock_provider.openai_chat_completion.call_args.args[0]
+    assert forwarded.tool_choice is None
+    assert forwarded.tools is None
+    assert forwarded.parallel_tool_calls is None
 
 
 async def test_openai_chat_completion_streaming_without_store(

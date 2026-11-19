@@ -993,6 +993,12 @@ access policies:
 | `responses` | Stored responses (table name is configurable in provider config) |
 | `openai_files` | Uploaded files |
 
+Upgrading a server that keyed `conversation_items` on item id alone renames
+that table to `conversation_items_v1` and recreates `conversation_items`
+keyed on `(conversation_id, id)`, copying the rows across. The server does not
+read `conversation_items_v1` again and logs a warning on each start while it
+exists; drop it manually once you have verified the migrated items.
+
 ### Route-Level Authorization
 
 Route-level authorization provides infrastructure-level access control for OGX API routes. This feature allows administrators to restrict which API routes can be accessed based on user attributes (when authentication is enabled) or to globally block/allow specific routes (without authentication).

@@ -13,6 +13,7 @@
 
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from openai.types.conversations.conversation import Conversation as OpenAIConversation
@@ -20,16 +21,24 @@ from openai.types.conversations.conversation_item import ConversationItem as Ope
 from pydantic import TypeAdapter
 from sqlalchemy import event
 
+from ogx.core.access_control.datatypes import AccessRule
 from ogx.core.conversations.conversations import (
+    ITEMS_TABLE,
     ConversationServiceConfig,
     ConversationServiceImpl,
 )
-from ogx.core.datatypes import StackConfig
+from ogx.core.datatypes import StackConfig, TenancyMode, User
 from ogx.core.storage.datatypes import (
     ServerStoresConfig,
+    SqlAlchemySqlStoreConfig,
     SqliteSqlStoreConfig,
     SqlStoreReference,
     StorageConfig,
+)
+from ogx.core.storage.sqlstore.authorized_sqlstore import (
+    get_default_tenancy_config,
+    set_default_tenancy_config,
+    set_default_tenancy_mode,
 )
 from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
 from ogx_api import (
@@ -55,30 +64,61 @@ from ogx_api.conversations.models import (
 )
 
 
+def _message(text: str, item_id: str | None = None) -> OpenAIResponseMessage:
+    return OpenAIResponseMessage(
+        type="message",
+        role="user",
+        content=[OpenAIResponseInputMessageContentText(type="input_text", text=text)],
+        id=item_id,
+        status="completed",
+    )
+
+
+def _texts(items: ConversationItemList) -> list[tuple[str, str]]:
+    return [(item.id, item.content[0].text) for item in items.data]
+
+
+async def _make_service(
+    backend: SqlAlchemySqlStoreConfig,
+    policy: list[AccessRule] | None = None,
+) -> ConversationServiceImpl:
+    storage = StorageConfig(
+        backends={
+            "sql_test": backend,
+        },
+        stores=ServerStoresConfig(
+            conversations=SqlStoreReference(backend="sql_test", table_name="openai_conversations"),
+            metadata=None,
+            inference=None,
+            prompts=None,
+            connectors=None,
+        ),
+    )
+    register_sqlstore_backends({"sql_test": storage.backends["sql_test"]})
+    stack_config = StackConfig(distro_name="test", providers={}, storage=storage)
+
+    config = ConversationServiceConfig(config=stack_config, policy=policy or [])
+    service = ConversationServiceImpl(config, {})
+    await service.initialize()
+    return service
+
+
 @pytest.fixture
 async def service():
     with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test_conversations.db"
+        yield await _make_service(SqliteSqlStoreConfig(db_path=str(Path(tmpdir) / "test_conversations.db")))
 
-        storage = StorageConfig(
-            backends={
-                "sql_test": SqliteSqlStoreConfig(db_path=str(db_path)),
-            },
-            stores=ServerStoresConfig(
-                conversations=SqlStoreReference(backend="sql_test", table_name="openai_conversations"),
-                metadata=None,
-                inference=None,
-                prompts=None,
-                connectors=None,
-            ),
-        )
-        register_sqlstore_backends({"sql_test": storage.backends["sql_test"]})
-        stack_config = StackConfig(distro_name="test", providers={}, storage=storage)
 
-        config = ConversationServiceConfig(config=stack_config, policy=[])
-        service = ConversationServiceImpl(config, {})
-        await service.initialize()
-        yield service
+@pytest.fixture
+async def multi_tenant_service():
+    """A service whose store isolates rows by tenant, as a multi-tenant deployment does."""
+    previous = get_default_tenancy_config()
+    set_default_tenancy_mode(TenancyMode.MULTI)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield await _make_service(SqliteSqlStoreConfig(db_path=str(Path(tmpdir) / "multi_tenant.db")))
+    finally:
+        set_default_tenancy_config(previous)
 
 
 async def test_conversation_lifecycle(service):
@@ -120,9 +160,7 @@ async def test_delete_conversation_cascades_to_items(service):
     with pytest.raises(ConversationNotFoundError):
         await service.retrieve(RetrieveItemRequest(conversation_id=conversation.id, item_id=item_id))
 
-    raw_items = await service.sql_store.fetch_all(
-        table="conversation_items", where={"conversation_id": conversation.id}
-    )
+    raw_items = await service.sql_store.fetch_all(table=ITEMS_TABLE, where={"conversation_id": conversation.id})
     assert raw_items.data == []
 
 
@@ -138,7 +176,7 @@ async def test_delete_conversation_is_atomic_when_parent_delete_fails(service):
             status="completed",
         )
     ]
-    await service.add_items(conversation.id, AddItemsRequest(items=items))
+    added = await service.add_items(conversation.id, AddItemsRequest(items=items))
 
     listed_before_delete = await service.list_items(ListItemsRequest(conversation_id=conversation.id))
     assert len(listed_before_delete.data) == 1
@@ -170,7 +208,7 @@ async def test_delete_conversation_is_atomic_when_parent_delete_fails(service):
 
     listed_after_failure = await service.list_items(ListItemsRequest(conversation_id=conversation.id))
     assert len(listed_after_failure.data) == 1
-    assert listed_after_failure.data[0].id == "msg_atomicdelete123"
+    assert listed_after_failure.data[0].id == added.data[0].id
 
 
 async def test_conversation_items(service):
@@ -188,7 +226,7 @@ async def test_conversation_items(service):
     item_list = await service.add_items(conversation.id, AddItemsRequest(items=items))
 
     assert len(item_list.data) == 1
-    assert item_list.data[0].id == "msg_test123"
+    assert item_list.data[0].id.startswith("msg_")
 
     items_result = await service.list_items(ListItemsRequest(conversation_id=conversation.id))
     assert len(items_result.data) == 1
@@ -395,10 +433,11 @@ async def test_delete_item_returns_parent_conversation(service):
             status="completed",
         )
     ]
-    await service.add_items(conversation.id, AddItemsRequest(items=items))
+    added = await service.add_items(conversation.id, AddItemsRequest(items=items))
+    item_id = added.data[0].id
 
     result = await service.openai_delete_conversation_item(
-        DeleteItemRequest(conversation_id=conversation.id, item_id="msg_todelete")
+        DeleteItemRequest(conversation_id=conversation.id, item_id=item_id)
     )
 
     assert isinstance(result, Conversation)
@@ -408,7 +447,7 @@ async def test_delete_item_returns_parent_conversation(service):
 
     # Verify the item was actually deleted
     with pytest.raises(ConversationItemNotFoundError):
-        await service.retrieve(RetrieveItemRequest(conversation_id=conversation.id, item_id="msg_todelete"))
+        await service.retrieve(RetrieveItemRequest(conversation_id=conversation.id, item_id=item_id))
 
 
 async def test_list_items_has_more_with_limit(service):
@@ -586,81 +625,210 @@ async def test_list_items_after_cursor_from_other_conversation_raises_error(serv
         await service.list_items(ListItemsRequest(conversation_id=conv2.id, after=cursor_from_conv1))
 
 
-async def test_add_items_rejects_item_id_from_other_conversation(service):
-    """An item ID that already belongs to another conversation must not be moved, and nothing in the batch is written."""
-    conv1 = await service.create_conversation(CreateConversationRequest())
-    conv2 = await service.create_conversation(CreateConversationRequest())
-    shared_id = "msg_" + "d" * 48
+async def test_add_item_without_id_gets_server_minted_id(service):
+    """Case 1: an item posted without an id is stored under a server-minted id."""
+    conversation = await service.create_conversation(CreateConversationRequest())
 
-    await service.add_items(
-        conv1.id,
-        AddItemsRequest(
-            items=[
-                OpenAIResponseMessage(
-                    type="message",
-                    role="user",
-                    content=[OpenAIResponseInputMessageContentText(type="input_text", text="Hello from conv1")],
-                    id=shared_id,
-                    status="completed",
-                )
-            ]
-        ),
+    added = await service.add_items(conversation.id, AddItemsRequest(items=[_message("hello")]))
+
+    item_id = added.data[0].id
+    assert item_id.startswith("msg_")
+    assert len(item_id) == len("msg_") + 48
+    retrieved = await service.retrieve(RetrieveItemRequest(conversation_id=conversation.id, item_id=item_id))
+    assert retrieved.content[0].text == "hello"
+
+
+async def test_add_items_copies_item_from_other_conversation(service):
+    """Case 2: an id from conversation A posted to B copies A's item with its original content."""
+    conv_a = await service.create_conversation(CreateConversationRequest())
+    conv_b = await service.create_conversation(CreateConversationRequest())
+    item_id = (await service.add_items(conv_a.id, AddItemsRequest(items=[_message("hello from A")]))).data[0].id
+
+    added = await service.add_items(conv_b.id, AddItemsRequest(items=[_message("content sent for B", item_id)]))
+
+    assert _texts(added) == [(item_id, "hello from A")]
+    assert _texts(await service.list_items(ListItemsRequest(conversation_id=conv_b.id))) == [(item_id, "hello from A")]
+    assert _texts(await service.list_items(ListItemsRequest(conversation_id=conv_a.id))) == [(item_id, "hello from A")]
+
+
+async def test_add_items_rejects_id_already_in_conversation(service):
+    """Case 3: re-adding an item's id to its own conversation is a 400 and the batch writes nothing."""
+    conversation = await service.create_conversation(CreateConversationRequest())
+    item_id = (await service.add_items(conversation.id, AddItemsRequest(items=[_message("first")]))).data[0].id
+
+    with pytest.raises(InvalidParameterError, match="Invalid value for 'items'.*Item already in conversation"):
+        await service.add_items(
+            conversation.id, AddItemsRequest(items=[_message("new item"), _message("second", item_id)])
+        )
+
+    assert _texts(await service.list_items(ListItemsRequest(conversation_id=conversation.id))) == [(item_id, "first")]
+
+
+async def test_create_conversation_copies_item_from_other_conversation(service):
+    """Case 4: creating a conversation with an item carrying another conversation's id copies it."""
+    conv_a = await service.create_conversation(CreateConversationRequest())
+    item_id = (await service.add_items(conv_a.id, AddItemsRequest(items=[_message("hello from A")]))).data[0].id
+
+    conv_b = await service.create_conversation(CreateConversationRequest(items=[_message("ignored", item_id)]))
+
+    assert _texts(await service.list_items(ListItemsRequest(conversation_id=conv_b.id))) == [(item_id, "hello from A")]
+    assert _texts(await service.list_items(ListItemsRequest(conversation_id=conv_a.id))) == [(item_id, "hello from A")]
+
+
+async def test_create_conversation_with_rejected_items_writes_nothing(service):
+    """A rejected item batch on create must not leave a conversation row behind."""
+    conv_a = await service.create_conversation(CreateConversationRequest())
+    item_id = (await service.add_items(conv_a.id, AddItemsRequest(items=[_message("hello from A")]))).data[0].id
+    conversations_before = len((await service.sql_store.fetch_all(table="openai_conversations")).data)
+
+    with pytest.raises(InvalidParameterError, match="Item already in conversation"):
+        await service.create_conversation(
+            CreateConversationRequest(items=[_message("copy", item_id), _message("copy again", item_id)])
+        )
+
+    conversations_after = len((await service.sql_store.fetch_all(table="openai_conversations")).data)
+    assert conversations_after == conversations_before
+
+
+async def test_add_items_ignores_unknown_client_ids(service):
+    """Case 5: two new messages sharing an unknown client id are both stored under fresh server ids."""
+    conversation = await service.create_conversation(CreateConversationRequest())
+    client_id = "msg_" + "f" * 48
+
+    added = await service.add_items(
+        conversation.id, AddItemsRequest(items=[_message("one", client_id), _message("two", client_id)])
     )
 
-    with pytest.raises(InvalidParameterError, match=f"already belongs to conversation '{conv1.id}'"):
-        await service.add_items(
-            conv2.id,
-            AddItemsRequest(
-                items=[
-                    OpenAIResponseMessage(
-                        type="message",
-                        role="user",
-                        content=[OpenAIResponseInputMessageContentText(type="input_text", text="New in conv2")],
-                        status="completed",
-                    ),
-                    OpenAIResponseMessage(
-                        type="message",
-                        role="user",
-                        content=[OpenAIResponseInputMessageContentText(type="input_text", text="Stolen from conv1")],
-                        id=shared_id,
-                        status="completed",
-                    ),
-                ]
-            ),
-        )
-
-    conv1_items = await service.list_items(ListItemsRequest(conversation_id=conv1.id))
-    assert [item.id for item in conv1_items.data] == [shared_id]
-    assert conv1_items.data[0].content[0].text == "Hello from conv1"
-
-    conv2_items = await service.list_items(ListItemsRequest(conversation_id=conv2.id))
-    assert conv2_items.data == []
+    ids = [item.id for item in added.data]
+    assert len(set(ids)) == 2
+    assert client_id not in ids
+    assert all(item_id.startswith("msg_") for item_id in ids)
+    listed = await service.list_items(ListItemsRequest(conversation_id=conversation.id, order="asc"))
+    assert _texts(listed) == [(ids[0], "one"), (ids[1], "two")]
+    with pytest.raises(ConversationItemNotFoundError):
+        await service.retrieve(RetrieveItemRequest(conversation_id=conversation.id, item_id=client_id))
 
 
-async def test_add_items_same_id_in_same_conversation_updates_in_place(service):
-    """Re-adding an item ID to its own conversation stays an in-place update."""
+async def test_delete_item_leaves_copy_in_other_conversation(service):
+    """Case 6: deleting A's item after it was copied into B leaves B's copy in place."""
+    conv_a = await service.create_conversation(CreateConversationRequest())
+    conv_b = await service.create_conversation(CreateConversationRequest())
+    item_id = (await service.add_items(conv_a.id, AddItemsRequest(items=[_message("hello from A")]))).data[0].id
+    await service.add_items(conv_b.id, AddItemsRequest(items=[_message("ignored", item_id)]))
+
+    await service.openai_delete_conversation_item(DeleteItemRequest(conversation_id=conv_a.id, item_id=item_id))
+
+    with pytest.raises(ConversationItemNotFoundError):
+        await service.retrieve(RetrieveItemRequest(conversation_id=conv_a.id, item_id=item_id))
+    retrieved = await service.retrieve(RetrieveItemRequest(conversation_id=conv_b.id, item_id=item_id))
+    assert retrieved.content[0].text == "hello from A"
+
+
+async def test_sync_items_keeps_ids_and_skips_items_already_present(service):
+    """The Responses sync keeps the ids it is given and does not duplicate or reject re-sent items."""
     conversation = await service.create_conversation(CreateConversationRequest())
-    item_id = "msg_" + "e" * 48
+    reply_id = "msg_" + "1" * 48
+    next_id = "msg_" + "2" * 48
 
-    for text in ("first", "second"):
-        await service.add_items(
-            conversation.id,
-            AddItemsRequest(
-                items=[
-                    OpenAIResponseMessage(
-                        type="message",
-                        role="user",
-                        content=[OpenAIResponseInputMessageContentText(type="input_text", text=text)],
-                        id=item_id,
-                        status="completed",
-                    )
-                ]
-            ),
-        )
+    await service.sync_items(conversation.id, AddItemsRequest(items=[_message("hello"), _message("reply", reply_id)]))
+    first_turn = await service.list_items(ListItemsRequest(conversation_id=conversation.id, order="asc"))
+    assert first_turn.data[0].id.startswith("msg_")
+    assert _texts(first_turn)[1:] == [(reply_id, "reply")]
 
-    items = await service.list_items(ListItemsRequest(conversation_id=conversation.id))
-    assert [item.id for item in items.data] == [item_id]
-    assert items.data[0].content[0].text == "second"
+    await service.sync_items(
+        conversation.id, AddItemsRequest(items=[_message("edited reply", reply_id), _message("next", next_id)])
+    )
+
+    second_turn = await service.list_items(ListItemsRequest(conversation_id=conversation.id, order="asc"))
+    assert _texts(second_turn)[1:] == [(reply_id, "reply"), (next_id, "next")]
+
+
+async def test_sync_items_allows_id_present_in_other_conversation(service):
+    """Output items replayed into another conversation keep their id there as well."""
+    conv_a = await service.create_conversation(CreateConversationRequest())
+    conv_b = await service.create_conversation(CreateConversationRequest())
+    item_id = "msg_" + "3" * 48
+
+    await service.sync_items(conv_a.id, AddItemsRequest(items=[_message("from A", item_id)]))
+    await service.sync_items(conv_b.id, AddItemsRequest(items=[_message("from B", item_id)]))
+
+    assert _texts(await service.list_items(ListItemsRequest(conversation_id=conv_a.id))) == [(item_id, "from A")]
+    assert _texts(await service.list_items(ListItemsRequest(conversation_id=conv_b.id))) == [(item_id, "from B")]
+
+
+async def test_list_items_after_cursor_uses_position_in_this_conversation(service):
+    """An id copied into several conversations must page from its position in the listed one."""
+    conv_a = await service.create_conversation(CreateConversationRequest())
+    conv_b = await service.create_conversation(CreateConversationRequest())
+    shared_id = (await service.add_items(conv_a.id, AddItemsRequest(items=[_message("shared")]))).data[0].id
+    await service.add_items(conv_b.id, AddItemsRequest(items=[_message("b0"), _message("b1")]))
+    await service.add_items(conv_b.id, AddItemsRequest(items=[_message("ignored", shared_id)]))
+    await service.add_items(conv_b.id, AddItemsRequest(items=[_message("b3")]))
+
+    page = await service.list_items(ListItemsRequest(conversation_id=conv_b.id, order="asc", after=shared_id))
+
+    assert [item.content[0].text for item in page.data] == ["b3"]
+
+
+async def _raw_items(service: ConversationServiceImpl, table: str, conversation_id: str) -> list[dict]:
+    result = await service.sql_store.sql_store.fetch_all(
+        table, where={"conversation_id": conversation_id}, order_by=[("sort_order", "asc")]
+    )
+    return result.data
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_add_items_treats_other_tenants_item_id_as_unknown(mock_user, multi_tenant_service):
+    """An id the caller cannot read gets a server-minted id, the same outcome as an unknown id, so
+    nothing about the other tenant's item leaks and the response cannot be used as an existence oracle."""
+    service = multi_tenant_service
+    alice = User("alice", {"roles": ["user"]}, tenant_id="tenant-a")
+    bob = User("bob", {"roles": ["user"]}, tenant_id="tenant-b")
+    mock_user.return_value = alice
+    conv_a = await service.create_conversation(CreateConversationRequest())
+    alice_item_id = (await service.add_items(conv_a.id, AddItemsRequest(items=[_message("alice secret")]))).data[0].id
+
+    mock_user.return_value = bob
+    conv_b = await service.create_conversation(CreateConversationRequest())
+    added = await service.add_items(conv_b.id, AddItemsRequest(items=[_message("bob content", alice_item_id)]))
+
+    assert added.data[0].id != alice_item_id
+    assert added.data[0].id.startswith("msg_")
+    assert "alice secret" not in added.model_dump_json()
+    assert _texts(added) == [(added.data[0].id, "bob content")]
+    bob_rows = await _raw_items(service, ITEMS_TABLE, conv_b.id)
+    assert [(row["owner_principal"], row["tenant_id"], row["item_data"]["content"][0]["text"]) for row in bob_rows] == [
+        ("bob", "tenant-b", "bob content")
+    ]
+    alice_rows = await _raw_items(service, ITEMS_TABLE, conv_a.id)
+    assert [
+        (row["id"], row["owner_principal"], row["tenant_id"], row["item_data"]["content"][0]["text"])
+        for row in alice_rows
+    ] == [(alice_item_id, "alice", "tenant-a", "alice secret")]
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_create_conversation_treats_other_tenants_item_id_as_unknown(mock_user, multi_tenant_service):
+    service = multi_tenant_service
+    mock_user.return_value = User("alice", {"roles": ["user"]}, tenant_id="tenant-a")
+    conv_a = await service.create_conversation(CreateConversationRequest())
+    alice_item_id = (await service.add_items(conv_a.id, AddItemsRequest(items=[_message("alice secret")]))).data[0].id
+
+    mock_user.return_value = User("bob", {"roles": ["user"]}, tenant_id="tenant-b")
+    conv_b = await service.create_conversation(
+        CreateConversationRequest(items=[_message("bob content", alice_item_id)])
+    )
+
+    listed = await service.list_items(ListItemsRequest(conversation_id=conv_b.id))
+    assert listed.data[0].id != alice_item_id
+    assert "alice secret" not in listed.model_dump_json()
+    assert _texts(listed) == [(listed.data[0].id, "bob content")]
+    bob_rows = await _raw_items(service, ITEMS_TABLE, conv_b.id)
+    assert [(row["owner_principal"], row["tenant_id"]) for row in bob_rows] == [("bob", "tenant-b")]
+    alice_rows = await _raw_items(service, ITEMS_TABLE, conv_a.id)
+    assert [(row["id"], row["owner_principal"], row["item_data"]["content"][0]["text"]) for row in alice_rows] == [
+        (alice_item_id, "alice", "alice secret")
+    ]
 
 
 async def test_create_conversation_with_items_supports_pagination(service):
@@ -725,7 +893,7 @@ async def test_item_ordering_uses_sort_order_not_timestamp(service):
             await service.add_items(conversation.id, AddItemsRequest(items=items))
 
     raw = await service.sql_store.fetch_all(
-        table="conversation_items",
+        table=ITEMS_TABLE,
         where={"conversation_id": conversation.id},
         order_by=[("sort_order", "asc")],
     )

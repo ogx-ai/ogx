@@ -68,7 +68,7 @@
     "endpoint": "/v1/chat/completions",
     "model": "qwen3-0.6b",
     "provider_metadata": {
-      "openai_sdk_version": "2.43.0"
+      "openai_sdk_version": "3.17.0"
     }
   },
   "response": {
@@ -82,43 +82,47 @@
             "index": 0,
             "logprobs": null,
             "message": {
-              "content": "The flight booking requires the date of your trip. Please provide the date of your flight from SFO to JFK.",
+              "content": "The flight booking requires a date. Please provide the date of your trip.",
               "refusal": null,
               "role": "assistant",
               "annotations": null,
               "audio": null,
               "function_call": null,
               "tool_calls": null,
-              "reasoning_content": "Okay, the user wants to book a flight from SFO to JFK for John Doe. Let me check the available tools. The provided function is book_flight, which requires flight information and a passenger. The flight info needs 'from', 'to', and 'date'. The passenger needs 'name' and 'age'. The user mentioned SFO and JFK, so the from and to are set. The date isn't provided, so maybe the function expects a date parameter. Since the user didn't specify a date, perhaps I need to ask for it. Wait, but the function requires the date as a parameter. Wait, looking back at the function definition, the required parameters are flight and passenger. The flight parameters include from, to, and date. Passenger has name and age. So the user's input is incomplete. They only provided the destination and name. The date is missing. Therefore, I should prompt the user to provide the flight date. But the function requires all parameters. Wait, maybe the user expects me to assume a date, but that's not correct. The function requires the date. Since the user didn't specify, I can't proceed without it. So the correct response is to ask for the flight date. But according to the instructions, if I can't call the function, I should respond. But in this case, the function requires all parameters. The user only provided some. Therefore, I need to ask for the missing information. But the assistant's role is to call the function if possible. Since the date is missing, maybe the function can't be called. But the user's query is to book the flight, so perhaps the date is implied. Wait, maybe I'm overcomplicating. The function requires flight and passenger. The flight info includes from, to, date. So the user needs to provide the date. Since they didn't, perhaps I should inform them that the date is missing. But according to the tool, the function requires flight and passenger. The flight info has date. So the parameters are flight (with from, to, date) and passenger (name, age). The user provided from and to, but not date. So the function can't be called without the date. Therefore, the correct response is to ask for the date. But the user might expect me to proceed. Wait, perhaps the date is part of the flight info, so maybe the user expects me to use a default date. But that's not valid. Therefore, I need to inform the user that the date is required. But according to the instructions, if I can't call the function, respond. Since the function requires flight and passenger, and the user provided only some, I can't proceed. Therefore, the assistant should ask for the missing details.\n"
+              "reasoning_content": "Okay, the user wants to book a flight from SFO to JFK for John Doe. Let me check the available tools. There's a function called book_flight that requires flight and passenger details. The flight parameters need from, to, and date. The passenger includes name and age. The user provided only the departure cities, name, and maybe age? Wait, the user didn't specify date or age. Oh, the initial message says \"Book a flight from SFO to JFK for John Doe\". So maybe the date is not provided, but perhaps the function expects a date. Since the user didn't mention the date, maybe I should ask for it. But wait, the function's parameters include date as a required field. So if the user doesn't provide it, maybe I need to make an assumption or prompt them. However, the tools provided don't include a date parameter, but the function's parameters have a date. Hmm, the user didn't specify the date. So maybe I should inform them that the date is missing and ask for it. But the user's query only mentions departure cities and name. Wait, maybe the date is implied? Or maybe there's a missing parameter. Since the function requires all three fields, and the user only provided two, I need to ask for the third. So the answer should include the name (John Doe) and the date, but the date isn't mentioned. Therefore, I can't proceed without the date. But maybe the user expects me to assume a date? Or perhaps there's a mistake. Wait, the function's parameters include date, so maybe the user's message has a date. Let me check again: the user wrote \"Book a flight from SFO to JFK for John Doe\". No date mentioned. So perhaps the function requires a date, but the user didn't include it. Therefore, I can't call the function. But the user's question is in the context of the tools provided. Wait, maybe the date is part of the flight info in the tool's definition. Looking back at the tool's definition, the flight parameters include date as a string in date format. So the flight info has from, to, date. But the user only provided from and to, not date. So without the date, the function can't be called. Therefore, the correct response would be to inform the user that the date is missing and ask for it. However, the assistant is supposed to use the provided tools. Since the user's query doesn't include the date, maybe there's an error. Alternatively, perhaps the date is assumed to be the current date? But that's not standard. So the answer should state that the date is required and ask for it. But according to the instructions, if the function can't be called, respond without tool calls. So in this case, the function can't be called because the date is missing. Therefore, the assistant should respond that the date is required and ask for it.\n"
             }
           }
         ],
         "created": 0,
         "model": "qwen3-0.6b",
         "object": "chat.completion",
+        "metadata": null,
         "moderation": null,
         "service_tier": null,
-        "system_fingerprint": "b10964-b29c606e2",
+        "system_fingerprint": "b11147-fee39dd92",
         "usage": {
-          "completion_tokens": 593,
+          "completion_tokens": 626,
           "prompt_tokens": 261,
-          "total_tokens": 854,
+          "total_tokens": 887,
           "completion_tokens_details": null,
           "prompt_tokens_details": {
             "audio_tokens": null,
-            "cached_tokens": 51
+            "cache_write_tokens": null,
+            "cached_tokens": 51,
+            "image_tokens": null,
+            "text_tokens": null
           }
         },
         "timings": {
           "cache_n": 51,
           "prompt_n": 210,
-          "prompt_ms": 989.305,
-          "prompt_per_token_ms": 4.71097619047619,
-          "prompt_per_second": 212.27023011103756,
-          "predicted_n": 593,
-          "predicted_ms": 21094.54,
-          "predicted_per_token_ms": 35.632668918918924,
-          "predicted_per_second": 28.064134131391345
+          "prompt_ms": 1498.733,
+          "prompt_per_token_ms": 7.1368238095238095,
+          "prompt_per_second": 140.11835330242278,
+          "predicted_n": 626,
+          "predicted_ms": 21014.524,
+          "predicted_per_token_ms": 33.623238400000005,
+          "predicted_per_second": 29.74133508805624
         }
       }
     },

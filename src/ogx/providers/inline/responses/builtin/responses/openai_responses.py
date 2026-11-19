@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 import tiktoken
 from pydantic import TypeAdapter
 
+from ogx.core.conversations.item_sync import SyncableConversations
 from ogx.core.conversations.validation import CONVERSATION_ID_PATTERN
 from ogx.core.datatypes import VectorStoresConfig
 from ogx.core.task import (
@@ -37,12 +38,13 @@ from ogx.providers.utils.responses.responses_store import (
     _OpenAIResponseObjectWithInputAndMessages,
 )
 from ogx.providers.utils.tools.mcp import MCPSessionManager
+from ogx.web_search import WebSearch
 from ogx_api import (
     AddItemsRequest,
     ConflictError,
     Connectors,
+    ContextLengthExceededError,
     ConversationItem,
-    Conversations,
     CreateResponseRequest,
     Files,
     GetPromptRequest,
@@ -86,6 +88,7 @@ from ogx_api import (
     ToolGroups,
     ToolRuntime,
     VectorIO,
+    WebSearchToolTypes,
 )
 from ogx_api.inference import OpenAIChatCompletionRequestWithExtraBody, ServiceTier
 
@@ -133,11 +136,12 @@ class OpenAIResponsesImpl:
         responses_store: ResponsesStore,
         vector_io_api: VectorIO,  # VectorIO
         moderation_endpoint: str | None,
-        conversations_api: Conversations,
+        conversations_api: SyncableConversations,
         prompts_api: Prompts,
         files_api: Files,
         connectors_api: Connectors,
         skills_api: "Skills | None" = None,
+        web_search_api: WebSearch | None = None,
         moderation_headers: dict[str, str] | None = None,
         vector_stores_config: VectorStoresConfig | None = None,
         compaction_config=None,
@@ -157,10 +161,12 @@ class OpenAIResponsesImpl:
             tool_runtime_api=tool_runtime_api,
             vector_io_api=vector_io_api,
             vector_stores_config=vector_stores_config,
+            web_search_api=web_search_api,
         )
         self.prompts_api = prompts_api
         self.files_api = files_api
         self.connectors_api = connectors_api
+        self.web_search_api = web_search_api
 
         self.compaction_config = compaction_config or CompactionConfig()
         self.memory_config = memory_config or MemoryConfig()
@@ -945,6 +951,18 @@ class OpenAIResponsesImpl:
                                 "Authorization credentials must be passed via the 'authorization' parameter, not 'headers'.",
                             )
 
+        # Resolve the web search tool here so a missing or provider-less web_search
+        # API is a 400 before any stream starts: the auto-router exists even when no
+        # web_search providers are configured, so a non-None API can still be empty.
+        if request.tools and any(tool.type in WebSearchToolTypes for tool in request.tools):
+            if self.web_search_api is None or not self.web_search_api.available_providers():
+                raise InvalidParameterError(
+                    "tools",
+                    "web_search",
+                    "Web search is not enabled on this server, so the web_search tool cannot be used. "
+                    "Remove web_search from your request, or use a server with web search enabled.",
+                )
+
         if request.guardrails and not self.moderation_endpoint:
             raise ServiceNotEnabledError(
                 "moderation_endpoint",
@@ -1018,6 +1036,8 @@ class OpenAIResponsesImpl:
                         # context window exceeded). Use the error code to pick the right HTTP status.
                         if error_code == "invalid_prompt":
                             raise InvalidParameterError("model", request.model, error_message)
+                        if error_code == "context_length_exceeded":
+                            raise ContextLengthExceededError(error_message)
                         raise InternalServerError(error_message)
                     case _:
                         pass  # Other event types don't have .response
@@ -1367,6 +1387,7 @@ class OpenAIResponsesImpl:
                 vector_io_api=self.vector_io_api,
                 vector_stores_config=self.tool_executor.vector_stores_config,
                 mcp_session_manager=mcp_session_manager,
+                web_search_api=self.web_search_api,
             )
 
             orchestrator = StreamingResponseOrchestrator(
@@ -1817,4 +1838,4 @@ class OpenAIResponsesImpl:
 
         adapter = TypeAdapter(list[ConversationItem])
         validated_items = adapter.validate_python(conversation_items)
-        await self.conversations_api.add_items(conversation_id, AddItemsRequest(items=validated_items))
+        await self.conversations_api.sync_items(conversation_id, AddItemsRequest(items=validated_items))

@@ -31,17 +31,17 @@ jobs:
 
     steps:
       - name: Checkout PR branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0  # Need full history to access main branch
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
 
@@ -170,7 +170,7 @@ jobs:
 
     steps:
       - name: Checkout PR branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -183,7 +183,7 @@ jobs:
       - name: Setup test environment
         uses: ./.github/actions/setup-test-environment
         with:
-          python-version: '3.12'
+          python-version: '3.13'
           client-version: 'latest'
           setup: 'ollama'
           suite: 'base'
@@ -271,7 +271,7 @@ jobs:
 
     steps:
       - name: Checkout PR branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -315,7 +315,7 @@ jobs:
         if: steps.get_release.outputs.has_release == 'true' && steps.extract_config.outputs.has_config == 'true'
         uses: ./.github/actions/setup-test-environment
         with:
-          python-version: '3.12'
+          python-version: '3.13'
           client-version: 'latest'
           setup: 'ollama'
           suite: 'base'
@@ -341,7 +341,7 @@ jobs:
         if: steps.get_release.outputs.has_release == 'true' && steps.extract_config.outputs.has_config == 'true'
         uses: ./.github/actions/setup-test-environment
         with:
-          python-version: '3.12'
+          python-version: '3.13'
           client-version: 'latest'
           setup: 'ollama'
           suite: 'base'
@@ -441,17 +441,17 @@ jobs:
 
     steps:
       - name: Checkout PR branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
 

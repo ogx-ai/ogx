@@ -232,3 +232,113 @@ class TestBuildTestIdHttpClient:
         client.chat.completions.create(model="test", messages=[{"role": "user", "content": "hi"}])
 
         assert json.loads(captured[0].headers[PROVIDER_DATA_HEADER]) == {"__test_id": TEST_ID}
+
+
+class TestIsTypesafeRequest:
+    """_is_typesafe_request() gates the .request() patch to TypeSafe SDK traffic by the
+    X-TypeSafe-SDK header the SDK stamps on every request, independent of the configured
+    base_url (default, env, or provider-configured)."""
+
+    def test_matches_sdk_header(self):
+        assert api_recorder._is_typesafe_request({"X-TypeSafe-SDK": "typesafe-sdk/0.7.2"}) is True
+
+    def test_header_match_is_case_insensitive(self):
+        assert api_recorder._is_typesafe_request({"x-typesafe-sdk": "typesafe-sdk/0.7.2"}) is True
+
+    def test_rejects_requests_without_the_header(self):
+        assert api_recorder._is_typesafe_request(None) is False
+        assert api_recorder._is_typesafe_request({}) is False
+        assert api_recorder._is_typesafe_request({"x-api-key": "k"}) is False
+
+
+class TestPatchedHttpxAsyncRequest:
+    """The TypeSafe SDK sends via the generic httpx2.AsyncClient.request() with the body as JSON
+    bytes in ``content`` (typesafe_sdk._core.transport.send_async), which the .post/.get/.stream
+    patches never see. The recorder intercepts .request() and must forward non-TypeSafe calls
+    (including the .post/.get/.stream delegates, which land here in record mode) untouched."""
+
+    SYSTEMONE_URL = "https://api.typesafe.ai/v1/systemone"
+    TYPESAFE_HEADERS = {"X-TypeSafe-SDK": "typesafe-sdk/0.7.2", "Authorization": "Bearer test"}
+
+    def _client(self, handler) -> httpx2.AsyncClient:
+        return httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+
+    async def test_non_typesafe_request_passes_through(self, tmp_path):
+        """A .request() to a non-TypeSafe host must reach the real client, not be recorded."""
+        hits: list[httpx2.Request] = []
+
+        async def handler(request: httpx2.Request) -> httpx2.Response:
+            hits.append(request)
+            return httpx2.Response(200, json={"ok": True})
+
+        async with self._client(handler) as client:
+            with api_recorder.api_recording(mode="replay", storage_dir=tmp_path):
+                await client.request("POST", "https://api.openai.com/v1/chat/completions", content=b"{}", headers={})
+
+        assert len(hits) == 1
+        assert not list(tmp_path.glob("**/*.json"))
+
+    async def test_typesafe_request_is_recorded(self, tmp_path):
+        body = {"state": "s", "questions": [{"type": "score", "prompt": "q"}]}
+        recorded = {"answers": [{"question": "q", "score": "4"}]}
+        hits = 0
+
+        async def handler(request: httpx2.Request) -> httpx2.Response:
+            nonlocal hits
+            hits += 1
+            return httpx2.Response(200, json=recorded)
+
+        async with self._client(handler) as client:
+            with api_recorder.api_recording(mode="record", storage_dir=tmp_path):
+                response = await client.request(
+                    "POST", self.SYSTEMONE_URL, content=json.dumps(body).encode(), headers=self.TYPESAFE_HEADERS
+                )
+
+        assert hits == 1
+        assert json.loads(response.content) == recorded
+        recordings = list((tmp_path / "recordings").glob("*.json"))
+        assert len(recordings) == 1
+        stored = json.loads(recordings[0].read_text())
+        assert stored["response"]["body"] == recorded
+        assert stored["request"]["payload"] == body
+
+    async def test_typesafe_request_replays_without_network(self, tmp_path):
+        recorded = {"answers": [{"question": "q", "score": "2"}]}
+        body = {"state": "s", "questions": [{"type": "score", "prompt": "q"}]}
+        hits = 0
+
+        async def handler(request: httpx2.Request) -> httpx2.Response:
+            nonlocal hits
+            hits += 1
+            return httpx2.Response(200, json=recorded)
+
+        async with self._client(handler) as client:
+            with api_recorder.api_recording(mode="record", storage_dir=tmp_path):
+                await client.request(
+                    "POST", self.SYSTEMONE_URL, content=json.dumps(body).encode(), headers=self.TYPESAFE_HEADERS
+                )
+            with api_recorder.api_recording(mode="replay", storage_dir=tmp_path):
+                response = await client.request(
+                    "POST", self.SYSTEMONE_URL, content=json.dumps(body).encode(), headers=self.TYPESAFE_HEADERS
+                )
+
+        assert hits == 1  # only the record call touched the transport
+        assert json.loads(response.content) == recorded
+
+    async def test_typesafe_request_matched_by_header_on_custom_host(self, tmp_path):
+        """A provider-configured base_url (non-default host) is still caught via the SDK header."""
+        hits = 0
+
+        async def handler(request: httpx2.Request) -> httpx2.Response:
+            nonlocal hits
+            hits += 1
+            return httpx2.Response(200, json={"answers": []})
+
+        url = "https://gateway.internal/v1/systemone"
+        body = {"state": "s", "questions": []}
+        async with self._client(handler) as client:
+            with api_recorder.api_recording(mode="record", storage_dir=tmp_path):
+                await client.request("POST", url, content=json.dumps(body).encode(), headers=self.TYPESAFE_HEADERS)
+
+        assert hits == 1
+        assert list((tmp_path / "recordings").glob("*.json"))

@@ -35,6 +35,7 @@ from .models import (
     RerankRequest,
     RerankResponse,
 )
+from .systemone import SystemOneRequest, SystemOneResponse
 
 
 class ModelStore(Protocol):
@@ -59,6 +60,18 @@ class InferenceProvider(Protocol):
     ) -> RerankResponse:
         """Rerank a list of documents based on their relevance to a query."""
         raise NotImplementedError("Reranking is not implemented")
+        return  # this is so mypy's safe-super rule will consider the method concrete
+
+    async def judge(
+        self,
+        request: SystemOneRequest,
+    ) -> SystemOneResponse:
+        """Answer a SystemOne judgment request: calibrated questions about a piece of state.
+
+        Default raises NotImplementedError so providers that do not serve decision models
+        fail loudly instead of silently returning no answers.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} does not support SystemOne judgments")
         return  # this is so mypy's safe-super rule will consider the method concrete
 
     async def openai_completion(
@@ -129,10 +142,12 @@ class Inference(InferenceProvider):
 
     OGX Inference API for generating completions, chat completions, and embeddings.
 
-    This API provides the raw interface to the underlying models. Three kinds of models are supported:
+    This API provides the raw interface to the underlying models. Four kinds of models are supported:
     - LLM models: these models generate "raw" and "chat" (conversational) completions.
     - Embedding models: these models generate embeddings to be used for semantic search.
     - Rerank models: these models reorder the documents based on their relevance to a query.
+    - SystemOne (judgment/decision) models: these models answer calibrated questions about a
+      piece of state (a probability, a choice, or a rubric score) instead of generating text.
     """
 
     async def list_chat_completions(

@@ -30,6 +30,8 @@ from ogx_api import (
     OpenAIListModelsResponse,
     OpenAIModel,
     RegisterModelRequest,
+    TypeSafeListModelsResponse,
+    TypeSafeModelInfo,
     UnregisterModelRequest,
 )
 
@@ -306,6 +308,22 @@ class ModelsRoutingTable(CommonRoutingTableImpl, Models):
             for model in all_models
         ]
         return GoogleListModelsResponse(models=google_models)
+
+    async def typesafe_list_models(self) -> TypeSafeListModelsResponse:
+        # Serve the TypeSafe SDK (detected via the X-TypeSafe-SDK header) the subset of
+        # models it can actually use: SystemOne judgment models. `name` is the OGX
+        # identifier, which is what POST /v1/systemone accepts in its model field.
+        all_models = await self._get_all_models()
+        typesafe_models = [
+            TypeSafeModelInfo(
+                name=model.identifier,
+                description=model.metadata.get("description", ""),
+                release_date=model.metadata.get("release_date", ""),
+            )
+            for model in all_models
+            if model.model_type == ModelType.systemone
+        ]
+        return TypeSafeListModelsResponse(models=typesafe_models)
 
     async def get_model(self, request_or_model_id: GetModelRequest | str) -> Model:
         # Support both the public Models API (GetModelRequest) and internal ModelStore interface (string)

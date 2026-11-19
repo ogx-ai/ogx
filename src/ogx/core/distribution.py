@@ -75,6 +75,10 @@ def builtin_automatically_routed_apis() -> list[AutoRoutedApiInfo]:
             routing_table_api=Api.vector_stores,
             router_api=Api.vector_io,
         ),
+        AutoRoutedApiInfo(
+            routing_table_api=Api.web_search_providers,
+            router_api=Api.web_search,
+        ),
     ]
 
 

@@ -1,0 +1,53 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_multi_turn[txt=deepseek/deepseek-chat]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_multi_turn[txt=deepseek/deepseek-chat]",
+    "url": "https://api.deepseek.com/anthropic/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "deepseek-chat",
+      "messages": [
+        {
+          "role": "user",
+          "content": "My name is Alice."
+        },
+        {
+          "role": "assistant",
+          "content": "Hello Alice! Nice to meet you."
+        },
+        {
+          "role": "user",
+          "content": "What is my name?"
+        }
+      ],
+      "max_tokens": 64,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "62fa672b-85cf-42fa-be22-561707c54660",
+      "type": "message",
+      "role": "assistant",
+      "model": "deepseek-chat",
+      "content": [
+        {
+          "type": "text",
+          "text": "Your name is Alice \u2014 you just told me."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 26,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 10,
+        "service_tier": "standard"
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

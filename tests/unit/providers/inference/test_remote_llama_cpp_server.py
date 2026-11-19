@@ -17,7 +17,14 @@ from ogx.providers.remote.inference.llama_cpp_server.llama_cpp_server import (
 )
 from ogx.providers.utils.inference import server_signature
 from ogx.providers.utils.inference.server_signature import ServerUnreachableError
-from ogx_api import HealthStatus, ModelType, OpenAIChatCompletionContentPartImageParam
+from ogx.providers.utils.inference.systemone import LOCAL_ENGINE_API_KEY
+from ogx_api import (
+    HealthStatus,
+    ModelType,
+    OpenAIChatCompletionContentPartImageParam,
+    SystemOneRequest,
+    SystemOneResponse,
+)
 from ogx_api.inference import RerankRequest
 
 
@@ -343,3 +350,102 @@ class TestSignatureProbesUseNetworkConfig:
         await getattr(adapter, probe)()
 
         assert captured[0]["verify"] is adapter.shared_ssl_context
+
+
+# ---------------------------------------------------------------------------
+# SystemOne (judgment)
+# ---------------------------------------------------------------------------
+
+
+def _judge_request() -> SystemOneRequest:
+    return SystemOneRequest(
+        model="laya",
+        state="I was charged twice. Please help.",
+        questions={"billing": {"type": "noul", "instructions": "Is this about billing?"}},
+    )
+
+
+async def test_judge_forwards_to_systemone_util():
+    """judge() must hit the server root (no /v1) with the configured key and no network config."""
+    adapter = _make_adapter()
+    with patch("ogx.providers.remote.inference.llama_cpp_server.llama_cpp_server.systemone_judge") as mock_judge:
+        mock_judge.return_value = SystemOneResponse(
+            model="laya",
+            answers={"billing": {"type": "noul", "noul": 0.9}},
+            usage={"input_tokens": 1, "output_tokens": 0},
+        )
+        await adapter.judge(_judge_request())
+
+    mock_judge.assert_awaited_once()
+    args, kwargs = mock_judge.call_args
+    assert args[0] == "http://mocked.localhost:8080"
+    # No auth_credential configured: the fixed local placeholder is used, not
+    # get_api_key()'s whitespace-containing display value (rejected by the SDK).
+    assert args[1] == LOCAL_ENGINE_API_KEY
+    assert kwargs["network"] is None
+
+
+async def test_judge_passes_auth_credential_to_systemone_util():
+    adapter = _make_adapter(api_key=SecretStr("top-secret"))
+    with patch("ogx.providers.remote.inference.llama_cpp_server.llama_cpp_server.systemone_judge") as mock_judge:
+        mock_judge.return_value = SystemOneResponse(
+            model="laya",
+            answers={"billing": {"type": "noul", "noul": 0.9}},
+            usage={"input_tokens": 1, "output_tokens": 0},
+        )
+        await adapter.judge(_judge_request())
+
+    assert mock_judge.call_args.args[1] == "top-secret"
+
+
+async def test_judge_passes_network_config_to_systemone_util():
+    adapter = _make_adapter(network=NETWORK_CONFIG)
+    with patch("ogx.providers.remote.inference.llama_cpp_server.llama_cpp_server.systemone_judge") as mock_judge:
+        mock_judge.return_value = SystemOneResponse(
+            model="laya",
+            answers={"billing": {"type": "noul", "noul": 0.9}},
+            usage={"input_tokens": 1, "output_tokens": 0},
+        )
+        await adapter.judge(_judge_request())
+
+    assert mock_judge.call_args.kwargs["network"] == adapter.config.network
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    [
+        "laya",
+        "laya:latest",
+        "Laya-Q8_0.gguf",
+        "Laya-Q8_0",
+        "Laya-BF16.gguf",
+        "julia-1",
+        "openjev",
+        "lev",
+        "kev",
+        "pplx-decider",
+        "lfm2-d1",
+    ],
+)
+def test_construct_model_from_identifier_marks_decision_models(identifier):
+    adapter = _make_adapter()
+
+    model = adapter.construct_model_from_identifier(identifier)
+
+    assert model.model_type == ModelType.systemone
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    [
+        "qwen3-0.6b",
+        "laya-2:latest",
+        "not-a-decision-model",
+    ],
+)
+def test_construct_model_from_identifier_leaves_other_models_alone(identifier):
+    adapter = _make_adapter()
+
+    model = adapter.construct_model_from_identifier(identifier)
+
+    assert model.model_type != ModelType.systemone

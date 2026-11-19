@@ -170,6 +170,28 @@ class TestAutodetect:
             await _autodetect_providers()
             assert captured[0] == "OLLAMA_URL"
 
+    async def test_autodetect_typesafe_candidate_config(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("TYPESAFE_API_KEY", "ts-test")
+        captured: list[tuple] = []
+
+        def side_effect(
+            provider_type: str,
+            base_url_env: object,
+            default_base_url: str,
+            required_api_key_env: object,
+            optional_api_key_env: object = None,
+            debug: bool = False,
+        ) -> tuple:
+            if provider_type == "remote::typesafe":
+                captured.append((base_url_env, default_base_url, required_api_key_env))
+                return (_ProbeStatus.OK, [], "https://api.typesafe.ai", "default", None)
+            return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
+
+        with patch("ogx.cli.stack.lets_go._probe_provider_availability", side_effect=side_effect):
+            parts = (await _autodetect_providers())[0].split(",")
+            assert "inference=remote::typesafe" in parts
+            assert captured == [("TYPESAFE_BASE_URL", "https://api.typesafe.ai", "TYPESAFE_API_KEY")]
+
     async def test_autodetect_result_order_matches_candidate_order(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
@@ -246,7 +268,7 @@ class TestRunCommandSync:
                     "ogx.cli.stack.lets_go._autodetect_providers",
                     AsyncMock(
                         return_value=(
-                            "files=inline::localfs,vector_io=inline::faiss,tool_runtime=inline::file-search,responses=inline::builtin",
+                            "files=inline::localfs,vector_io=inline::faiss,responses=inline::builtin",
                             None,
                         )
                     ),
@@ -443,9 +465,9 @@ class TestClaudeCodeAliases:
         assert "ollama" in _CLAUDE_CODE_PROVIDER_PRIORITY
 
 
-class TestAddFileSearchAndResponses:
+class TestAddResponsesAndWebSearch:
     def test_uses_brave_when_brave_key_is_set(self, monkeypatch: pytest.MonkeyPatch):
-        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.cli.stack.lets_go import _add_responses_and_web_search
         from ogx.core.datatypes import StackConfig
 
         monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "brave-key")
@@ -453,16 +475,16 @@ class TestAddFileSearchAndResponses:
         monkeypatch.delenv("BING_API_KEY", raising=False)
         monkeypatch.delenv("NIMBLE_API_KEY", raising=False)
 
+        run_config = StackConfig(
+            distro_name="test",
+            providers={
+                "tool_runtime": [],
+                "responses": [],
+            },
+        )
+
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(
-                StackConfig(
-                    distro_name="test",
-                    providers={
-                        "tool_runtime": [],
-                        "responses": [],
-                    },
-                )
-            )
+            _add_responses_and_web_search(run_config)
 
         web_search_providers = [
             p
@@ -475,8 +497,12 @@ class TestAddFileSearchAndResponses:
         assert "bing-search" not in web_search_providers
         assert "nimble-search" not in web_search_providers
 
+        # A real provider was added, so the placeholder must not be
+        provider_types = [p.provider_type for p in run_config.providers["web_search"]]
+        assert "inline::placeholder" not in provider_types
+
     def test_falls_back_to_tavily_when_only_tavily_key_set(self, monkeypatch: pytest.MonkeyPatch):
-        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.cli.stack.lets_go import _add_responses_and_web_search
         from ogx.core.datatypes import StackConfig
 
         monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
@@ -485,7 +511,7 @@ class TestAddFileSearchAndResponses:
         monkeypatch.delenv("NIMBLE_API_KEY", raising=False)
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(
+            _add_responses_and_web_search(
                 StackConfig(
                     distro_name="test",
                     providers={
@@ -510,7 +536,7 @@ class TestAddFileSearchAndResponses:
         assert provider_ids_in_calls == {"tavily-search"}
 
     def test_selects_first_with_api_key(self, monkeypatch: pytest.MonkeyPatch):
-        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.cli.stack.lets_go import _add_responses_and_web_search
         from ogx.core.datatypes import StackConfig
 
         monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "brave-key")
@@ -519,7 +545,7 @@ class TestAddFileSearchAndResponses:
         monkeypatch.setenv("NIMBLE_API_KEY", "nimble-key")
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(
+            _add_responses_and_web_search(
                 StackConfig(
                     distro_name="test",
                     providers={
@@ -543,34 +569,52 @@ class TestAddFileSearchAndResponses:
         # All four have keys, all four should be added
         assert provider_ids_in_calls == {"brave-search", "tavily-search", "bing-search", "nimble-search"}
 
-    def test_no_web_search_when_no_key_set(self, monkeypatch: pytest.MonkeyPatch):
-        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+    def test_web_search_placeholder_when_no_key_set(self, monkeypatch: pytest.MonkeyPatch):
+        from ogx.cli.stack.lets_go import _add_responses_and_web_search
         from ogx.core.datatypes import StackConfig
 
         # Clear env vars to ensure no keys are set
-        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY", "EXA_API_KEY"):
+        for var in (
+            "BRAVE_SEARCH_API_KEY",
+            "TAVILY_SEARCH_API_KEY",
+            "BING_API_KEY",
+            "NIMBLE_API_KEY",
+            "EXA_API_KEY",
+            "SEARCHAPI_API_KEY",
+        ):
             monkeypatch.delenv(var, raising=False)
 
-        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(
-                StackConfig(
-                    distro_name="test",
-                    providers={
-                        "tool_runtime": [],
-                        "responses": [],
-                    },
-                )
-            )
+        run_config = StackConfig(
+            distro_name="test",
+            providers={
+                "tool_runtime": [],
+                "responses": [],
+            },
+        )
 
-        # Should show disabled message, not provider names
-        has_disabled = any("web search disabled" in str(call) for call in mock_cprint.call_args_list)
-        assert has_disabled
+        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
+            _add_responses_and_web_search(run_config)
+
+        # Should show the built-in placeholder message, not provider names
+        has_placeholder = any("built-in placeholder" in str(call) for call in mock_cprint.call_args_list)
+        assert has_placeholder
+
+        # The placeholder provider should be registered so the web_search tool is hosted
+        provider_types = [p.provider_type for p in run_config.providers["web_search"]]
+        assert "inline::placeholder" in provider_types
 
     def test_duplicate_providers_when_already_configured(self, monkeypatch: pytest.MonkeyPatch):
-        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.cli.stack.lets_go import _add_responses_and_web_search
         from ogx.core.datatypes import Provider, StackConfig
 
-        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY", "EXA_API_KEY"):
+        for var in (
+            "BRAVE_SEARCH_API_KEY",
+            "TAVILY_SEARCH_API_KEY",
+            "BING_API_KEY",
+            "NIMBLE_API_KEY",
+            "EXA_API_KEY",
+            "SEARCHAPI_API_KEY",
+        ):
             monkeypatch.delenv(var, raising=False)
 
         initial_providers = [
@@ -586,7 +630,7 @@ class TestAddFileSearchAndResponses:
         )
 
         with patch("ogx.cli.stack.lets_go.cprint"):
-            _add_file_search_and_responses(config)
+            _add_responses_and_web_search(config)
 
         web_search_types = {
             "remote::brave-search",
@@ -594,11 +638,11 @@ class TestAddFileSearchAndResponses:
             "remote::bing-search",
             "remote::nimble-search",
         }
-        web_search_providers = [p for p in config.providers["tool_runtime"] if p.provider_type in web_search_types]
+        web_search_providers = [p for p in config.providers["web_search"] if p.provider_type in web_search_types]
         assert len(web_search_providers) == 1
 
     def test_existing_provider_keeps_no_api_key_config(self):
-        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.cli.stack.lets_go import _add_responses_and_web_search
         from ogx.core.datatypes import Provider, StackConfig
 
         config = StackConfig(
@@ -616,11 +660,9 @@ class TestAddFileSearchAndResponses:
         )
 
         with patch("ogx.cli.stack.lets_go.cprint"):
-            _add_file_search_and_responses(config)
+            _add_responses_and_web_search(config)
 
-        web_search_providers = [
-            p for p in config.providers["tool_runtime"] if p.provider_type == "remote::brave-search"
-        ]
+        web_search_providers = [p for p in config.providers["web_search"] if p.provider_type == "remote::brave-search"]
         assert len(web_search_providers) == 1
         assert web_search_providers[0].config["api_key"] == "existing-key"
         assert web_search_providers[0].config["max_results"] == 5

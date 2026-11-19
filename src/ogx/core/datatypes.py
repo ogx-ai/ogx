@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from ogx.core.access_control.datatypes import AccessRule, RouteAccessRule
 from ogx.core.server_tls import ServerTLSConfig, validate_fips_tls
@@ -21,6 +21,7 @@ from ogx.core.storage.datatypes import (
     StorageConfig,
 )
 from ogx.log import LoggingConfig
+from ogx.web_search import WebSearch
 from ogx_api import (
     Api,
     ConnectorInput,
@@ -96,7 +97,7 @@ RoutableObjectWithProvider = Annotated[
     Field(discriminator="type"),
 ]
 
-RoutedProtocol = Inference | VectorIO | ToolRuntime
+RoutedProtocol = Inference | VectorIO | ToolRuntime | WebSearch
 
 
 # Example: /inference, /vector_io
@@ -624,6 +625,12 @@ class FileIngestionParams(BaseModel):
         default=128,
         description="Default overlap in tokens between chunks (original default: 512 // 4 = 128)",
     )
+    embedding_batch_size: int = Field(
+        default=256,
+        ge=1,
+        le=2048,
+        description="Maximum number of chunks sent in one embeddings request when attaching a file. A file with more chunks is embedded in several sequential requests. At most 2048, the embeddings API input limit.",
+    )
 
 
 class ChunkRetrievalParams(BaseModel):
@@ -860,6 +867,8 @@ class ServerConfig(BaseModel):
 class StackConfig(BaseModel):
     """Top-level runtime configuration for a OGX distribution including providers, storage, and server settings."""
 
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     version: int = OGX_RUN_CONFIG_VERSION
 
     distro_name: str | None = Field(
@@ -971,6 +980,90 @@ can be instantiated multiple times (with different configs) if necessary.
                 stacklevel=2,
             )
 
+        return self
+
+    @model_validator(mode="after")
+    def normalize_systemone_to_inference(self) -> "StackConfig":
+        """Collapse the ``systemone`` provider/api section into ``inference``.
+
+        Judgment/decision (SystemOne) models are served through the Inference API, so a
+        ``systemone`` section is a spelling alias for ``inference``. Keeping the spelling in
+        the config makes intent explicit; the resolver only ever sees ``inference``.
+        """
+        systemone_providers = self.providers.pop("systemone", None)
+        if systemone_providers:
+            self.providers["inference"] = [*self.providers.get("inference", []), *systemone_providers]
+        if self.apis and "systemone" in self.apis:
+            self.apis = [a for a in self.apis if a != "systemone"]
+            if "inference" not in self.apis:
+                self.apis.append("inference")
+        return self
+
+    @model_validator(mode="after")
+    def normalize_tool_runtime_web_search_to_web_search(self) -> "StackConfig":
+        """Move web-search providers configured under ``tool_runtime`` to ``web_search``.
+
+        Web search backends were historically tool_runtime providers; they are now
+        first-class providers of the web_search API. Existing configs keep working:
+        at read time their entries are translated, and ``web_search`` is added to the
+        served APIs so the translated providers are reachable.
+        """
+        import warnings
+
+        legacy_types = {
+            "remote::brave-search",
+            "remote::bing-search",
+            "remote::tavily-search",
+            "remote::exa-search",
+            "remote::nimble-search",
+            "remote::serply-search",
+            "remote::searchapi-search",
+            "inline::placeholder",
+        }
+        tool_runtime_providers = self.providers.get("tool_runtime") or []
+        to_move = [p for p in tool_runtime_providers if p.provider_type in legacy_types]
+        if not to_move:
+            return self
+
+        warnings.warn(
+            "Web search providers configured under 'tool_runtime' are deprecated; "
+            "move them to a 'web_search' section. Affected provider types: "
+            + ", ".join(sorted({p.provider_type for p in to_move})),
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        self.providers["tool_runtime"] = [p for p in tool_runtime_providers if p.provider_type not in legacy_types]
+        self.providers["web_search"] = [*self.providers.get("web_search", []), *to_move]
+
+        if self.apis and "web_search" not in self.apis:
+            self.apis.append("web_search")
+        return self
+
+    @model_validator(mode="after")
+    def normalize_removed_file_search_tool_runtime(self) -> "StackConfig":
+        """Drop the removed ``inline::file-search`` provider from ``tool_runtime``.
+
+        The file-search tool runtime no longer exists: file search runs built
+        into the Responses API on top of the vector stores API and requires no
+        tool_runtime provider. Existing configs keep loading: the entries are
+        dropped at read time, with a warning prompting cleanup.
+        """
+        import warnings
+
+        tool_runtime_providers = self.providers.get("tool_runtime") or []
+        if not any(p.provider_type == "inline::file-search" for p in tool_runtime_providers):
+            return self
+
+        warnings.warn(
+            "The 'inline::file-search' tool_runtime provider was removed; file search "
+            "now runs built into the Responses API over the vector stores API. "
+            "Remove the entry from your 'tool_runtime' section.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        self.providers["tool_runtime"] = [p for p in tool_runtime_providers if p.provider_type != "inline::file-search"]
         return self
 
     @model_validator(mode="after")

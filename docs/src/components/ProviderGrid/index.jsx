@@ -29,12 +29,6 @@ const ICONS = {
       <path d="M14 2v4a2 2 0 002 2h4"/><path d="M10 13H8"/><path d="M16 17H8"/><path d="M16 13h-2"/>
     </svg>
   ),
-  datasetio: (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/>
-      <path d="M3 9h18"/><path d="M3 15h18"/>
-    </svg>
-  ),
   external: (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a6 6 0 01-12 0V8z"/>
@@ -60,8 +54,8 @@ const CATEGORIES = [
   {
     id: 'tool_runtime',
     label: 'Tool Runtime',
-    count: 6,
-    desc: 'File Search, Brave Search, Tavily, MCP, Wolfram Alpha',
+    count: 5,
+    desc: 'File Search, Brave Search, Tavily, MCP',
     href: '/docs/providers/tool_runtime/',
   },
   {
@@ -70,13 +64,6 @@ const CATEGORIES = [
     count: 3,
     desc: 'Local filesystem and S3 storage backends',
     href: '/docs/providers/files/',
-  },
-  {
-    id: 'datasetio',
-    label: 'DatasetIO',
-    count: 2,
-    desc: 'Local filesystem and HuggingFace dataset loading',
-    href: '/docs/providers/datasetio/',
   },
 ];
 
@@ -114,9 +101,8 @@ export function ProviderGrid() {
 const REF_DATA = [
   { id: 'inference', label: 'Inference', count: 23, examples: 'Ollama, vLLM, OpenAI, Bedrock, Anthropic, Gemini, WatsonX, and more', href: '/docs/providers/inference/', linkLabel: 'Inference Providers' },
   { id: 'vector_io', label: 'Vector IO', count: 15, examples: 'FAISS, ChromaDB, Qdrant, Milvus, PGVector, Weaviate, Elasticsearch', href: '/docs/providers/vector_io/', linkLabel: 'Vector IO Providers' },
-  { id: 'tool_runtime', label: 'Tool Runtime', count: 6, examples: 'File Search, Brave Search, Tavily, MCP, Wolfram Alpha', href: '/docs/providers/tool_runtime/', linkLabel: 'Tool Runtime Providers' },
+  { id: 'tool_runtime', label: 'Tool Runtime', count: 5, examples: 'File Search, Brave Search, Tavily, MCP', href: '/docs/providers/tool_runtime/', linkLabel: 'Tool Runtime Providers' },
   { id: 'files', label: 'Files', count: 3, examples: 'Local filesystem, S3, OpenAI Files', href: '/docs/providers/files/', linkLabel: 'Files Providers' },
-  { id: 'datasetio', label: 'DatasetIO', count: 2, examples: 'Local filesystem, HuggingFace', href: '/docs/providers/datasetio/', linkLabel: 'DatasetIO Providers' },
   { id: 'external', label: 'External', count: null, examples: 'Build your own provider', href: '/docs/providers/external/', linkLabel: 'External Providers Guide' },
 ];
 

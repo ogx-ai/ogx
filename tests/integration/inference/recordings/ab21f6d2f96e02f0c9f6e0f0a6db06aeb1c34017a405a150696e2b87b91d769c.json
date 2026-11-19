@@ -1,0 +1,82 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=llama-cpp-server/qwen3-0.6b-inference:chat_completion:non_streaming_01]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet do humans live on?"
+        }
+      ],
+      "stream": false,
+      "reasoning_effort": "low"
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-ab21f6d2f96e",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Humans live on Earth.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, so the user is asking which planet humans live on. Hmm, I know that humans are on Earth, but I need to make sure. Wait, does the question imply that there are other planets? Maybe it's a trick question. Let me think. I know that Earth is our home, so the answer is Earth. But sometimes people might confuse it with other planets. Let me check if there's any information I'm missing. No, there's no mention of any other planets where humans live. So the correct answer should be Earth. I should also confirm that the user is not being asked about other planets, maybe they are just curious. Yeah, I think that's it.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11669-620d2225c",
+        "usage": {
+          "completion_tokens": 150,
+          "prompt_tokens": 15,
+          "total_tokens": 165,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 15,
+          "prompt_ms": 121.287,
+          "prompt_per_token_ms": 8.0858,
+          "prompt_per_second": 123.67360063320882,
+          "predicted_n": 150,
+          "predicted_ms": 3829.904,
+          "predicted_per_token_ms": 25.704053691275167,
+          "predicted_per_second": 38.90436940455949
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -14,6 +14,7 @@ from ogx.providers.inline.responses.builtin.responses.openai_responses import (
 from ogx.providers.utils.responses.responses_store import (
     ResponsesStore,
 )
+from ogx.web_search import WebSearch
 from ogx_api import Connectors
 from ogx_api.tools import ToolGroups, ToolRuntime
 
@@ -75,6 +76,13 @@ def mock_connectors_api():
 
 
 @pytest.fixture
+def mock_web_search_api():
+    web_search_api = AsyncMock(spec=WebSearch)
+    web_search_api.available_providers.return_value = ["fake-search"]
+    return web_search_api
+
+
+@pytest.fixture
 def openai_responses_impl(
     mock_inference_api,
     mock_tool_groups_api,
@@ -85,6 +93,7 @@ def openai_responses_impl(
     mock_prompts_api,
     mock_files_api,
     mock_connectors_api,
+    mock_web_search_api,
 ):
     return OpenAIResponsesImpl(
         inference_api=mock_inference_api,
@@ -97,4 +106,5 @@ def openai_responses_impl(
         prompts_api=mock_prompts_api,
         files_api=mock_files_api,
         connectors_api=mock_connectors_api,
+        web_search_api=mock_web_search_api,
     )

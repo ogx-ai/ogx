@@ -1,0 +1,127 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestChatCompletionWithTools::test_tool_with_complex_schema[txt=sglang/Qwen/Qwen3-0.6B]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:30000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Book a flight from SFO to JFK for John Doe"
+        }
+      ],
+      "max_tokens": 4096,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "book_flight",
+            "description": "Book a flight",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "flight": {
+                  "$ref": "#/$defs/FlightInfo"
+                },
+                "passenger": {
+                  "$ref": "#/$defs/Passenger"
+                }
+              },
+              "required": [
+                "flight",
+                "passenger"
+              ],
+              "$defs": {
+                "FlightInfo": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "date": {
+                      "type": "string",
+                      "format": "date"
+                    }
+                  }
+                },
+                "Passenger": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "age": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "Qwen/Qwen3-0.6B",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-92ddeb07263c",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "\n\nThe assistant cannot proceed without the passenger's age. Please provide John Doe's age.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "\nOkay, the user wants to book a flight from SFO to JFK for John Doe. Let me check the tools available. There's a function called book_flight that requires flight and passenger details. The flight parameter needs info like from and to cities, and the passenger has name and age. The user provided SFO to JFK, so I can map that. The passenger is John Doe, but I need his age. Wait, the user didn't mention his age. Oh, but maybe I should ask if he's older than 12 or if there's a specific age mentioned. But the function requires both flight and passenger, so I need to include the necessary info. Since the user only provided the departure city and destination, but not the passenger's details like name and age, I might need to make an assumption or prompt for the missing information. However, the function's parameters are set as required, so maybe I should proceed with the given info, assuming the age is provided elsewhere. Wait, the user's message only mentions John Doe, so maybe I should just use his name and assume the age. But perhaps the function expects the passenger's name and age. Since the user didn't specify age, maybe I should note that but according to the tool definition, the parameters are required, so I must include them. Wait, looking back, the required fields are flight and passenger. The passenger has name and age. The user provided only the flight and the name. So I need to fill in the passenger's age. But the user's message doesn't mention it. Hmm, maybe there's a mistake here. Let me check again. The user wrote \"Book a flight from SFO to JFK for John Doe\". So the passenger's name is John Doe. But the function requires passenger's name and age. Since the user didn't mention the age, perhaps I need to ask for it. However, the tool's parameters are set as required, so maybe the age is an optional field. Wait, looking at the parameters for the passenger: \"properties\": {\"name\": {\"type\": \"string\"}, \"age\": {\"type\": \"integer\"}}. The required fields are both. So the user must provide both. But in this case, only the name is provided. Therefore, I can't call the function without the age. So perhaps I need to inform the user that they need to provide their age. But the function requires both, so maybe the user made a mistake. Alternatively, maybe the age is implied by the name. But that's not standard. So the correct approach is to call the function with the given flight and passenger name, but since age is missing, the tool can't be called. Wait, but the user's query includes \"for John Doe\", which might imply that the passenger's name is John Doe, but age isn't mentioned. Therefore, the function can't be called without the age. So maybe the assistant should respond that the age is required. But the user might have intended to include it. Alternatively, perhaps there's a misunderstanding. Let me check again. The user's message is \"Book a flight from SFO to JFK for John Doe\". So the passenger is John Doe, but the age isn't provided. Therefore, the function requires both, so I can't proceed. But the function's parameters are set to have both required fields. Therefore, the correct response is to inform the user that the age is missing. However, the assistant is supposed to call the function if possible. Wait, but according to the tool definition, the function requires both flight and passenger. The passenger has name and age. The user provided only the flight and the name. Therefore, the assistant can't call the function. But the user's message includes the name, so maybe the assistant should proceed by using that name and assume the age is provided. But that's not correct. Alternatively, perhaps the assistant should prompt the user to provide the age. However, the instructions say to call the function if possible. Since the age is missing, the function can't be called. Therefore, the assistant should respond that the necessary information is missing. But the user might expect the answer to be generated. Wait, maybe there's a mistake in the tool parameters. Let me recheck. The function's parameters are flight (required), and passenger (required with name and age). The user's message only includes the flight and the name. Therefore, the assistant can't call the function. But the user might have intended to include the age. Maybe the assistant should proceed by using the name and age as provided, but that's not possible. Therefore, the correct response is to state that the age is required. However, the assistant is supposed to use the tools. So perhaps there's an error here. Alternatively, maybe the age is part of the flight details? No, the flight parameters are from, to, date. The passenger's details are name and age. So the assistant can't proceed without the age. Therefore, the answer is that the necessary information is missing. But the user's question includes the name, so maybe the assistant should proceed by using that name and assume the age is provided. But that's not accurate. Therefore, the assistant should inform the user that the age is required.\n"
+            },
+            "matched_stop": 151645
+          }
+        ],
+        "created": 0,
+        "model": "Qwen/Qwen3-0.6B",
+        "object": "chat.completion",
+        "metadata": {
+          "weight_version": "default",
+          "weight_versions": [
+            {
+              "version": "default",
+              "start": 0,
+              "end": 1097
+            }
+          ]
+        },
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 1097,
+          "prompt_tokens": 271,
+          "total_tokens": 1368,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "reasoning_tokens": 1078
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

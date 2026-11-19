@@ -2,7 +2,7 @@ exclude: 'build/'
 minimum_pre_commit_version: 4.4.0
 x-uv-dependency: &uv-dependency "uv==0.9.15"
 default_language_version:
-    python: python3.12
+    python: python3.14
 
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
@@ -60,7 +60,8 @@ repos:
 
 
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.18.2
+    # Keep in sync with the mypy pin in pyproject.toml
+    rev: v2.4.1
     hooks:
     -   id: mypy
         additional_dependencies:
@@ -167,6 +168,15 @@ repos:
         pass_filenames: false
         require_serial: true
         files: ^docs/static/google-interactions-(spec|coverage)\.json$|^docs/docs/api-google-interactions/conformance\.mdx$|^scripts/(google_interactions_coverage|generate_google_interactions_coverage_docs)\.py$|^src/ogx_api/interactions/models\.py$
+      - id: systemone-coverage
+        name: TypeSafe SystemOne API Conformance
+        additional_dependencies:
+          - *uv-dependency
+        entry: ./scripts/uv-run-with-index.sh run python scripts/systemone_coverage.py --check-regression --update --quiet
+        language: python
+        pass_filenames: false
+        require_serial: true
+        files: ^docs/static/(ogx-spec\.yaml|typesafe-spec\.json|systemone-coverage\.json)$|^scripts/systemone_coverage\.py$|^src/ogx_api/inference/systemone\.py$
       - id: provider-compat-matrix
         name: Provider Compatibility Matrix
         additional_dependencies:

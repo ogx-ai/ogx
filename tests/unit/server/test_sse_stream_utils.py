@@ -93,7 +93,7 @@ async def test_inference_disconnect_finishes_upstream_cleanup() -> None:
     first_chunk_sent = anyio.Event()
     upstream_closed = anyio.Event()
 
-    async def upstream() -> AsyncGenerator[str, None]:
+    async def upstream() -> AsyncGenerator[str]:
         try:
             yield "first"
             await anyio.sleep_forever()
@@ -111,7 +111,7 @@ async def test_inference_disconnect_finishes_upstream_cleanup() -> None:
 
         async def openai_chat_completion(
             self, _params: OpenAIChatCompletionRequestWithExtraBody
-        ) -> AsyncGenerator[str, None]:
+        ) -> AsyncGenerator[str]:
             return upstream()
 
     router = create_router(cast(Inference, InferenceImpl()))
@@ -169,7 +169,7 @@ async def test_sse_client_errors_keep_actionable_details(protocol: str, error: E
 
 
 async def _collect_protocol_error(protocol: str, error: Exception) -> str:
-    async def source() -> AsyncGenerator[str, None]:
+    async def source() -> AsyncGenerator[str]:
         raise error
         yield "unreachable"
 

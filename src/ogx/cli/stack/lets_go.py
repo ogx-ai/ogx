@@ -243,18 +243,11 @@ def _remove_api(run_config: StackConfig, api: str) -> None:
         run_config.apis = [a for a in run_config.apis if a != api]
 
 
-def _add_file_search_and_responses(run_config: StackConfig) -> None:
-    """Add file-search and responses providers to the stack config.
+def _add_responses_and_web_search(run_config: StackConfig) -> None:
+    """Add the responses and web_search providers to the stack config.
 
     These are only added after confirming an embedding model is available.
     """
-    # Add tool_runtime API with file-search provider
-    if "tool_runtime" not in run_config.providers:
-        run_config.providers["tool_runtime"] = []
-    if not any(p.provider_type == "inline::file-search" for p in run_config.providers["tool_runtime"]):
-        run_config.providers["tool_runtime"].append(
-            Provider(provider_id="file-search", provider_type="inline::file-search")
-        )
     # Add tool_runtime to APIs if not already present. A config without an `apis:` list
     # serves every provider-backed API, so there is nothing to add there.
     if run_config.apis is not None and "tool_runtime" not in run_config.apis:
@@ -282,7 +275,7 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
     if run_config.apis is not None and "responses" not in run_config.apis:
         run_config.apis.append("responses")
 
-    # Add web search providers in priority order: brave -> tavily -> bing -> nimble -> serply -> exa
+    # Add web search providers in priority order: brave -> tavily -> bing -> nimble -> serply -> exa -> searchapi
     _web_search_order = [
         ("remote::brave-search", "brave-search"),
         ("remote::tavily-search", "tavily-search"),
@@ -290,11 +283,12 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
         ("remote::nimble-search", "nimble-search"),
         ("remote::serply-search", "serply-search"),
         ("remote::exa-search", "exa-search"),
+        ("remote::searchapi-search", "searchapi-search"),
     ]
-    tool_runtime_registry = get_provider_registry().get(Api.tool_runtime, {})
+    web_search_registry = get_provider_registry().get(Api.web_search, {})
     existing_web_search: set[str] = {
         p.provider_type
-        for p in run_config.providers["tool_runtime"]
+        for p in run_config.providers.get("web_search", [])
         if p.provider_type in {pt for pt, _ in _web_search_order}
     }
 
@@ -307,7 +301,7 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
             added = True
             continue
 
-        spec = tool_runtime_registry.get(provider_type)
+        spec = web_search_registry.get(provider_type)
         if spec is None:
             continue
 
@@ -331,7 +325,9 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
             cprint(f"  ✗ {provider_id} (web search) — failed to construct config with env vars", color="yellow")
             continue  # noqa S112 -- exception is reported to the user via cprint before continuing
 
-        run_config.providers["tool_runtime"].append(
+        if "web_search" not in run_config.providers:
+            run_config.providers["web_search"] = []
+        run_config.providers["web_search"].append(
             Provider(
                 provider_id=provider_id,
                 provider_type=provider_type,
@@ -342,16 +338,25 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
         added = True
 
     if not added:
+        if "web_search" not in run_config.providers:
+            run_config.providers["web_search"] = []
+        run_config.providers["web_search"].append(
+            Provider(provider_id="placeholder", provider_type="inline::placeholder")
+        )
         if all_env_vars:
             vars_str = ", ".join(dict.fromkeys(all_env_vars))
             cprint(
-                f"  ✗ web search disabled (no API key set — set {vars_str})",
+                f"  ✓ web search (built-in placeholder — returns a 'not available' notice; set {vars_str} for real search)",
                 color="yellow",
             )
         else:
-            cprint("  ✗ web search disabled", color="yellow")
+            cprint("  ✓ web search (built-in placeholder)", color="yellow")
 
-    cprint("  ✓ inline::file-search (built-in)", color="green")
+    # Add web_search to APIs if not already present. A config without an `apis:` list
+    # serves every provider-backed API, so there is nothing to add there.
+    if run_config.apis is not None and "web_search" not in run_config.apis:
+        run_config.apis.append("web_search")
+
     cprint("  ✓ inline::builtin responses (built-in)", color="green")
 
 
@@ -433,8 +438,8 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
             f"  ✓ Default embedding model → {args.default_embedding_model} ({args.default_embedding_dimension}d)",
             color="green",
         )
-        # Add file-search and responses now that embedding model is confirmed
-        _add_file_search_and_responses(run_config)
+        # Add responses and web search now that embedding model is confirmed
+        _add_responses_and_web_search(run_config)
     elif "vector_io" in run_config.providers:
         detected_result = (
             autodetect_embedding if autodetect_embedding is not None else await _detect_embedding_model(run_config)
@@ -471,8 +476,8 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
                     f"  ✓ Auto-detected embedding model → {detected.provider_id}/{detected.model_id} ({embedding_dimension}d)",
                     color="green",
                 )
-                # Add file-search and responses now that embedding model is confirmed
-                _add_file_search_and_responses(run_config)
+                # Add responses and web search now that embedding model is confirmed
+                _add_responses_and_web_search(run_config)
         else:
             cprint(
                 "  ✗ No embedding model detected — vector stores, file-search, and responses disabled.",
@@ -591,6 +596,7 @@ async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[Qualifi
         # provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env
         ("remote::ollama", "OLLAMA_URL", "http://localhost:11434/v1", None, None),
         ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", None, "VLLM_API_TOKEN"),
+        ("remote::sglang", "SGLANG_URL", "http://localhost:30000/v1", None, "SGLANG_API_TOKEN"),
         ("remote::llama-cpp-server", "LLAMA_CPP_SERVER_URL", "http://localhost:8080/v1", None, None),
         ("remote::text-embeddings-inference", "TEI_URL", "http://localhost:8080/v1", None, None),
         ("remote::openai", "OPENAI_BASE_URL", "https://api.openai.com/v1", "OPENAI_API_KEY", None),
@@ -605,6 +611,7 @@ async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[Qualifi
         ("remote::gemini", None, "https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY", None),
         ("remote::azure", "AZURE_API_BASE", "", "AZURE_API_KEY", None),
         ("remote::meta", None, "https://api.meta.ai/v1", "META_API_KEY", None),
+        ("remote::typesafe", "TYPESAFE_BASE_URL", "https://api.typesafe.ai", "TYPESAFE_API_KEY", None),
     ]
 
     passed: list[str] = []
@@ -666,7 +673,7 @@ async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[Qualifi
             detected_embedding = _pick_embedding_from_models(models, provider_type.split("::")[-1])
 
     # Inline providers require no external service — always include them.
-    # Note: file-search and responses require an embedding model, so they are added later
+    # Note: responses require an embedding model, so they are added later
     # after confirming an embedding model is available (either user-provided or auto-detected)
     inline_providers = [
         "files=inline::localfs",
@@ -813,7 +820,7 @@ def _is_auth_error(e: Exception) -> bool:
 
 
 @contextlib.contextmanager
-def _suppress_provider_logs(suppress: bool = True) -> Generator[None, None, None]:
+def _suppress_provider_logs(suppress: bool = True) -> Generator[None]:
     """Context manager to suppress all provider-related logs during probing.
 
     When suppress=True, temporarily disables all logging. When suppress=False,

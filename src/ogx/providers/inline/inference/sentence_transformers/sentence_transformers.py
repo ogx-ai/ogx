@@ -343,6 +343,7 @@ class SentenceTransformersInferenceImpl(
                 return SentenceTransformer(model, trust_remote_code=trust_remote_code)
 
             loaded_model = await asyncio.to_thread(_load_model)
+            assert loaded_model is not None
             EMBEDDING_MODELS[cache_key] = loaded_model
             return loaded_model
 

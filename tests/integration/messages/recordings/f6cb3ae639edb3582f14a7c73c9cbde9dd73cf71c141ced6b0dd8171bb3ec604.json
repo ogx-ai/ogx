@@ -1,0 +1,50 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_content_block_array[txt=deepseek/deepseek-chat]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_content_block_array[txt=deepseek/deepseek-chat]",
+    "url": "https://api.deepseek.com/anthropic/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "deepseek-chat",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "What is 1+1? Reply with just the number."
+            }
+          ]
+        }
+      ],
+      "max_tokens": 32,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "8538c6c0-21b2-47b9-aea3-47afbb5ec31e",
+      "type": "message",
+      "role": "assistant",
+      "model": "deepseek-chat",
+      "content": [
+        {
+          "type": "text",
+          "text": "2"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 17,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 1,
+        "service_tier": "standard"
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

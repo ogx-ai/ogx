@@ -511,23 +511,40 @@ class AuthorizedSqlStore:
         for operation in operations:
             await self._check_access_for_rows(operation.table, operation.where, Action.DELETE, current_user)
 
+        tenant_where, tenant_params = self._build_tenant_filter(current_user)
+
         if self._can_apply_sql_policy_filter_for_mutations(current_user):
             access_where, access_params = self._build_access_control_where_clause(self.policy)
-            filtered_operations = [
-                DeleteOperation(
-                    table=operation.table,
-                    where=operation.where,
-                    where_sql=(
-                        access_where if operation.where_sql is None else f"({operation.where_sql}) AND ({access_where})"
-                    ),
-                    where_sql_params={**(operation.where_sql_params or {}), **access_params},
-                )
-                for operation in operations
-            ]
-            await self.sql_store.delete_many(filtered_operations)
+            combined_where, combined_params = self._combine_where_clauses(
+                (access_where, access_params),
+                (tenant_where, tenant_params),
+            )
+            await self.sql_store.delete_many(self._apply_extra_where(operations, combined_where, combined_params))
+            return
+
+        if tenant_where != "1=1":
+            await self.sql_store.delete_many(self._apply_extra_where(operations, tenant_where, tenant_params))
             return
 
         await self.sql_store.delete_many(operations)
+
+    @staticmethod
+    def _apply_extra_where(
+        operations: Sequence[DeleteOperation], extra_where: str, extra_params: Mapping[str, Any]
+    ) -> list[DeleteOperation]:
+        """AND `extra_where` onto each operation's existing where_sql, per operation (each may
+        already carry its own where_sql and target a different table)."""
+        return [
+            DeleteOperation(
+                table=operation.table,
+                where=operation.where,
+                where_sql=(
+                    extra_where if operation.where_sql is None else f"({operation.where_sql}) AND ({extra_where})"
+                ),
+                where_sql_params={**(operation.where_sql_params or {}), **extra_params},
+            )
+            for operation in operations
+        ]
 
     async def _check_access_for_rows(
         self,

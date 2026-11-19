@@ -1,0 +1,86 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_tool_use_round_trip[txt=anthropic/claude-haiku-5-5]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_tool_use_round_trip[txt=anthropic/claude-haiku-5-5]",
+    "url": "https://api.anthropic.com/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "claude-haiku-5-5",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Use the calculator tool to compute 15 * 7."
+        }
+      ],
+      "max_tokens": 256,
+      "tools": [
+        {
+          "type": "custom",
+          "name": "calculator",
+          "description": "Perform basic arithmetic. Use this for any math question.",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "expression": {
+                "type": "string",
+                "description": "The math expression to evaluate"
+              }
+            },
+            "required": [
+              "expression"
+            ]
+          }
+        }
+      ],
+      "tool_choice": {
+        "type": "any"
+      },
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "claude-haiku-5-5",
+      "id": "msg_011Cg5w8wwpm5yQA6xeDtHxv",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_01VVHuU7wD9zFKpnmRip2Cct",
+          "name": "calculator",
+          "input": {
+            "expression": "15 * 7"
+          },
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ],
+      "container": null,
+      "stop_reason": "tool_use",
+      "stop_sequence": null,
+      "stop_details": null,
+      "usage": {
+        "input_tokens": 528,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 42,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "speed": "standard"
+      },
+      "diagnostics": null
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

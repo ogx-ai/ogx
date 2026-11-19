@@ -1,0 +1,93 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_tool_use_round_trip[txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_tool_use_round_trip[txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b]",
+    "url": "https://api.fireworks.ai/inference/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Use the calculator tool to compute 15 * 7."
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "chatcmpl-tool-970e74fabb3a4895",
+              "name": "calculator",
+              "input": {
+                "expression": "15 * 7"
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "chatcmpl-tool-970e74fabb3a4895",
+              "content": "105"
+            }
+          ]
+        }
+      ],
+      "max_tokens": 256,
+      "tools": [
+        {
+          "type": "custom",
+          "name": "calculator",
+          "description": "Perform basic arithmetic. Use this for any math question.",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "expression": {
+                "type": "string",
+                "description": "The math expression to evaluate"
+              }
+            },
+            "required": [
+              "expression"
+            ]
+          }
+        }
+      ],
+      "stream": false,
+      "thinking": {
+        "type": "disabled"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "content": [
+        {
+          "type": "text",
+          "text": "15 * 7 = 105."
+        }
+      ],
+      "id": "msg_77fc2390cb363201aa01209c",
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "role": "assistant",
+      "stop_details": null,
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "type": "message",
+      "usage": {
+        "input_tokens": 50,
+        "output_tokens": 12,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 294,
+        "cache_creation": null,
+        "service_tier": null,
+        "inference_geo": null
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

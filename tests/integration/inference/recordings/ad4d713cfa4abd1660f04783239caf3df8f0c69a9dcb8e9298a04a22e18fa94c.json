@@ -1,0 +1,109 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_structured_output[txt=sglang/Qwen/Qwen3-0.6B-inference:chat_completion:structured_output]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:30000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a helpful assistant. Michael Jordan was born in 1963. His first name is \"Michael\", He played basketball for the Chicago Bulls for 15 seasons and was drafted in 1984"
+        },
+        {
+          "role": "user",
+          "content": "Please give me information about Michael Jordan."
+        }
+      ],
+      "max_tokens": 4096,
+      "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+          "name": "AnswerFormat",
+          "schema": {
+            "properties": {
+              "first_name": {
+                "title": "First Name",
+                "type": "string"
+              },
+              "last_name": {
+                "title": "Last Name",
+                "type": "string"
+              },
+              "year_of_birth": {
+                "title": "Year Of Birth",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "first_name",
+              "last_name",
+              "year_of_birth"
+            ],
+            "title": "AnswerFormat",
+            "type": "object"
+          }
+        }
+      },
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "Qwen/Qwen3-0.6B",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-ad4d713cfa4a",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "{ \"first_name\": \"Michael\", \"last_name\": \"Jordan\", \"year_of_birth\": 1963 }",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "\nOkay, the user asked for information about Michael Jordan. Let me start by recalling his basic details. He was born in 1963, so I should mention that. His first name is \"Michael\", so I need to make sure that's included.\n\nHe played basketball for the Chicago Bulls for 15 seasons. That's a key point. I should highlight his time in the Bulls and his impact on the team. Also, he was drafted in 1984, which is a significant detail. I should note that he became the first overall pick in the 1984 draft, which is a notable achievement.\n\nI should also mention his career highlights, like his 15-season NBA career. Maybe add something about his role as a player and his contributions to the team. Let me check if there are any other important facts I might have missed. Oh, he was a star player and helped the Bulls win championships. That's a good point to include.\n\nWait, the user might be looking for a comprehensive overview. I need to structure the information clearly. Start with his birth date, first name, and career details. Then mention his time with the Bulls, draft year, and achievements. Make sure the response is concise but covers all the necessary information. Let me double-check the facts to avoid any errors. Yeah, that should cover it.\n"
+            },
+            "matched_stop": 151645
+          }
+        ],
+        "created": 0,
+        "model": "Qwen/Qwen3-0.6B",
+        "object": "chat.completion",
+        "metadata": {
+          "weight_version": "default",
+          "weight_versions": [
+            {
+              "version": "default",
+              "start": 0,
+              "end": 308
+            }
+          ]
+        },
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 308,
+          "prompt_tokens": 66,
+          "total_tokens": 374,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "reasoning_tokens": 281
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

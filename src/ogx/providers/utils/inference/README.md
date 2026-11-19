@@ -19,6 +19,7 @@ inference/
   anthropic_mixin.py      # AnthropicMixin: native /v1/messages passthrough shared by providers
   anthropic_translation.py # Anthropic<->OpenAI translation and the SSE passthrough stream helper
   network_config.py       # NetworkConfig model and httpx client kwargs builder
+  systemone.py            # Shared SystemOne (judgment) call path over the typesafe SDK
 ```
 
 ## OpenAIMixin (`openai_mixin.py`)
@@ -84,6 +85,18 @@ Persists chat completion request/response pairs to the SqlStore. Used by the inf
 ## Model classification (`models_dev_registry.py`)
 
 `classify_model(identifier, provider_id)` classifies embedding and rerank models for remote adapters whose `/v1/models` response has no model task/type field (vLLM, llama.cpp servers), returning `None` when `identifier` is neither so callers can fall back to their own default classification. Only embedding classification consults the [models.dev](https://models.dev) registry, enriching `Model.metadata` with `embedding_dimension`/`context_length` when it has an entry, and falling back to a name heuristic (`"embed"` in the identifier) otherwise; models.dev has no rerank entries, so rerank classification is a name heuristic (`"rerank"` in the identifier) only.
+
+## SystemOne judgment helper (`systemone.py`)
+
+Shared call path for SystemOne (judgment) providers that speak the TypeSafe wire protocol:
+the TypeSafe cloud API and local engines that serve `POST /v1/systemone` natively (Ollama,
+llama.cpp server, SGLang, vLLM). `systemone_judge()` wraps the official `typesafe_sdk`
+client, maps SDK errors to `SystemOneProviderError` (with the upstream status code), and
+re-validates the raw response body into OGX's `SystemOneResponse` wire model, after dropping
+any per-engine extension/diagnostic fields the caller names via `extension_fields` /
+`extension_fields_by_type` / `top_level_extension_fields` (e.g. SGLang's `x_label_mass`, or
+vLLM's `id`/`object`/`created`/`diagnostics` and its extra fields on `noul` answers).
+`LOCAL_ENGINE_API_KEY` is the placeholder key for engines that ignore `Authorization`.
 
 ## Server signature verification (`server_signature.py`)
 

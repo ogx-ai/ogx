@@ -12,14 +12,14 @@ You can install the dependencies by running:
 
 ```bash
 cd ogx
-uv venv --python 3.12
+uv venv --python 3.13
 uv sync --group dev
 uv pip install -e .
 source .venv/bin/activate
 ```
 
-**Note:** If you are making changes to OGX, it is essential that you use Python 3.12 as shown above.
-OGX can work with Python 3.13 but the pre-commit hooks used to validate code changes only work with Python 3.12.
+**Note:** If you are making changes to OGX, use Python 3.13 or 3.14 as shown above; those are the versions
+the pre-commit hooks used to validate code changes are tested against in CI.
 If you don't specify a Python version, `uv` will automatically select a Python version according to the `requires-python`
 section of the `pyproject.toml`, which is fine for running OGX but not for committing changes.
 For more info, see the [uv docs around Python versions](https://docs.astral.sh/uv/concepts/python-versions/).
@@ -180,9 +180,9 @@ This practice:
 
 ### Adding a New Provider
 
-OGX has "out-of-tree" providers referred to as [external providers](https://ogx-ai.github.io/docs/providers/external) as well as "in-tree" providers that are a part of the core project. The OGX community is accepting of [new in-tree provider contributions](https://ogx-ai.github.io/docs/contributing/new_api_provider) so long as there is merit seen in the addition.
+The OGX community is accepting of [new in-tree provider contributions](https://ogx-ai.github.io/docs/contributing/new_api_provider) so long as there is merit seen in the addition.
 
-If you wish to include a new in-tree provider in the Core project, please follow these steps:
+If you wish to include a new in-tree provider in the core project, please follow these steps:
 
 1. **Open a discussion issue**: Open an issue with label "discussion" describing the provider you want to add, its use case, and how it fits into the OGX ecosystem.
 
@@ -248,13 +248,13 @@ ogx stack list-deps <distro-name> | xargs -L1 uv pip install
 
 If you have made changes to a provider's configuration in any form (introducing a new config key, or
 changing models, etc.), you should run `./scripts/distro_codegen.py` to re-generate various YAML
-files as well as the documentation. You should not change `docs/source/.../distributions/` files
+files as well as the documentation. You should not change `docs/docs/distributions/` files
 manually as they are auto-generated.
 
 ### Updating the provider documentation
 
 If you have made changes to a provider's configuration, you should run `./scripts/provider_codegen.py`
-to re-generate the documentation. You should not change `docs/source/.../providers/` files manually
+to re-generate the documentation. You should not change `docs/docs/providers/` files manually
 as they are auto-generated.
 Note that the provider "description" field will be used to generate the provider documentation.
 

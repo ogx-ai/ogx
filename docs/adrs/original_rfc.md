@@ -27,7 +27,7 @@ Meta releases weights of both the pretrained and instruction fine-tuned Llama mo
 
 ### Model Lifecycle
 
-![Figure 1: Model Life Cycle](resources/model-lifecycle.png)
+![Figure 1: Model Life Cycle](../static/img/model-lifecycle.png)
 
 For each of the operations that need to be performed (e.g. fine tuning, inference, evals etc) during the model life cycle, we identified the capabilities as toolchain APIs that are needed. Some of these capabilities are primitive operations like inference while other capabilities like synthetic data generation are composed of other capabilities. The list of APIs we have identified to support the lifecycle of Llama models is below:
 
@@ -40,7 +40,7 @@ For each of the operations that need to be performed (e.g. fine tuning, inferenc
 
 ### Agentic System
 
-![Figure 2: Agentic System](resources/agentic-system.png)
+![Figure 2: Agentic System](../static/img/agentic-system.png)
 
 In addition to the model lifecycle, we considered the different components involved in an agentic system. Specifically around tool calling and shields. Since the model may decide to call tools, a single model inference call is not enough. What’s needed is an agentic loop consisting of tool calls and inference. The model provides separate tokens representing end-of-message and end-of-turn. A message represents a possible stopping point for execution where the model can inform the execution environment that a tool call needs to be made. The execution environment, upon execution, adds back the result to the context window and makes another inference call. This process can get repeated until an end-of-turn token is generated.
 Note that as of today, in the OSS world, such a “loop” is often coded explicitly via elaborate prompt engineering using a ReAct pattern (typically) or preconstructed execution graph. Llama 3.1 (and future Llamas) attempts to absorb this multi-step reasoning loop inside the main model itself.
@@ -66,9 +66,9 @@ The sequence diagram that details the steps is in the [agentic system docs](http
 
 We define the OGX as a layer cake shown below.
 
-![Figure 3: OGX](resources/ogx.png)
+![Figure 3: OGX](../static/img/ogx.png)
 
-The API is defined in the [YAML](_static/ogx-spec.yaml) and [HTML](_static/ogx-spec.html) files.
+The API is defined in the [YAML](../static/ogx-spec.yaml) file.
 
 ## Sample implementations
 

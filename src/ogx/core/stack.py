@@ -276,11 +276,10 @@ async def auto_register_tool_groups(run_config: StackConfig, impls: dict[Api, An
     register that tool group automatically. This replaces the old explicit
     tool_groups config in registered_resources.
 
-    When multiple providers map to the same toolgroup (e.g. brave-search and
-    tavily-search both serve builtin::websearch), the provider with a configured
-    api_key wins. If none have a key, the first candidate is used so the tool
-    group still exists (invocation will fail with a clear provider error rather
-    than "tool not found").
+    When multiple providers map to the same toolgroup, the provider with a
+    configured api_key wins. If none have a key, the first candidate is used so
+    the tool group still exists (invocation will fail with a clear provider
+    error rather than "tool not found").
     """
     if Api.tool_groups not in impls:
         return
@@ -946,6 +945,9 @@ def run_config_from_dynamic_config_spec(
                 f"Failed to parse provider spec '{api_provider}'. Expected format: api=provider (e.g. inference=fireworks)"
             )
         api_str, provider_with_params = api_provider.split("=", 1)
+        # `systemone` is a spelling alias for `inference` (judgment models are inference models).
+        if api_str == "systemone":
+            api_str = "inference"
 
         # Parse provider name and optional config parameters
         # Format: provider_name?param1=value1&param2=value2

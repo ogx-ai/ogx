@@ -11,7 +11,6 @@ inline/
   inference/           # Local inference (sentence-transformers, transformers)
   ios/                 # iOS on-device inference
   vector_io/           # Vector storage (sqlite-vec, faiss, chroma, milvus, qdrant)
-  tool_runtime/        # Tool runtime (RAG context retrieval)
   files/               # File storage and management
   file_processor/      # File processing (text extraction, etc.)
   skills/              # Skills API (versioned skill bundle management)
@@ -31,3 +30,4 @@ Their factory function is typically named `get_provider_impl()` and returns an i
 - **`inference/transformers`** -- Runs Llama models locally using the transformers library.
 - **`vector_io/sqlite_vec`** -- SQLite-based vector storage using the sqlite-vec extension.
 - **`skills/builtin`** -- Manages versioned skill bundles (zip archives with SKILL.md manifests). Stores bundles via the Files API and metadata in KVStore.
+- **`web_search/placeholder`** -- Placeholder backend for the web_search API. Performs no search; invocations return a "not available" notice. Registered by `ogx go` when no web search provider is configured.

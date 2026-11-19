@@ -270,6 +270,11 @@ ALL_RESOURCES = {
             "cancel": "post /v1/batches/{batch_id}/cancel",
         }
     },
+    "systemone": {
+        "methods": {
+            "create": "post /v1/systemone",
+        }
+    },
     "alpha": {
         "subresources": {
             "admin": {

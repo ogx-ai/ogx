@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from ogx.core.datatypes import Api, Provider, StackConfig
 from ogx.core.resolver import resolve_impls
 from ogx.core.routers.inference import InferenceRouter
+from ogx.core.routers.tool_runtime import ToolRuntimeRouter
 from ogx.core.routing_tables.models import ModelsRoutingTable
 from ogx.core.storage.datatypes import (
     InferenceStoreReference,
@@ -267,3 +268,54 @@ async def test_resolve_impls_inference_store_reference_null_raises() -> None:
 
     with pytest.raises(ValueError, match="storage.stores.inference must be configured in run config"):
         await resolve_impls(run_config, provider_registry, dist_registry, policy={})
+
+
+async def test_resolve_impls_wires_required_router_apis_omitted_from_apis_list() -> None:
+    """Router APIs a provider hard-depends on are wired even when an explicit `apis:` list omits them.
+
+    Template-generated distros derive `apis:` from provider keys. When the last
+    provider of an API is removed (as happened when the inline::file-search
+    tool_runtime provider was retired), the API drops out of the list, but
+    providers like the built-in responses impl still require the in-process
+    tool_runtime impl for function tools and MCP.
+    """
+    provider_spec = InlineProviderSpec(
+        api=Api.inference,
+        provider_type="sample",
+        module="test_module",
+        config_class="test_resolver.SampleConfig",
+        api_dependencies=[Api.tool_runtime],
+    )
+
+    provider_registry = {Api.inference: {provider_spec.provider_type: provider_spec}}
+
+    run_config = make_run_config(
+        distro_name="test_image",
+        apis=["inference"],
+        providers={
+            "inference": [
+                Provider(
+                    provider_id="sample_provider",
+                    provider_type="sample",
+                    config=SampleConfig.sample_run_config(),
+                )
+            ]
+        },
+    )
+
+    dist_registry = MagicMock()
+
+    mock_module = MagicMock()
+    impl = SampleImpl(SampleConfig(foo="baz"), {}, provider_spec)
+    add_protocol_methods(SampleImpl, Inference)
+
+    mock_module.get_provider_impl = AsyncMock(return_value=impl)
+    mock_module.get_provider_impl.__text_signature__ = "()"
+    sys.modules["test_module"] = mock_module
+
+    impls = await resolve_impls(run_config, provider_registry, dist_registry, policy={})
+
+    # tool_runtime and its routing table are wired because the inference
+    # provider declares them required, despite being absent from `apis:`
+    assert isinstance(impls[Api.tool_runtime], ToolRuntimeRouter)
+    assert Api.tool_groups in impls

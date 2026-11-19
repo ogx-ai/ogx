@@ -1,0 +1,77 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[openai_client-txt=sglang/Qwen/Qwen3-0.6B-inference:chat_completion:non_streaming_02]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:30000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet has rings around it with a name starting with letter S?"
+        }
+      ],
+      "max_tokens": 4096,
+      "stream": false,
+      "reasoning_effort": "low"
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "Qwen/Qwen3-0.6B",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-3ca7d9189c1b",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "\n\nThe planet with rings around it and a name starting with the letter **S** is **Saturn**.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "\nOkay, so the user is asking which planet has rings around it and the name starts with the letter 'S'. Let me think. First, I need to recall some planets and their characteristics. The question mentions rings, which are typically found on terrestrial planets, like Mercury, Venus, Earth, or Mars. But wait, Mercury and Venus have rings? Mercury is a rocky planet with a thin atmosphere, and Venus is a gas giant with clouds. Mars is a rocky planet with a reddish appearance and has a thin atmosphere. So none of those have rings. Then there's Earth, which has a solid surface and no rings. Mars also doesn't have rings. What about the other planets? Jupiter is a gas giant with a Great Red Spot, but no rings. Saturn is a gas giant with a ring system, right? So Saturn has rings. The name starts with S, which matches. So the answer should be Saturn. Let me double-check to make sure I didn't miss any other planets. Neptune has a ring system too, but Neptune's name starts with N, not S. So yes, Saturn is the correct answer.\n"
+            },
+            "matched_stop": 151645
+          }
+        ],
+        "created": 0,
+        "model": "Qwen/Qwen3-0.6B",
+        "object": "chat.completion",
+        "metadata": {
+          "weight_version": "default",
+          "weight_versions": [
+            {
+              "version": "default",
+              "start": 0,
+              "end": 257
+            }
+          ]
+        },
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 257,
+          "prompt_tokens": 22,
+          "total_tokens": 279,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "reasoning_tokens": 233
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

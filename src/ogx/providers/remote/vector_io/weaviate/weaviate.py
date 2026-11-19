@@ -100,6 +100,8 @@ class WeaviateIndex(EmbeddingIndex):
         collection.data.insert_many(data_objects)
 
     async def delete_chunks(self, chunks_for_deletion: list[ChunkForDeletion]) -> None:
+        if not chunks_for_deletion:
+            return
         sanitized_collection_name = sanitize_collection_name(self.collection_name, weaviate_format=True)
         collection = self.client.collections.get(sanitized_collection_name)
         chunk_ids = [chunk.chunk_id for chunk in chunks_for_deletion]
@@ -170,8 +172,13 @@ class WeaviateIndex(EmbeddingIndex):
             if self.client.collections.exists(sanitized_collection_name):
                 self.client.collections.delete(sanitized_collection_name)
             return
+        if not chunk_ids:
+            # contains_any([]) raises WeaviateInvalidInputError rather than matching nothing.
+            return
         collection = self.client.collections.get(sanitized_collection_name)
-        collection.data.delete_many(where=Filter.by_property("id").contains_any(chunk_ids))
+        # "id" is the Weaviate object UUID, not a stored property -- chunk_id is, and is
+        # what delete_chunks() above filters on too.
+        collection.data.delete_many(where=Filter.by_property("chunk_id").contains_any(chunk_ids))
 
     async def query_keyword(
         self,
@@ -392,6 +399,16 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
                 vectorizer_config=wvc.config.Configure.Vectorizer.none(),
                 properties=[
                     wvc.config.Property(name="chunk_content", data_type=wvc.config.DataType.TEXT),
+                    # Default (word) tokenization splits on non-alphanumeric characters, so
+                    # chunk IDs that share a token (e.g. "doc-1_1" and "doc-1_2" both tokenize
+                    # to include "doc" and "1") would over-match a contains_any filter on this
+                    # property -- field tokenization treats the whole value as one token, so
+                    # delete()/delete_chunks() match only the exact chunk_id requested (#6710).
+                    wvc.config.Property(
+                        name="chunk_id",
+                        data_type=wvc.config.DataType.TEXT,
+                        tokenization=wvc.config.Tokenization.FIELD,
+                    ),
                 ],
             )
 

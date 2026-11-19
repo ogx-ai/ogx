@@ -42,6 +42,7 @@ from .models import (
     RerankRequest,
     RerankResponse,
 )
+from .systemone import SystemOneRequest, SystemOneResponse
 
 logger = logging.LoggerAdapter(logging.getLogger(__name__), {"category": "inference"})
 
@@ -242,5 +243,19 @@ def create_router(impl: Inference) -> APIRouter:
         request: Annotated[RerankRequest, Body(...)],
     ) -> RerankResponse:
         return await impl.rerank(request)
+
+    @router.post(
+        f"/{OGX_API_V1}/systemone",
+        response_model=SystemOneResponse,
+        summary="Answer SystemOne judgment questions about a piece of state.",
+        description="Run a decision model's questions against `state` and return calibrated answers.",
+        responses={
+            200: {"description": "SystemOneResponse with one answer per question."},
+        },
+    )
+    async def systemone(
+        request: Annotated[SystemOneRequest, Body(...)],
+    ) -> SystemOneResponse:
+        return await impl.judge(request)
 
     return router

@@ -23,6 +23,7 @@ from ogx.providers.remote.inference.openai.openai import OpenAIInferenceAdapter
 from ogx.providers.utils.responses.responses_store import (
     _OpenAIResponseObjectWithInputAndMessages,
 )
+from ogx.web_search import WebSearchResult
 from ogx_api import (
     ResponseStreamOptions,
     ResponseTruncation,
@@ -40,7 +41,6 @@ from ogx_api.openai_responses import (
     OpenAIResponseTextFormat,
 )
 from ogx_api.responses.models import CreateResponseRequest
-from ogx_api.tools import ToolDef, ToolInvocationResult
 from tests.unit.providers.responses.builtin.test_openai_responses_helpers import fake_stream
 
 
@@ -147,21 +147,8 @@ async def test_create_openai_response_with_max_output_tokens_and_tools(openai_re
     model = "meta-llama/Llama-3.1-8B-Instruct"
     max_tokens = 150
 
-    openai_responses_impl.tool_groups_api.get_tool.return_value = ToolDef(
-        name="get_weather",
-        toolgroup_id="weather",
-        description="Get weather information",
-        input_schema={
-            "type": "object",
-            "properties": {"location": {"type": "string"}},
-            "required": ["location"],
-        },
-    )
-
-    openai_responses_impl.tool_runtime_api.invoke_tool.return_value = ToolInvocationResult(
-        status="completed",
-        content="Sunny, 72°F",
-    )
+    # The shared tool_call_completion fixture emits a web_search call
+    openai_responses_impl.web_search_api.search.return_value = WebSearchResult(content="Sunny, 72°F")
 
     # Mock two inference calls: one for tool call, one for final response
     mock_inference_api.openai_chat_completion.side_effect = [

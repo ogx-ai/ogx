@@ -33,11 +33,6 @@ from ogx.providers.inline.vector_io.sqlite_vec.config import (
     SQLiteVectorIOConfig,
 )
 from ogx.providers.registry.inference import available_providers
-from ogx.providers.remote.tool_runtime.brave_search.config import BraveSearchToolConfig
-from ogx.providers.remote.tool_runtime.exa_search.config import ExaSearchToolConfig
-from ogx.providers.remote.tool_runtime.nimble_search.config import NimbleSearchToolConfig
-from ogx.providers.remote.tool_runtime.serply_search.config import SerplySearchToolConfig
-from ogx.providers.remote.tool_runtime.tavily_search.config import TavilySearchToolConfig
 from ogx.providers.remote.vector_io.chroma.config import ChromaVectorIOConfig
 from ogx.providers.remote.vector_io.elasticsearch.config import ElasticsearchVectorIOConfig
 from ogx.providers.remote.vector_io.infinispan.config import InfinispanVectorIOConfig
@@ -46,6 +41,12 @@ from ogx.providers.remote.vector_io.pgvector.config import (
 )
 from ogx.providers.remote.vector_io.qdrant.config import QdrantVectorIOConfig
 from ogx.providers.remote.vector_io.weaviate.config import WeaviateVectorIOConfig
+from ogx.providers.remote.web_search.brave_search.config import BraveSearchConfig
+from ogx.providers.remote.web_search.exa_search.config import ExaSearchConfig
+from ogx.providers.remote.web_search.nimble_search.config import NimbleSearchConfig
+from ogx.providers.remote.web_search.searchapi_search.config import SearchApiSearchConfig
+from ogx.providers.remote.web_search.serply_search.config import SerplySearchConfig
+from ogx.providers.remote.web_search.tavily_search.config import TavilySearchConfig
 from ogx_api import RemoteProviderSpec
 
 
@@ -62,6 +63,7 @@ def _get_config_for_provider(provider_spec: ProviderSpec) -> dict[str, Any]:
 ENABLED_INFERENCE_PROVIDERS = [
     "ollama",
     "vllm",
+    "sglang",
     "fireworks",
     "together",
     "gemini",
@@ -80,6 +82,7 @@ ENABLED_INFERENCE_PROVIDERS = [
 INFERENCE_PROVIDER_IDS = {
     "ollama": "${env.OLLAMA_URL:+ollama}",
     "vllm": "${env.VLLM_URL:+vllm}",
+    "sglang": "${env.SGLANG_URL:+sglang}",
     "cerebras": "${env.CEREBRAS_API_KEY:+cerebras}",
     "nvidia": "${env.NVIDIA_API_KEY:+nvidia}",
     "vertexai": "${env.VERTEX_AI_PROJECT:+vertexai}",
@@ -153,12 +156,16 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         "messages": [BuildProvider(provider_type="inline::builtin")],
         "responses": [BuildProvider(provider_type="inline::builtin")],
         "skills": [BuildProvider(provider_type="inline::builtin")],
+        # Web search backends keep their legacy tool_runtime spelling; the
+        # StackConfig normalizer moves them to a web_search section at load time
+        # (see StackConfig.normalize_tool_runtime_web_search_to_web_search).
         "tool_runtime": [
             BuildProvider(provider_type="remote::exa-search"),
             BuildProvider(provider_type="remote::brave-search"),
             BuildProvider(provider_type="remote::tavily-search"),
             BuildProvider(provider_type="remote::nimble-search"),
             BuildProvider(provider_type="remote::serply-search"),
+            BuildProvider(provider_type="remote::searchapi-search"),
             BuildProvider(provider_type="inline::file-search"),
             BuildProvider(provider_type="remote::model-context-protocol"),
         ],
@@ -194,6 +201,8 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
     )
     postgres_sql_config = PostgresSqlStoreConfig.sample_run_config()
     postgres_kv_config = PostgresKVStoreConfig.sample_run_config()
+    postgres_uri_sql_config = PostgresSqlStoreConfig.sample_run_config(use_connection_string=True)
+    postgres_uri_kv_config = PostgresKVStoreConfig.sample_run_config(use_connection_string=True)
     default_overrides = {
         "inference": remote_inference_providers + [embedding_provider],
         "vector_io": [
@@ -277,31 +286,39 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 config=AutoFileProcessorConfig.sample_run_config(),
             ),
         ],
+        # Legacy tool_runtime spelling for the web search backends (translated to
+        # web_search at config load); the config classes are the web_search ones,
+        # whose sample run config is identical to the legacy tool_runtime classes'.
         "tool_runtime": [
             Provider(
                 provider_id="exa-search",
                 provider_type="remote::exa-search",
-                config=ExaSearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+                config=ExaSearchConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="brave-search",
                 provider_type="remote::brave-search",
-                config=BraveSearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+                config=BraveSearchConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="tavily-search",
                 provider_type="remote::tavily-search",
-                config=TavilySearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+                config=TavilySearchConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="nimble-search",
                 provider_type="remote::nimble-search",
-                config=NimbleSearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+                config=NimbleSearchConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="serply-search",
                 provider_type="remote::serply-search",
-                config=SerplySearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+                config=SerplySearchConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+            ),
+            Provider(
+                provider_id="searchapi-search",
+                provider_type="remote::searchapi-search",
+                config=SearchApiSearchConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="file-search",
@@ -359,6 +376,15 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         },
         deep=True,
     )
+    postgres_uri_run_settings = base_run_settings.model_copy(
+        update={
+            "storage_backends": {
+                "kv_default": postgres_uri_kv_config,
+                "sql_default": postgres_uri_sql_config,
+            }
+        },
+        deep=True,
+    )
 
     return DistributionTemplate(
         name=name,
@@ -370,11 +396,16 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         run_configs={
             "config.yaml": base_run_settings,
             "run-with-postgres-store.yaml": postgres_run_settings,
+            "run-with-postgres-uri-store.yaml": postgres_uri_run_settings,
         },
         run_config_env_vars={
             "OGX_PORT": (
                 "8321",
                 "Port for the OGX distribution server",
+            ),
+            "POSTGRES_CONNECTION_STRING": (
+                "postgresql://ogx:ogx@localhost:5432/ogx",
+                "PostgreSQL connection URI for the PostgreSQL storage configuration",
             ),
             "FIREWORKS_API_KEY": (
                 "",

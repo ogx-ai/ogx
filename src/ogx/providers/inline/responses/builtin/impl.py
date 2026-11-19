@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 from opentelemetry import metrics
 
+from ogx.core.conversations.item_sync import SyncableConversations
 from ogx.core.datatypes import AccessRule
 from ogx.log import get_logger
 from ogx.providers.utils.responses.responses_store import ResponsesStore
@@ -20,11 +21,11 @@ from ogx.telemetry.constants import (
     RESPONSES_PARAMETER_USAGE_TOTAL,
     RESPONSES_TOOL_TYPES_USED_TOTAL,
 )
+from ogx.web_search import WebSearch
 from ogx_api import (
     CancelResponseRequest,
     CompactResponseRequest,
     Connectors,
-    Conversations,
     CreateResponseRequest,
     DeleteResponseRequest,
     Files,
@@ -106,12 +107,13 @@ class BuiltinResponsesImpl(Responses):
         vector_io_api: VectorIO,
         tool_runtime_api: ToolRuntime,
         tool_groups_api: ToolGroups,
-        conversations_api: Conversations,
+        conversations_api: SyncableConversations,
         prompts_api: Prompts,
         files_api: Files,
         connectors_api: Connectors,
         policy: list[AccessRule],
         skills_api: "Skills | None" = None,
+        web_search_api: WebSearch | None = None,
     ):
         self.config = config
         self.inference_api = inference_api
@@ -125,6 +127,7 @@ class BuiltinResponsesImpl(Responses):
         self.policy = policy
         self.connectors_api = connectors_api
         self.skills_api = skills_api
+        self.web_search_api = web_search_api
 
     async def initialize(self) -> None:
         self.responses_store = ResponsesStore(self.config.persistence.responses, self.policy)
@@ -145,6 +148,7 @@ class BuiltinResponsesImpl(Responses):
             vector_stores_config=self.config.vector_stores_config,
             connectors_api=self.connectors_api,
             skills_api=self.skills_api,
+            web_search_api=self.web_search_api,
             compaction_config=self.config.compaction_config,
             memory_config=self.config.memory_config,
         )
