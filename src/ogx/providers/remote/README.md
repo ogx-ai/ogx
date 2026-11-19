@@ -21,7 +21,6 @@ remote/
     oci/               # Oracle Cloud Infrastructure
     ollama/            # Ollama
     openai/            # OpenAI
-    passthrough/       # Generic passthrough to any endpoint
     runpod/            # RunPod
     sambanova/         # SambaNova
     text_embeddings_inference/ # HuggingFace Text-Embeddings-Inference
