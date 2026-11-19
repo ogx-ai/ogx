@@ -62,7 +62,7 @@ dynamic = ["version"]
 authors = [{ name = "The OGX Contributors", email = "contributors@ogx.dev" }]
 description = "Open-source, OpenAI-compatible API server with pluggable providers for any model and any infrastructure"
 readme = "README.md"
-requires-python = ">=3.12,<3.15"
+requires-python = ">=3.13,<3.15"
 license = { "text" = "MIT" }
 classifiers = [
     "License :: OSI Approved :: MIT License",
@@ -284,6 +284,8 @@ ogx-api = [{ path = "src/ogx_api", editable = true }]
 
 [tool.ruff]
 line-length = 120
+# Lint against the supported floor, not the top of the requires-python range.
+target-version = "py313"
 exclude = [
     "./.git",
     "./docs/*",

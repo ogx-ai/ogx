@@ -30,7 +30,7 @@ tests/
 
 ## Python & Tooling
 
-- **Python 3.12** is required. Pre-commit hooks only work with 3.12.
+- **Python 3.13 or 3.14** is required. Pre-commit hooks run on 3.14 (see `.pre-commit-config.yaml`).
 - Use `uv` for all dependency management and script execution.
 - Run scripts with `uv run`, never bare `python3` or `python`.
 - Use standard library modules when possible.

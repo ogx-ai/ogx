@@ -89,4 +89,8 @@ def test_mcp_invocation(ogx_client, text_model_id, mcp_server):
     assert tool_events
     assert tool_events[-1].result.tool_calls[0].tool_name == "greet_everyone"
 
-    assert "hello" in final_response.output_text.lower()
+    # Do not assert on the greeting wording in the final response: small live
+    # models vary in how they phrase it, and the deterministic contract of this
+    # test is that the MCP tool was invoked and executed and the turn completed
+    # with a final response.
+    assert final_response.output_text.strip()

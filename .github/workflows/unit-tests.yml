@@ -36,8 +36,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Test 3.13 only on push to main and scheduled runs to reduce PR runner contention
-        python: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && fromJSON('["3.12", "3.13"]') || fromJSON('["3.12"]') }}
+        # Test 3.14 only on push to main and scheduled runs to reduce PR runner contention
+        python: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && fromJSON('["3.13", "3.14"]') || fromJSON('["3.13"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

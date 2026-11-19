@@ -50,7 +50,7 @@ runs:
         verify "$WHEEL" "$WHEEL_SHA"
 
         # Isolated venv: vLLM pins its own torch, which must not leak into the project env.
-        [ -d "$WORKDIR/venv" ] || uv venv --python 3.12 "$WORKDIR/venv"
+        [ -d "$WORKDIR/venv" ] || uv venv --python 3.13 "$WORKDIR/venv"
         uv pip install --python "$WORKDIR/venv/bin/python" --torch-backend cpu "$WHEEL"
         "$WORKDIR/venv/bin/vllm" --version
 
