@@ -11,10 +11,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx2
 import pytest
 
-from ogx.providers.utils.common.url_validation import resolve_public_ips
+from ogx.providers.utils.common.url_validation import PinnedIPTransport, resolve_public_ips
 from ogx.providers.utils.tools.mcp import (
     _pinned_sse_client_factory,
-    _PinnedIPTransport,
     list_mcp_tools,
     validate_mcp_endpoint,
 )
@@ -125,7 +124,7 @@ async def test_pinned_ip_transport_connects_to_pinned_address_and_keeps_host_hea
     try:
         # Nothing listens on 127.0.0.2: the request can only succeed if the
         # transport reroutes the connection to the pinned address.
-        transport = _PinnedIPTransport({"127.0.0.2": "127.0.0.1"})
+        transport = PinnedIPTransport({"127.0.0.2": "127.0.0.1"})
         async with httpx2.AsyncClient(transport=transport, timeout=5.0) as client:
             response = await client.get(f"http://127.0.0.2:{port}/sse")
         assert response.status_code == 200
@@ -139,7 +138,7 @@ async def test_pinned_ip_transport_connects_to_pinned_address_and_keeps_host_hea
 async def test_pinned_ip_transport_rejects_non_pinned_hosts() -> None:
     """A pinned transport must fail closed: a host without a pin (e.g. from a
     server-supplied SSE endpoint event) is rejected instead of being resolved."""
-    transport = _PinnedIPTransport({"127.0.0.2": "127.0.0.1"})
+    transport = PinnedIPTransport({"127.0.0.2": "127.0.0.1"})
     async with httpx2.AsyncClient(transport=transport, timeout=5.0) as client:
         with pytest.raises(ValueError, match="non-pinned hosts are not allowed"):
             await client.get("http://127.0.0.1:9/sse")
@@ -150,7 +149,7 @@ async def test_pinned_sse_client_factory_uses_pinned_transport() -> None:
     client = factory(headers={"Authorization": "Bearer token"}, timeout=httpx2.Timeout(5.0))
     try:
         assert isinstance(client, httpx2.AsyncClient)
-        assert isinstance(client._transport, _PinnedIPTransport)
+        assert isinstance(client._transport, PinnedIPTransport)
     finally:
         await client.aclose()
 
