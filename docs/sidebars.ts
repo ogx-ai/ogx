@@ -145,27 +145,6 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'DatasetIO',
-          collapsed: false,
-          link: { type: 'doc', id: 'providers/datasetio/index' },
-          items: [
-            'providers/datasetio/inline_localfs',
-            'providers/datasetio/remote_huggingface',
-            'providers/datasetio/remote_nvidia'
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Eval',
-          collapsed: false,
-          link: { type: 'doc', id: 'providers/eval/index' },
-          items: [
-            'providers/eval/inline_builtin',
-            'providers/eval/remote_nvidia'
-          ],
-        },
-        {
-          type: 'category',
           label: 'File Processors',
           collapsed: false,
           link: { type: 'doc', id: 'providers/file_processors/index' },
@@ -251,14 +230,23 @@ const sidebars: SidebarsConfig = {
           link: { type: 'doc', id: 'providers/tool_runtime/index' },
           items: [
             'providers/tool_runtime/inline_file-search',
-            'providers/tool_runtime/remote_bing-search',
-            'providers/tool_runtime/remote_brave-search',
-            'providers/tool_runtime/remote_exa-search',
-            'providers/tool_runtime/remote_model-context-protocol',
-            'providers/tool_runtime/remote_nimble-search',
-            'providers/tool_runtime/remote_searchapi-search',
-            'providers/tool_runtime/remote_serply-search',
-            'providers/tool_runtime/remote_tavily-search'
+            'providers/tool_runtime/remote_model-context-protocol'
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Web Search',
+          collapsed: false,
+          link: { type: 'doc', id: 'providers/web_search/index' },
+          items: [
+            'providers/web_search/inline_placeholder',
+            'providers/web_search/remote_bing-search',
+            'providers/web_search/remote_brave-search',
+            'providers/web_search/remote_exa-search',
+            'providers/web_search/remote_nimble-search',
+            'providers/web_search/remote_searchapi-search',
+            'providers/web_search/remote_serply-search',
+            'providers/web_search/remote_tavily-search'
           ],
         },
         {
@@ -298,7 +286,6 @@ const sidebars: SidebarsConfig = {
         'building_applications/agent_execution_loop',
         'building_applications/responses_vs_agents',
         'building_applications/tools',
-        'building_applications/evals',
         'building_applications/telemetry',
         'building_applications/playground',
         'building_applications/claude_code_integration',

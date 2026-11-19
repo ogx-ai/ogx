@@ -171,6 +171,7 @@ _GUARDRAIL_BATCH_CHARS = 200
 # Maps OpenAI Chat Completions error codes to Responses API error codes
 _RESPONSES_API_ERROR_CODES = {
     "invalid_base64": "invalid_base64_image",
+    "context_length_exceeded": "invalid_prompt",
 }
 
 _VALID_RESPONSE_ERROR_CODES = frozenset(
@@ -900,7 +901,7 @@ class StreamingResponseOrchestrator:
             # propagate so responses.create raises it instead of reporting a "server_error" failure.
             raise
         except Exception as exc:  # noqa: BLE001
-            if _is_context_length_error(exc):
+            if self.truncation == ResponseTruncation.auto and _is_context_length_error(exc):
                 # Context-length exceeded from provider - signal retry with truncation
                 logger.warning(
                     "Context length exceeded during response generation - will retry with truncated history",
@@ -1838,8 +1839,10 @@ class StreamingResponseOrchestrator:
                     self.ctx.chat_tools.append(chat_tool)
             elif input_tool.type in WebSearchToolTypes:
                 tool_name = "web_search"
-                # Need to access tool_groups_api from tool_executor
-                tool = await self.tool_executor.tool_groups_api.get_tool(tool_name)
+                if self.tool_executor.web_search_api is None:
+                    raise ValueError(f"Tool {tool_name} not found")
+                # The default backend owns the model-facing tool definition
+                tool = await self.tool_executor.web_search_api.tool_def(None)
                 if not tool:
                     raise ValueError(f"Tool {tool_name} not found")
                 self.ctx.chat_tools.append(make_openai_tool(tool_name, tool))

@@ -266,19 +266,6 @@ def normalize_inference_request(method: str, url: str, headers: dict[str, Any], 
     return request_hash
 
 
-def normalize_tool_request(provider_name: str, tool_name: str, kwargs: dict[str, Any]) -> str:
-    """Create a normalized hash of the tool request for consistent matching."""
-    normalized = {
-        "provider": provider_name,
-        "tool_name": tool_name,
-        "kwargs": kwargs,
-    }
-
-    # Create hash - sort_keys=True ensures deterministic ordering
-    normalized_json = json.dumps(normalized, sort_keys=True)
-    return hashlib.sha256(normalized_json.encode()).hexdigest()
-
-
 def normalize_http_request(url: str, method: str, payload: dict[str, Any]) -> str:
     """Create a normalized hash of an HTTP request for consistent matching.
 
@@ -774,50 +761,6 @@ def _combine_model_list_responses(endpoint: str, records: list[dict[str, Any]]) 
     return {"request": canonical_req, "response": {"body": ordered, "is_streaming": False}}
 
 
-async def _patched_tool_invoke_method(
-    original_method, provider_name: str, self, tool_name: str, kwargs: dict[str, Any], authorization: str | None = None
-):
-    """Patched version of tool runtime invoke_tool method for recording/replay."""
-    global _current_mode, _current_storage
-
-    if _current_mode == APIRecordingMode.LIVE or _current_storage is None:
-        # Normal operation
-        return await original_method(self, tool_name, kwargs, authorization=authorization)
-
-    request_hash = normalize_tool_request(provider_name, tool_name, kwargs)
-
-    if _current_mode in (APIRecordingMode.REPLAY, APIRecordingMode.RECORD_IF_MISSING):
-        recording = _current_storage.find_recording(request_hash)
-        if recording:
-            return recording["response"]["body"]
-        elif _current_mode == APIRecordingMode.REPLAY:
-            raise RuntimeError(
-                f"Recording not found for {provider_name}.{tool_name} | Request: {kwargs}\n"
-                f"\n"
-                f"Run './scripts/integration-tests.sh --inference-mode record-if-missing' with required API keys to generate."
-            )
-        # If RECORD_IF_MISSING and no recording found, fall through to record
-
-    if _current_mode in (APIRecordingMode.RECORD, APIRecordingMode.RECORD_IF_MISSING):
-        # Make the tool call and record it
-        result = await original_method(self, tool_name, kwargs, authorization=authorization)
-
-        request_data = {
-            "test_id": get_test_context(),
-            "provider": provider_name,
-            "tool_name": tool_name,
-            "kwargs": kwargs,
-        }
-        response_data = {"body": result, "is_streaming": False}
-
-        # Store the recording
-        _current_storage.store_recording(request_hash, request_data, response_data)
-        return result
-
-    else:
-        raise AssertionError(f"Invalid mode: {_current_mode}")
-
-
 async def _patched_file_processor_method(original_method, self, request, file=None):
     """Patched version of file processor process_file method.
 
@@ -958,18 +901,141 @@ def _is_tei_model_lookup_url(url: str) -> bool:
     return urlparse(url).path == "/info"
 
 
-async def _patched_httpx_async_get(original_get, self, url, **kwargs):
-    """Patched version of httpx2.AsyncClient.get for recording/replay of the TEI model lookup.
+# Web search backends called server-side by the web_search API (brave, bing,
+# tavily, exa, nimble, serply, searchapi -- see
+# src/ogx/providers/remote/web_search). Matched on host-anchored substrings so
+# in-repo endpoints that merely contain "search" (e.g. vector store search)
+# are never intercepted.
+_WEB_SEARCH_ENDPOINTS = (
+    "api.search.brave.com/res/v1/web/search",
+    "api.bing.microsoft.com/v7.0/search",
+    "api.tavily.com/search",
+    "api.exa.ai/search",
+    "sdk.nimbleway.com/v1/search",
+    "api.serply.io/v1/search",
+    "www.searchapi.io/api/v1/search",
+)
 
-    Records and replays the Text-Embeddings-Inference GET /info request as a
+
+def _is_web_search_url(url: str) -> bool:
+    """Whether this URL targets a web search backend endpoint for recording/replay."""
+    return any(endpoint in url for endpoint in _WEB_SEARCH_ENDPOINTS)
+
+
+# Credential fields some backends carry in the request body: Tavily sends its
+# API key in the JSON body (the other backends use headers, which the recorder
+# neither hashes nor stores). The credential is config-derived, not part of
+# the query, so it is redacted before hashing and storing -- committed
+# recordings then never contain a live key, and the hash is independent of
+# which key is configured, so a recording made under one key replays under any.
+_WEB_SEARCH_CREDENTIAL_FIELDS = ("api_key",)
+
+
+def _redact_web_search_credentials(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return the web search payload without credential fields.
+
+    Returns a copy: the live request (built by the provider) still carries the
+    real key, so redaction only affects the hash and the stored recording.
+    """
+    return {field: value for field, value in payload.items() if field not in _WEB_SEARCH_CREDENTIAL_FIELDS}
+
+
+async def _record_replay_web_search(
+    original, self, url_str: str, method: str, payload: dict[str, Any], **kwargs
+) -> Any:
+    """Record/replay a raw web search backend call (GET or POST).
+
+    The request hash covers the URL, method, and exact payload (query, result
+    limits, ...). That payload is deterministic per test because the model's
+    tool-call arguments come from a replayed inference response.
+
+    Credential fields in the payload (Tavily's body-borne API key) are
+    redacted before hashing and storing, so recordings are key-independent
+    and never store a live key.
+    """
+    global _current_mode, _current_storage
+
+    redacted_payload = _redact_web_search_credentials(payload)
+    request_hash = normalize_http_request(url_str, method, redacted_payload)
+
+    if _current_mode in (APIRecordingMode.REPLAY, APIRecordingMode.RECORD_IF_MISSING):
+        recording = _current_storage.find_recording(request_hash)
+        if recording:
+            body_bytes = json.dumps(recording["response"]["body"]).encode()
+            mock_request = httpx2.Request(method, url_str)
+            return httpx2.Response(
+                status_code=recording["response"].get("status", 200),
+                headers={"content-type": "application/json"},
+                content=body_bytes,
+                request=mock_request,
+            )
+        elif _current_mode == APIRecordingMode.REPLAY:
+            raise RuntimeError(
+                f"Recording not found for web search {method} {url_str}\n"
+                f"\n"
+                f"Run './scripts/integration-tests.sh --inference-mode record-if-missing' with the "
+                f"search provider's API key to generate."
+            )
+
+    if _current_mode in (APIRecordingMode.RECORD, APIRecordingMode.RECORD_IF_MISSING):
+        response = await original(self, url_str, **kwargs)
+
+        try:
+            body = response.json()
+        except ValueError:
+            # Not a usable search response (e.g. an error page); let the caller
+            # surface its own error instead of recording a bad response.
+            return response
+
+        if response.status_code != 200:
+            # Record runs must use a valid search key; never pin a 401/403 so a
+            # bad key cannot silently become the replayed "result".
+            return response
+
+        _current_storage.store_recording(
+            request_hash,
+            {
+                "test_id": get_test_context(),
+                "url": url_str,
+                "method": method,
+                "payload": redacted_payload,
+            },
+            {
+                "status": response.status_code,
+                "body": body,
+                "is_streaming": False,
+            },
+        )
+        return response
+
+    raise AssertionError(f"Invalid mode: {_current_mode}")
+
+
+async def _patched_httpx_async_get(original_get, self, url, **kwargs):
+    """Patched version of httpx2.AsyncClient.get for recording/replay.
+
+    Serves the Text-Embeddings-Inference GET /info model lookup and the
+    GET-based web search backends (brave, bing, serply, searchapi). All other
+    GET requests pass through untouched.
+    """
+    url_str = str(url)
+    if _current_mode == APIRecordingMode.LIVE or _current_storage is None:
+        return await original_get(self, url, **kwargs)
+    if _is_tei_model_lookup_url(url_str):
+        return await _record_replay_tei_model_lookup(original_get, self, url_str, **kwargs)
+    if _is_web_search_url(url_str):
+        return await _record_replay_web_search(
+            original_get, self, url_str, "GET", dict(kwargs.get("params") or {}), **kwargs
+        )
+    return await original_get(self, url, **kwargs)
+
+
+async def _record_replay_tei_model_lookup(original_get, self, url_str: str, **kwargs):
+    """Record and replay the Text-Embeddings-Inference GET /info request as a
     model-list response (models-*.json, shared across tests) so the served model
     can be discovered without a live backend.
     """
     global _current_mode, _current_storage
-
-    url_str = str(url)
-    if not _is_tei_model_lookup_url(url_str) or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
-        return await original_get(self, url, **kwargs)
 
     headers = dict(kwargs.get("headers") or {})
     request_hash = normalize_inference_request("GET", url_str, headers, {})
@@ -996,7 +1062,7 @@ async def _patched_httpx_async_get(original_get, self, url, **kwargs):
             )
 
     if _current_mode in (APIRecordingMode.RECORD, APIRecordingMode.RECORD_IF_MISSING):
-        response = await original_get(self, url, **kwargs)
+        response = await original_get(self, url_str, **kwargs)
 
         try:
             body = response.json()
@@ -1042,8 +1108,15 @@ async def _patched_httpx_async_post(original_post, self, url, **kwargs):
     global _current_mode, _current_storage
 
     url_str = str(url)
-    if not _should_intercept_httpx(url_str) or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
+    if (
+        not (_should_intercept_httpx(url_str) or _is_web_search_url(url_str))
+        or _current_mode == APIRecordingMode.LIVE
+        or _current_storage is None
+    ):
         return await original_post(self, url, **kwargs)
+
+    if _is_web_search_url(url_str):
+        return await _record_replay_web_search(original_post, self, url_str, "POST", kwargs.get("json") or {}, **kwargs)
 
     json_payload = kwargs.get("json", {})
     request_hash = normalize_http_request(url_str, "POST", json_payload)
@@ -1745,7 +1818,7 @@ async def _genai_record_replay(original_method, self, endpoint, mode, storage, *
 
 
 def patch_inference_clients():
-    """Install monkey patches for OpenAI client methods, google-genai methods, tool runtime methods, and aiohttp for rerank."""
+    """Install monkey patches for OpenAI client methods, google-genai methods, file processor methods, and aiohttp for rerank."""
     global _original_methods
 
     import aiohttp
@@ -1757,16 +1830,14 @@ def patch_inference_clients():
     from openai.resources.responses import AsyncResponses
 
     from ogx.providers.inline.file_processor.pypdf.adapter import PyPDFFileProcessorAdapter
-    from ogx.providers.remote.tool_runtime.tavily_search.tavily_search import TavilySearchToolRuntimeImpl
 
-    # Store original methods for OpenAI clients, tool runtimes, file processors, aiohttp, and httpx2
+    # Store original methods for OpenAI clients, file processors, aiohttp, and httpx2
     _original_methods = {
         "chat_completions_create": AsyncChatCompletions.create,
         "completions_create": AsyncCompletions.create,
         "embeddings_create": AsyncEmbeddings.create,
         "models_list": AsyncModels.list,
         "responses_create": AsyncResponses.create,
-        "tavily_invoke_tool": TavilySearchToolRuntimeImpl.invoke_tool,
         "pypdf_process_file": PyPDFFileProcessorAdapter.process_file,
         "aiohttp_post": aiohttp.ClientSession.post,
         "httpx_async_post": httpx2.AsyncClient.post,
@@ -1821,17 +1892,6 @@ def patch_inference_clients():
     AsyncEmbeddings.create = patched_embeddings_create
     AsyncModels.list = patched_models_list
     AsyncResponses.create = patched_responses_create
-
-    # Create patched methods for tool runtimes
-    async def patched_tavily_invoke_tool(
-        self, tool_name: str, kwargs: dict[str, Any], authorization: str | None = None
-    ):
-        return await _patched_tool_invoke_method(
-            _original_methods["tavily_invoke_tool"], "tavily", self, tool_name, kwargs, authorization=authorization
-        )
-
-    # Apply tool runtime patches
-    TavilySearchToolRuntimeImpl.invoke_tool = patched_tavily_invoke_tool
 
     # Create patched methods for file processors
     async def patched_pypdf_process_file(self, request, file=None):
@@ -1897,7 +1957,7 @@ def patch_inference_clients():
 
 
 def unpatch_inference_clients():
-    """Remove monkey patches and restore original OpenAI client, tool runtime, and aiohttp methods."""
+    """Remove monkey patches and restore original OpenAI client, file processor, and aiohttp methods."""
     global _original_methods
 
     if not _original_methods:
@@ -1913,7 +1973,6 @@ def unpatch_inference_clients():
     from openai.resources.responses import AsyncResponses
 
     from ogx.providers.inline.file_processor.pypdf.adapter import PyPDFFileProcessorAdapter
-    from ogx.providers.remote.tool_runtime.tavily_search.tavily_search import TavilySearchToolRuntimeImpl
 
     # Restore OpenAI client methods
     AsyncChatCompletions.create = _original_methods["chat_completions_create"]
@@ -1921,9 +1980,6 @@ def unpatch_inference_clients():
     AsyncEmbeddings.create = _original_methods["embeddings_create"]
     AsyncModels.list = _original_methods["models_list"]
     AsyncResponses.create = _original_methods["responses_create"]
-
-    # Restore tool runtime methods
-    TavilySearchToolRuntimeImpl.invoke_tool = _original_methods["tavily_invoke_tool"]
 
     # Restore file processor methods
     PyPDFFileProcessorAdapter.process_file = _original_methods["pypdf_process_file"]

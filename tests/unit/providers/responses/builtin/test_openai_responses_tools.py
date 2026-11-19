@@ -20,6 +20,7 @@ from ogx.providers.inline.responses.builtin.responses.tool_executor import ToolE
 from ogx.providers.utils.responses.responses_store import (
     _OpenAIResponseObjectWithInputAndMessages,
 )
+from ogx.web_search import WebSearchResult
 from ogx_api import (
     GetConnectorRequest,
 )
@@ -37,7 +38,7 @@ from ogx_api.openai_responses import (
     WebSearchToolTypes,
 )
 from ogx_api.responses.models import CreateResponseRequest
-from ogx_api.tools import ListToolDefsResponse, ToolDef, ToolInvocationResult
+from ogx_api.tools import ListToolDefsResponse, ToolDef
 from ogx_api.vector_io import (
     VectorStoreContent,
     VectorStoreSearchResponse,
@@ -588,7 +589,7 @@ async def test_create_openai_response_with_string_input_with_tools(openai_respon
     input_text = "What is the capital of Ireland?"
     model = "meta-llama/Llama-3.1-8B-Instruct"
 
-    openai_responses_impl.tool_groups_api.get_tool.return_value = ToolDef(
+    openai_responses_impl.web_search_api.tool_def.return_value = ToolDef(
         name="web_search",
         toolgroup_id="web_search",
         description="Search the web for information",
@@ -599,10 +600,7 @@ async def test_create_openai_response_with_string_input_with_tools(openai_respon
         },
     )
 
-    openai_responses_impl.tool_runtime_api.invoke_tool.return_value = ToolInvocationResult(
-        status="completed",
-        content="Dublin",
-    )
+    openai_responses_impl.web_search_api.search.return_value = WebSearchResult(content="Dublin")
 
     # Execute
     for tool_name in WebSearchToolTypes:
@@ -611,8 +609,8 @@ async def test_create_openai_response_with_string_input_with_tools(openai_respon
             fake_stream("tool_call_completion.yaml"),
             fake_stream(),
         ]
-        openai_responses_impl.tool_groups_api.get_tool.reset_mock()
-        openai_responses_impl.tool_runtime_api.invoke_tool.reset_mock()
+        openai_responses_impl.web_search_api.tool_def.reset_mock()
+        openai_responses_impl.web_search_api.search.reset_mock()
         openai_responses_impl.responses_store.upsert_response_object.reset_mock()
 
         result = await openai_responses_impl.create_openai_response(
@@ -643,11 +641,8 @@ async def test_create_openai_response_with_string_input_with_tools(openai_respon
         assert "Dublin" in second_params.messages[-1].content
         assert second_params.temperature == 0.1
 
-        openai_responses_impl.tool_groups_api.get_tool.assert_called_with("web_search")
-        openai_responses_impl.tool_runtime_api.invoke_tool.assert_called_once_with(
-            tool_name="web_search",
-            kwargs={"query": "What is the capital of Ireland?"},
-        )
+        openai_responses_impl.web_search_api.tool_def.assert_awaited_once()
+        openai_responses_impl.web_search_api.search.assert_called_once_with(None, "What is the capital of Ireland?")
 
         openai_responses_impl.responses_store.upsert_response_object.assert_called()
 

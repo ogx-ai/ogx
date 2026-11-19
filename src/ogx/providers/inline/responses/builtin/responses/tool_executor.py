@@ -14,6 +14,7 @@ from opentelemetry import trace
 
 from ogx.core.datatypes import VectorStoresConfig
 from ogx.log import get_logger
+from ogx.web_search import WebSearch
 from ogx_api import (
     ImageContentItem,
     InvalidParameterError,
@@ -125,11 +126,13 @@ class ToolExecutor:
         vector_io_api: VectorIO,
         vector_stores_config: VectorStoresConfig | None = None,
         mcp_session_manager=None,
+        web_search_api: WebSearch | None = None,
     ):
         self.tool_groups_api = tool_groups_api
         self.tool_runtime_api = tool_runtime_api
         self.vector_io_api = vector_io_api
         self.vector_stores_config = vector_stores_config or VectorStoresConfig()
+        self.web_search_api = web_search_api
         # Optional MCPSessionManager for session reuse within a request (fix for #4452)
         self.mcp_session_manager = mcp_session_manager
         # Connector-resolved MCP endpoints are admin-configured and may be private.
@@ -477,20 +480,22 @@ class ToolExecutor:
                             response_file_search_tool=response_file_search_tool,
                         )
             elif function_name == "web_search":
-                if ctx.response_tools:
-                    response_web_search_tool = next(
-                        (t for t in ctx.response_tools if isinstance(t, OpenAIResponseInputToolWebSearch)),
-                        None,
-                    )
-                    if response_web_search_tool:
-                        if response_web_search_tool.filters and response_web_search_tool.filters.allowed_domains:
-                            tool_kwargs["allowed_domains"] = response_web_search_tool.filters.allowed_domains
-                        if response_web_search_tool.user_location:
-                            tool_kwargs["user_location"] = response_web_search_tool.user_location.model_dump(
-                                exclude_none=True
-                            )
-                        if response_web_search_tool.search_context_size:
-                            tool_kwargs["search_context_size"] = response_web_search_tool.search_context_size
+                if self.web_search_api is None:
+                    raise ValueError("Failed to invoke web_search: no web search provider is configured on this server")
+                response_web_search_tool = (
+                    next((t for t in ctx.response_tools if isinstance(t, OpenAIResponseInputToolWebSearch)), None)
+                    if ctx.response_tools
+                    else None
+                )
+                if response_web_search_tool:
+                    if response_web_search_tool.filters and response_web_search_tool.filters.allowed_domains:
+                        tool_kwargs["allowed_domains"] = response_web_search_tool.filters.allowed_domains
+                    if response_web_search_tool.user_location:
+                        tool_kwargs["user_location"] = response_web_search_tool.user_location.model_dump(
+                            exclude_none=True
+                        )
+                    if response_web_search_tool.search_context_size:
+                        tool_kwargs["search_context_size"] = response_web_search_tool.search_context_size
 
                 attributes = {
                     "tool_name": function_name,
@@ -498,9 +503,22 @@ class ToolExecutor:
                 # TODO: follow semantic conventions for Open Telemetry tool spans
                 # https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/#execute-tool-span
                 with tracer.start_as_current_span("invoke_tool", attributes=attributes):
-                    result = await self.tool_runtime_api.invoke_tool(
-                        tool_name=function_name,
-                        kwargs=tool_kwargs,
+                    web_search_result = await self.web_search_api.search(
+                        None,
+                        tool_kwargs.get("query", ""),
+                        **{
+                            k: v
+                            for k, v in tool_kwargs.items()
+                            if k in ("search_context_size", "allowed_domains", "user_location")
+                        },
+                    )
+                    result = ToolInvocationResult(
+                        content=web_search_result.content,
+                        metadata={
+                            # Backends may not echo the query; fall back to the one that was searched
+                            "query": web_search_result.query or tool_kwargs.get("query"),
+                            "sources": [{"url": source.url} for source in web_search_result.sources],
+                        },
                     )
             else:
                 attributes = {

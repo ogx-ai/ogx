@@ -273,12 +273,12 @@ async def test_insert_chunks_with_missing_document_id(vector_io_adapter):
     chunks = [
         Chunk(
             content="has doc_id in metadata",
-            chunk_id=generate_chunk_id("doc-1", "has doc_id in metadata"),
+            chunk_id=generate_chunk_id(document_id="doc-1", chunk_text="has doc_id in metadata"),
             metadata={"document_id": "doc-1"},
             embedding=[],
             chunk_metadata=ChunkMetadata(
                 document_id="doc-1",
-                chunk_id=generate_chunk_id("doc-1", "has doc_id in metadata"),
+                chunk_id=generate_chunk_id(document_id="doc-1", chunk_text="has doc_id in metadata"),
                 created_timestamp=int(time.time()),
                 updated_timestamp=int(time.time()),
                 chunk_embedding_model="test-model",
@@ -288,12 +288,12 @@ async def test_insert_chunks_with_missing_document_id(vector_io_adapter):
         ),
         Chunk(
             content="no doc_id anywhere",
-            chunk_id=generate_chunk_id("unknown", "no doc_id anywhere"),
+            chunk_id=generate_chunk_id(document_id="unknown", chunk_text="no doc_id anywhere"),
             metadata={"source": "test"},
             embedding=[],
             chunk_metadata=ChunkMetadata(
                 document_id=None,
-                chunk_id=generate_chunk_id("unknown", "no doc_id anywhere"),
+                chunk_id=generate_chunk_id(document_id="unknown", chunk_text="no doc_id anywhere"),
                 created_timestamp=int(time.time()),
                 updated_timestamp=int(time.time()),
                 chunk_embedding_model="test-model",
@@ -303,12 +303,12 @@ async def test_insert_chunks_with_missing_document_id(vector_io_adapter):
         ),
         Chunk(
             content="doc_id in chunk_metadata",
-            chunk_id=generate_chunk_id("doc-3", "doc_id in chunk_metadata"),
+            chunk_id=generate_chunk_id(document_id="doc-3", chunk_text="doc_id in chunk_metadata"),
             metadata={},
             embedding=[],
             chunk_metadata=ChunkMetadata(
                 document_id="doc-3",
-                chunk_id=generate_chunk_id("doc-3", "doc_id in chunk_metadata"),
+                chunk_id=generate_chunk_id(document_id="doc-3", chunk_text="doc_id in chunk_metadata"),
                 created_timestamp=int(time.time()),
                 updated_timestamp=int(time.time()),
                 chunk_embedding_model="test-model",
@@ -345,7 +345,7 @@ async def test_document_id_with_invalid_type_raises_error():
     from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
     from ogx_api import Chunk, ChunkMetadata
 
-    chunk_id = generate_chunk_id("test", "test")
+    chunk_id = generate_chunk_id(document_id="test", chunk_text="test")
     chunk = Chunk(
         content="test",
         chunk_id=chunk_id,
@@ -371,7 +371,7 @@ async def test_query_chunks_calls_underlying_index_and_returns(vector_io_adapter
     from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
     from ogx_api import ChunkMetadata
 
-    chunk_id = generate_chunk_id("test", "c1")
+    chunk_id = generate_chunk_id(document_id="test", chunk_text="c1")
     chunk = Chunk(
         content="c1",
         chunk_id=chunk_id,

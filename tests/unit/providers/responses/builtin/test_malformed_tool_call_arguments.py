@@ -16,7 +16,7 @@ from tests.unit.providers.responses.builtin.test_openai_responses_helpers import
 
 
 def _register_web_search_tool(openai_responses_impl):
-    openai_responses_impl.tool_groups_api.get_tool.return_value = ToolDef(
+    openai_responses_impl.web_search_api.tool_def.return_value = ToolDef(
         name="web_search",
         toolgroup_id="web_search",
         description="Search the web",

@@ -151,6 +151,20 @@ runs:
           echo "::group::vLLM server log"
           cat "$WORKDIR/vllm.log" >&2
           echo "::endgroup::"
+          # Startup OOM kills (vLLM membinds the worker to the first bound core's
+          # NUMA node) can only be root-caused with the runner's topology, so
+          # capture it next to the server log.
+          echo "::group::Runner diagnostics (CPU/NUMA/memory)"
+          nproc
+          lscpu 2>/dev/null | grep -E "Model name|^CPU\(s\):|Thread\(s\)|Core\(s\)|Socket\(s\)|NUMA node" || true
+          lscpu -e=CPU,NODE,SOCKET 2>/dev/null | head -12 || true
+          for f in /sys/devices/system/node/node*/meminfo; do
+            [ -r "$f" ] || continue
+            echo "$f:"
+            grep -E "MemTotal|MemFree|MemAvailable" "$f"
+          done
+          free -h
+          echo "::endgroup::"
         }
 
         echo "Waiting for vLLM to be ready..."
@@ -214,6 +228,20 @@ runs:
         dump_log() {
           echo "::group::vLLM server log"
           cat "$WORKDIR/vllm.log" >&2
+          echo "::endgroup::"
+          # Startup OOM kills (vLLM membinds the worker to the first bound core's
+          # NUMA node) can only be root-caused with the runner's topology, so
+          # capture it next to the server log.
+          echo "::group::Runner diagnostics (CPU/NUMA/memory)"
+          nproc
+          lscpu 2>/dev/null | grep -E "Model name|^CPU\(s\):|Thread\(s\)|Core\(s\)|Socket\(s\)|NUMA node" || true
+          lscpu -e=CPU,NODE,SOCKET 2>/dev/null | head -12 || true
+          for f in /sys/devices/system/node/node*/meminfo; do
+            [ -r "$f" ] || continue
+            echo "$f:"
+            grep -E "MemTotal|MemFree|MemAvailable" "$f"
+          done
+          free -h
           echo "::endgroup::"
         }
 

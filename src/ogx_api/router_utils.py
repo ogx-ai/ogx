@@ -25,7 +25,7 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
-from ogx_api.common.errors import OpenAIErrorResponse
+from ogx_api.common.errors import OGXError, OpenAIErrorResponse
 
 # OpenAPI extension key to mark routes that don't require authentication.
 # Use this in FastAPI route decorators: @router.get("/health", openapi_extra={PUBLIC_ROUTE_KEY: True})
@@ -218,7 +218,9 @@ class ExceptionTranslatingRoute(APIRoute):
                 if http_exc is not None:
                     return JSONResponse(
                         status_code=http_exc.status_code,
-                        content=OpenAIErrorResponse.from_message(http_exc.detail).to_dict(),
+                        content=OpenAIErrorResponse.from_message(
+                            http_exc.detail, code=exc.code if isinstance(exc, OGXError) else None
+                        ).to_dict(),
                     )
                 raise
             return resp

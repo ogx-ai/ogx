@@ -165,10 +165,19 @@ class RunConfigSettings(BaseModel):
             provider_configs[api_str] = []
             for provider in provider_objs:
                 api = Api(api_str)
-                if provider.provider_type not in provider_registry[api]:
+                spec = provider_registry[api].get(provider.provider_type)
+                if spec is None:
+                    # Legacy section placement (e.g. a web search backend listed under
+                    # tool_runtime before the web_search API existed): the config keeps
+                    # the legacy spelling, so resolve the spec from the registry that
+                    # now owns the provider type.
+                    for registry in provider_registry.values():
+                        if spec := registry.get(provider.provider_type):
+                            break
+                if spec is None:
                     raise ValueError(f"Unknown provider type: {provider.provider_type} for API: {api_str}")
                 provider_id = provider.provider_type.split("::")[-1]
-                config_class = provider_registry[api][provider.provider_type].config_class
+                config_class = spec.config_class
                 assert config_class is not None, (
                     f"No config class for provider type: {provider.provider_type} for API: {api_str}"
                 )
