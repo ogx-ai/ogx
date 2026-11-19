@@ -40,6 +40,15 @@ from ogx_api import ConnectorInput, ConnectorType, ModelType
 # warning. Any other unknown provider type still fails codegen.
 _REMOVED_PROVIDER_TYPES = {
     "inline::file-search",
+    "remote::model-context-protocol",
+}
+
+# API sections removed from the Api enum: the distro templates keep the
+# sections verbatim until a cleanup follow-up, and the StackConfig
+# normalizer drops them at load time with a deprecation warning.
+_REMOVED_API_SECTIONS = {
+    "tool_runtime",
+    "tool_groups",
 }
 
 
@@ -173,8 +182,13 @@ class RunConfigSettings(BaseModel):
 
             provider_configs[api_str] = []
             for provider in provider_objs:
-                api = Api(api_str)
-                spec = provider_registry[api].get(provider.provider_type)
+                if api_str in _REMOVED_API_SECTIONS:
+                    # The section's API no longer exists as an Api member, so the
+                    # spec is resolved by provider type only (see below).
+                    spec = None
+                else:
+                    api = Api(api_str)
+                    spec = provider_registry[api].get(provider.provider_type)
                 if spec is None:
                     # Legacy section placement (e.g. a web search backend listed under
                     # tool_runtime before the web_search API existed): the config keeps

@@ -62,7 +62,6 @@ from ogx_api import (
     Providers,
     RegisterModelRequest,
     Responses,
-    ToolGroupNotFoundError,
     VectorIO,
 )
 
@@ -267,59 +266,6 @@ async def register_resources(run_config: StackConfig, impls: dict[Api, Any]) -> 
                 identifier=obj.identifier,
                 provider_id=obj.provider_id,
             )
-
-
-async def auto_register_tool_groups(run_config: StackConfig, impls: dict[Api, Any]) -> None:
-    """Auto-register built-in tool groups based on configured tool_runtime providers.
-
-    For each tool_runtime provider whose spec declares a toolgroup_id,
-    register that tool group automatically. This replaces the old explicit
-    tool_groups config in registered_resources.
-
-    When multiple providers map to the same toolgroup, the provider with a
-    configured api_key wins. If none have a key, the first candidate is used so
-    the tool group still exists (invocation will fail with a clear provider
-    error rather than "tool not found").
-    """
-    if Api.tool_groups not in impls:
-        return
-
-    tool_groups_impl = impls[Api.tool_groups]
-
-    registry = get_provider_registry(run_config)
-    type_to_toolgroup = {
-        ptype: spec.toolgroup_id for ptype, spec in registry.get(Api.tool_runtime, {}).items() if spec.toolgroup_id
-    }
-
-    # Single-pass selection: keep the first provider per toolgroup, but
-    # let a provider with a configured api_key replace one without.
-    chosen: dict[str, Provider] = {}
-    chosen_has_key: dict[str, bool] = {}
-    for provider in run_config.providers.get("tool_runtime", []):
-        if not provider.provider_id or provider.provider_id == "__disabled__":
-            continue
-        toolgroup_id = type_to_toolgroup.get(provider.provider_type)
-        if not toolgroup_id:
-            continue
-
-        has_key = "api_key" not in provider.config or bool(provider.config.get("api_key"))
-        if toolgroup_id not in chosen or (has_key and not chosen_has_key[toolgroup_id]):
-            chosen[toolgroup_id] = provider
-            chosen_has_key[toolgroup_id] = has_key
-
-    for toolgroup_id, provider in chosen.items():
-        # Unregister first so register_tool_group rebuilds in-memory tool
-        # indexes (_index_tools) which are empty after a restart.
-        try:
-            await tool_groups_impl.unregister_toolgroup(toolgroup_id)
-        except ToolGroupNotFoundError:
-            pass
-
-        logger.info("Auto-registering tool group", toolgroup_id=toolgroup_id, provider_id=provider.provider_id)
-        await tool_groups_impl.register_tool_group(
-            toolgroup_id=toolgroup_id,
-            provider_id=provider.provider_id,
-        )
 
 
 async def register_connectors(run_config: StackConfig, impls: dict[Api, Any]) -> None:
@@ -811,7 +757,6 @@ class Stack:
         )
 
         await register_resources(self.run_config, impls)
-        await auto_register_tool_groups(self.run_config, impls)
         await register_connectors(self.run_config, impls)
         await refresh_registry_once(impls)
         await validate_vector_stores_config(self.run_config.vector_stores, impls)

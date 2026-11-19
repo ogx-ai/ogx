@@ -8,10 +8,10 @@ from typing import Any
 
 from pydantic import Field, SecretStr
 
-from ogx.providers.utils.common.http import BaseToolRuntimeConfig
+from ogx.providers.utils.common.http import BaseWebSearchConfig
 
 
-class BingSearchConfig(BaseToolRuntimeConfig):
+class BingSearchConfig(BaseWebSearchConfig):
     """Configuration for the Bing Search web search backend."""
 
     api_key: SecretStr | None = Field(

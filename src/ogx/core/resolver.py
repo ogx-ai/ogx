@@ -49,9 +49,6 @@ from ogx_api import (
     RemoteProviderSpec,
     Responses,
     Skills,
-    ToolGroups,
-    ToolGroupsProtocolPrivate,
-    ToolRuntime,
     VectorIO,
     VectorStore,
 )
@@ -87,8 +84,6 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.vector_io: VectorIO,
         Api.vector_stores: VectorStore,
         Api.models: Models,
-        Api.tool_groups: ToolGroups,
-        Api.tool_runtime: ToolRuntime,
         Api.files: Files,
         Api.prompts: Prompts,
         Api.conversations: Conversations,
@@ -138,7 +133,6 @@ def additional_protocols_map() -> dict[Api, Any]:
     """
     return {
         Api.inference: (ModelsProtocolPrivate, Models, Api.models),
-        Api.tool_groups: (ToolGroupsProtocolPrivate, ToolGroups, Api.tool_groups),
     }
 
 
@@ -495,8 +489,6 @@ async def instantiate_provider(
 
     protocols = api_protocol_map_for_compliance_check(run_config)
     additional_protocols = additional_protocols_map()
-    # TODO: check compliance for special tool groups
-    # the impl should be for Api.tool_runtime, the name should be the special tool group, the protocol should be the special tool group protocol
     check_protocol_compliance(impl, protocols[provider_spec.api])
     if not isinstance(provider_spec, AutoRoutedProviderSpec) and provider_spec.api in additional_protocols:
         additional_api, _, _ = additional_protocols[provider_spec.api]

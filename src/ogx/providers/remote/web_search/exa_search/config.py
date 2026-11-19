@@ -8,10 +8,10 @@ from typing import Any
 
 from pydantic import Field, SecretStr
 
-from ogx.providers.utils.common.http import BaseToolRuntimeConfig
+from ogx.providers.utils.common.http import BaseWebSearchConfig
 
 
-class ExaSearchConfig(BaseToolRuntimeConfig):
+class ExaSearchConfig(BaseWebSearchConfig):
     """Configuration for the Exa Search web search backend."""
 
     api_key: SecretStr | None = Field(

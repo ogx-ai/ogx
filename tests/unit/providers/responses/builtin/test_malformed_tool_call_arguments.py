@@ -47,8 +47,6 @@ async def test_malformed_json_arguments_dont_crash_and_are_fed_back_to_the_model
 
     # The response completed -- it did not fail with server_error.
     assert result.status == "completed"
-    # The malformed call never reached the tool runtime.
-    openai_responses_impl.tool_runtime_api.invoke_tool.assert_not_called()
 
     # The second inference call's messages must include a tool message reporting the
     # parse failure, keyed to the original malformed tool call, so the model could see
@@ -86,7 +84,6 @@ async def test_non_object_json_arguments_dont_crash_and_are_fed_back_to_the_mode
     )
 
     assert result.status == "completed"
-    openai_responses_impl.tool_runtime_api.invoke_tool.assert_not_called()
 
     second_call_messages = mock_inference_api.openai_chat_completion.call_args_list[1].args[0].messages
     tool_messages = [m for m in second_call_messages if getattr(m, "role", None) == "tool"]
@@ -119,4 +116,3 @@ async def test_persistent_malformed_arguments_end_incomplete_not_failed(openai_r
     assert result.status == "incomplete"
     assert result.incomplete_details is not None
     assert result.incomplete_details.reason == "max_iterations_exceeded"
-    openai_responses_impl.tool_runtime_api.invoke_tool.assert_not_called()

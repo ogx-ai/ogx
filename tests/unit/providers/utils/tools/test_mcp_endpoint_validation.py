@@ -162,7 +162,7 @@ def test_validate_mcp_endpoint_allows_public_https_url(mock_resolve: MagicMock) 
 
 
 async def test_list_mcp_tools_still_allows_private_admin_endpoints() -> None:
-    """Admin-configured connectors/toolgroups may use private MCP URLs.
+    """Admin-configured connectors may use private MCP URLs.
 
     SSRF validation for caller-supplied Responses server_url lives in the
     Responses path, not in the shared MCP helpers.

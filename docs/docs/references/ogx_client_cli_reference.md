@@ -31,7 +31,6 @@ Commands:
   post_training      Post-training.
   providers          Manage API providers.
   scoring_functions  Manage scoring functions.
-  toolgroups         Manage available tool groups.
 ```
 
 ### `ogx-client configure`
@@ -311,71 +310,6 @@ Optional arguments:
 
 - `--provider-id`: Provider ID for the eval task
 - `--provider-eval-task-id`: Provider's eval task ID
-
-## Tool Group Management
-
-Manage available tool groups.
-
-### `ogx-client toolgroups list`
-
-Show available llama toolgroups at distribution endpoint
-
-```bash
-ogx-client toolgroups list
-```
-
-```text
-+---------------------------+------------------+------+---------------+
-| identifier                | provider_id      | args | mcp_endpoint  |
-+===========================+==================+======+===============+
-| builtin::websearch        | tavily-search    | None | None          |
-+---------------------------+------------------+------+---------------+
-```
-
-### `ogx-client toolgroups get`
-
-Get available llama toolgroups by id
-
-```bash
-ogx-client toolgroups get <toolgroup_id>
-```
-
-Shows detailed information about a specific toolgroup. If the toolgroup is not found, displays an error message.
-
-Required arguments:
-
-- `TOOLGROUP_ID`: ID of the tool group
-
-### `ogx-client toolgroups register`
-
-Register a new toolgroup at distribution endpoint
-
-```bash
-ogx-client toolgroups register <toolgroup_id> [--provider-id <provider-id>] [--provider-toolgroup-id <provider-toolgroup-id>] [--mcp-config <mcp-config>] [--args <args>]
-```
-
-Required arguments:
-
-- `TOOLGROUP_ID`: ID of the tool group
-
-Optional arguments:
-
-- `--provider-id`: Provider ID for the toolgroup
-- `--provider-toolgroup-id`: Provider's toolgroup ID
-- `--mcp-config`: JSON configuration for the MCP endpoint
-- `--args`: JSON arguments for the toolgroup
-
-### `ogx-client toolgroups unregister`
-
-Unregister a toolgroup from distribution endpoint
-
-```bash
-ogx-client toolgroups unregister <toolgroup_id>
-```
-
-Required arguments:
-
-- `TOOLGROUP_ID`: ID of the tool group
 
 ## Datasets Management
 

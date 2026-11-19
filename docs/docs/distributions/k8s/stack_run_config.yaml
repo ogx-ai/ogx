@@ -4,7 +4,7 @@ apis:
 - responses
 - inference
 - files
-- tool_runtime
+- web_search
 - vector_io
 providers:
   inference:
@@ -48,7 +48,7 @@ providers:
           backend: sql_default
           max_write_queue_size: 10000
           num_writers: 4
-  tool_runtime:
+  web_search:
   - provider_id: brave-search
     provider_type: remote::brave-search
     config:
@@ -59,12 +59,6 @@ providers:
     config:
       api_key: ${env.TAVILY_SEARCH_API_KEY:+}
       max_results: 3
-  - provider_id: file-search
-    provider_type: inline::file-search
-    config: {}
-  - provider_id: model-context-protocol
-    provider_type: remote::model-context-protocol
-    config: {}
 storage:
   backends:
     kv_default:

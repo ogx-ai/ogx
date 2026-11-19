@@ -23,10 +23,6 @@ Types:
 from ogx_client.models import ListToolDefsResponse, ToolDef
 ```
 
-Methods:
-
-- <code title="get /v1/admin/tools">client.tools.tools_v1_admin_tools_get(toolgroup_id=None) -> ListToolDefsResponse</code>
-
 ## Inspect
 
 Types:

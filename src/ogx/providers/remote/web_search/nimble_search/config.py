@@ -8,10 +8,10 @@ from typing import Any, Literal
 
 from pydantic import Field, SecretStr
 
-from ogx.providers.utils.common.http import BaseToolRuntimeConfig
+from ogx.providers.utils.common.http import BaseWebSearchConfig
 
 
-class NimbleSearchConfig(BaseToolRuntimeConfig):
+class NimbleSearchConfig(BaseWebSearchConfig):
     """Configuration for the Nimble Search web search backend."""
 
     api_key: SecretStr | None = Field(

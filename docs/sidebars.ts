@@ -225,15 +225,6 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'Tool Runtime',
-          collapsed: false,
-          link: { type: 'doc', id: 'providers/tool_runtime/index' },
-          items: [
-            'providers/tool_runtime/remote_model-context-protocol'
-          ],
-        },
-        {
-          type: 'category',
           label: 'Web Search',
           collapsed: false,
           link: { type: 'doc', id: 'providers/web_search/index' },

@@ -37,8 +37,6 @@ from ogx_api.responses.models import CreateResponseRequest
 @pytest.fixture
 def responses_impl_with_conversations(
     mock_inference_api,
-    mock_tool_groups_api,
-    mock_tool_runtime_api,
     mock_responses_store,
     mock_vector_io_api,
     mock_conversations_api,
@@ -49,8 +47,6 @@ def responses_impl_with_conversations(
     """Create OpenAIResponsesImpl instance with conversations API."""
     return OpenAIResponsesImpl(
         inference_api=mock_inference_api,
-        tool_groups_api=mock_tool_groups_api,
-        tool_runtime_api=mock_tool_runtime_api,
         responses_store=mock_responses_store,
         vector_io_api=mock_vector_io_api,
         conversations_api=mock_conversations_api,

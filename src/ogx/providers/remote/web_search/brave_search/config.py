@@ -8,12 +8,12 @@ from typing import Any
 
 from pydantic import Field, HttpUrl, SecretStr
 
-from ogx.providers.utils.common.http import BaseToolRuntimeConfig
+from ogx.providers.utils.common.http import BaseWebSearchConfig
 
 DEFAULT_BASE_URL = "https://api.search.brave.com"
 
 
-class BraveSearchConfig(BaseToolRuntimeConfig):
+class BraveSearchConfig(BaseWebSearchConfig):
     """Configuration for the Brave Search web search backend."""
 
     base_url: HttpUrl = Field(

@@ -28,7 +28,7 @@ logger = get_logger(name=__name__, category="core")
 # Api.containers is served by a built-in implementation that delegates to a pluggable
 # container_runtime provider; it is not itself provider-backed. The container_runtime
 # router/resolver wiring is tracked as a follow-up (issue #5892), at which point containers
-# becomes an auto-routed API paired with container_runtime (mirroring tool_groups/tool_runtime).
+# becomes an auto-routed API paired with container_runtime (mirroring models/inference).
 INTERNAL_APIS = {
     Api.inspect,
     Api.providers,
@@ -66,10 +66,6 @@ def builtin_automatically_routed_apis() -> list[AutoRoutedApiInfo]:
         AutoRoutedApiInfo(
             routing_table_api=Api.models,
             router_api=Api.inference,
-        ),
-        AutoRoutedApiInfo(
-            routing_table_api=Api.tool_groups,
-            router_api=Api.tool_runtime,
         ),
         AutoRoutedApiInfo(
             routing_table_api=Api.vector_stores,

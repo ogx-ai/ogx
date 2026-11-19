@@ -24,13 +24,11 @@ async def get_routing_table_impl(
     policy: list[AccessRule],
 ) -> Any:
     from ..routing_tables.models import ModelsRoutingTable
-    from ..routing_tables.toolgroups import ToolGroupsRoutingTable
     from ..routing_tables.vector_stores import VectorStoresRoutingTable
     from ..routing_tables.web_search import WebSearchRoutingTable
 
     api_to_tables = {
         "models": ModelsRoutingTable,
-        "tool_groups": ToolGroupsRoutingTable,
         "vector_stores": VectorStoresRoutingTable,
         "web_search_providers": WebSearchRoutingTable,
     }
@@ -48,14 +46,12 @@ async def get_auto_router_impl(
     api: Api, routing_table: RoutingTable, deps: dict[str, Any], run_config: StackConfig, policy: list[AccessRule]
 ) -> Any:
     from .inference import InferenceRouter
-    from .tool_runtime import ToolRuntimeRouter
     from .vector_io import VectorIORouter
     from .web_search import WebSearchRouter
 
     api_to_routers = {
         "vector_io": VectorIORouter,
         "inference": InferenceRouter,
-        "tool_runtime": ToolRuntimeRouter,
         "web_search": WebSearchRouter,
     }
     if api.value not in api_to_routers:

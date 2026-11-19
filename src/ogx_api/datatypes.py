@@ -13,7 +13,6 @@ from pydantic import BaseModel, Field
 
 from ogx_api.models import Model
 from ogx_api.schema_utils import json_schema_type
-from ogx_api.tools import ToolGroup
 from ogx_api.vector_stores import VectorStore
 
 
@@ -95,9 +94,7 @@ class Api(Enum, metaclass=DynamicApiMeta):
     :cvar responses: Response orchestration and execution
     :cvar batches: Batch processing for asynchronous API requests
     :cvar vector_io: Vector database operations and queries
-    :cvar tool_runtime: Tool execution and management
     :cvar models: Model metadata and management
-    :cvar tool_groups: Tool group organization
     :cvar files: File storage and management
     :cvar file_processors: File parsing and processing operations
     :cvar prompts: Prompt versions and management
@@ -116,13 +113,11 @@ class Api(Enum, metaclass=DynamicApiMeta):
     responses = "responses"
     batches = "batches"
     vector_io = "vector_io"
-    tool_runtime = "tool_runtime"
     container_runtime = "container_runtime"
     web_search = "web_search"
 
     models = "models"
     vector_stores = "vector_stores"  # only used for routing table
-    tool_groups = "tool_groups"
     web_search_providers = "web_search_providers"  # only used for routing table
     files = "files"
     file_processors = "file_processors"
@@ -219,14 +214,6 @@ class VectorStoresProtocolPrivate(Protocol):
     async def unregister_vector_store(self, vector_store_id: str) -> None: ...
 
 
-class ToolGroupsProtocolPrivate(Protocol):
-    """Protocol for provider-side tool group registration and unregistration."""
-
-    async def register_toolgroup(self, toolgroup: ToolGroup) -> None: ...
-
-    async def unregister_toolgroup(self, toolgroup_id: str) -> None: ...
-
-
 @json_schema_type
 class ProviderSpec(BaseModel):
     """Base specification for a OGX provider including its config and dependencies."""
@@ -276,11 +263,6 @@ class ProviderSpec(BaseModel):
     is_external: bool = Field(
         default=False,
         description="Notes whether this provider is an external provider.",
-    )
-
-    toolgroup_id: str | None = Field(
-        default=None,
-        description="For tool_runtime providers, the built-in tool group ID this provider serves (e.g. 'builtin::websearch').",
     )
 
     # used internally by the resolver; this is a hack for now
