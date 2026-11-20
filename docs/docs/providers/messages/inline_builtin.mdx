@@ -14,7 +14,10 @@ Implements the Anthropic Messages API by delegating to the inference API's anthr
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `kvstore` | `KVStoreReference` | No |  | Configuration for the key-value store backend used by message batches. |
+| `sqlstore` | `SqlStoreReference` | No | table_name='message_batches' backend='sql_default' | Configuration for the SQL store backend used to persist message batch metadata. |
+| `sqlstore.table_name` | `str` | No |  | Name of the table to use for the SqlStore |
+| `sqlstore.backend` | `str` | No |  | Name of backend from storage.backends |
+| `kvstore` | `KVStoreReference` | No |  | Configuration for the key-value store backend used to persist message batch results. |
 | `kvstore.namespace` | `str` | No |  | Key prefix for KVStore backends |
 | `kvstore.backend` | `str` | No |  | Name of backend from storage.backends |
 | `max_concurrent_batches` | `int` | No | 1 | Maximum number of concurrent message batches to process simultaneously. |
@@ -23,6 +26,9 @@ Implements the Anthropic Messages API by delegating to the inference API's anthr
 ## Sample Configuration
 
 ```yaml
+sqlstore:
+  table_name: message_batches
+  backend: sql_default
 kvstore:
   namespace: message_batches
   backend: kv_default
