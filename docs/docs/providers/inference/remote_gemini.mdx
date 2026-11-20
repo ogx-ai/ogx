@@ -17,6 +17,7 @@ Google Gemini inference provider for accessing Gemini models and Google's AI ser
 | `allowed_models` | `list[str] \| None` | No |  | List of models that should be registered with the model registry. If None, all models are allowed. |
 | `refresh_models` | `bool` | No | False | Whether to refresh models periodically from the provider |
 | `api_key` | `SecretStr \| None` | No |  | Authentication credential for the provider |
+| `base_url` | `HttpUrl \| None` | No | `https://generativelanguage.googleapis.com/v1beta/openai/` | Base URL for Google Gemini API (OpenAI-compatible endpoint) |
 | `network` | `NetworkConfig \| None` | No |  | Network configuration including TLS, proxy, and timeout settings. |
 | `network.tls` | `TLSConfig \| None` | No |  | TLS/SSL configuration for secure connections. |
 | `network.tls.verify` | `bool \| Path` | No | True | Whether to verify TLS certificates. Can be a boolean or a path to a CA certificate file. |
@@ -47,4 +48,5 @@ Google Gemini inference provider for accessing Gemini models and Google's AI ser
 api_key: ${env.GEMINI_API_KEY:=}
 access_token: ${env.GEMINI_ACCESS_TOKEN:=}
 project: ${env.GEMINI_AI_PROJECT:=}
+base_url: ${env.GEMINI_BASE_URL:=https://generativelanguage.googleapis.com/v1beta/openai/}
 ```
