@@ -57,4 +57,4 @@ class TestLocalizeImageContentSSRF:
         assert (content, fmt) == (b"img", "png")
         transport = captured["transport"]
         assert isinstance(transport, PinnedIPTransport)
-        assert transport._pins == {"example.com": "93.184.216.34"}
+        assert transport._pins == {"example.com": ["93.184.216.34"]}

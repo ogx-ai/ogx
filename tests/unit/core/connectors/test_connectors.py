@@ -470,7 +470,7 @@ class TestConnectorUrlValidation:
             url="http://93.184.216.34:8080/mcp",
         )
         await connector_service.get_connector(GetConnectorRequest(connector_id="public-mcp"))
-        assert mock_info.call_args.kwargs["endpoint_pins"] == {"93.184.216.34": "93.184.216.34"}
+        assert mock_info.call_args.kwargs["endpoint_pins"] == {"93.184.216.34": ["93.184.216.34"]}
 
     @patch("ogx.core.connectors.connectors.get_mcp_server_info")
     async def test_get_connector_pins_resolved_private_ip(self, mock_info, connector_service):
@@ -485,4 +485,5 @@ class TestConnectorUrlValidation:
         await connector_service.get_connector(GetConnectorRequest(connector_id="local-mcp"))
         pins = mock_info.call_args.kwargs["endpoint_pins"]
         assert list(pins) == ["localhost"]
-        assert ipaddress.ip_address(pins["localhost"]).is_loopback
+        assert pins["localhost"], "expected at least one pinned address for localhost"
+        assert all(ipaddress.ip_address(ip).is_loopback for ip in pins["localhost"])

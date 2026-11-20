@@ -40,10 +40,21 @@ class TestPinUrl:
             pin_url(url)
 
     def test_allows_public_ip(self):
-        assert pin_url("http://8.8.8.8/file") == {"8.8.8.8": "8.8.8.8"}
+        assert pin_url("http://8.8.8.8/file") == {"8.8.8.8": ["8.8.8.8"]}
 
     def test_allows_172_outside_private_range(self):
-        assert pin_url("http://172.32.0.1/file") == {"172.32.0.1": "172.32.0.1"}
+        assert pin_url("http://172.32.0.1/file") == {"172.32.0.1": ["172.32.0.1"]}
+
+    @patch("ogx.providers.utils.common.url_validation.socket.getaddrinfo")
+    def test_returns_all_validated_addresses_in_order(self, mock_getaddrinfo):
+        # A dual-stack hostname keeps every validated address so a target
+        # bound to a single family stays reachable (tried in order by the
+        # transport).
+        mock_getaddrinfo.return_value = [
+            (10, 1, 6, "", ("::1", 0)),
+            (2, 1, 6, "", ("127.0.0.1", 0)),
+        ]
+        assert pin_url("http://localhost/mcp", allow_private=True) == {"localhost": ["::1", "127.0.0.1"]}
 
     @patch("ogx.providers.utils.common.url_validation.socket.getaddrinfo")
     def test_rejects_hostname_resolving_to_private(self, mock_getaddrinfo):
@@ -58,7 +69,7 @@ class TestPinUrl:
         mock_getaddrinfo.return_value = [
             (2, 1, 6, "", ("93.184.216.34", 0)),
         ]
-        assert pin_url("http://example.com/file") == {"example.com": "93.184.216.34"}
+        assert pin_url("http://example.com/file") == {"example.com": ["93.184.216.34"]}
 
     @patch("ogx.providers.utils.common.url_validation.socket.getaddrinfo")
     def test_rejects_hostname_with_mixed_public_and_private_results(self, mock_getaddrinfo):
@@ -74,11 +85,11 @@ class TestPinUrl:
         mock_getaddrinfo.return_value = [
             (2, 1, 6, "", ("127.0.0.1", 0)),
         ]
-        assert pin_url("http://mcp.internal/file", allow_private=True) == {"mcp.internal": "127.0.0.1"}
+        assert pin_url("http://mcp.internal/file", allow_private=True) == {"mcp.internal": ["127.0.0.1"]}
 
     def test_allow_private_accepts_metadata_ip_literal(self):
         assert pin_url("http://169.254.169.254/latest/meta-data/", allow_private=True) == {
-            "169.254.169.254": "169.254.169.254"
+            "169.254.169.254": ["169.254.169.254"]
         }
 
     def test_allow_private_still_rejects_unresolvable_hostnames(self):
@@ -139,7 +150,7 @@ class TestPinnedIPTransport:
     async def test_https_request_pins_ip_and_keeps_sni(self):
         sent = await self._drive(
             "https://mcp.example.com:8443/mcp",
-            {"mcp.example.com": "93.184.216.34"},
+            {"mcp.example.com": ["93.184.216.34"]},
             headers={"host": "mcp.example.com:8443"},
         )
         assert sent.url.host == "93.184.216.34"
@@ -148,8 +159,34 @@ class TestPinnedIPTransport:
         assert sent.headers["host"] == "mcp.example.com:8443"
 
     async def test_http_request_pins_ip_without_sni(self):
-        sent = await self._drive("http://example.com/image.png", {"example.com": "93.184.216.34"})
+        sent = await self._drive("http://example.com/image.png", {"example.com": ["93.184.216.34"]})
         assert sent.url.host == "93.184.216.34"
         assert sent.extensions.get("sni_hostname") is None
         # No client-set Host header: the fallback keeps the original hostname.
         assert sent.headers["host"] == "example.com"
+
+    async def test_falls_back_to_next_validated_address(self):
+        """Models the dual-stack localhost case: a hostname pinned to
+        ["::1", "127.0.0.1"] (or the 127.0.0.2/127.0.0.1 analogue below)
+        must stay reachable when the target only listens on one family."""
+        import asyncio
+
+        async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            await reader.read(1024)
+            writer.write(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\nok")
+            await writer.drain()
+            writer.close()
+
+        # Only 127.0.0.1 listens: the pinned 127.0.0.2 is tried first and
+        # refused, then the fallback succeeds.
+        server = await asyncio.start_server(handle, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        try:
+            transport = PinnedIPTransport({"127.0.0.1": ["127.0.0.2", "127.0.0.1"]})
+            async with httpx2.AsyncClient(transport=transport, timeout=5.0) as client:
+                response = await client.get(f"http://127.0.0.1:{port}/")
+            assert response.status_code == 200
+            assert response.text == "ok"
+        finally:
+            server.close()
+            await server.wait_closed()
