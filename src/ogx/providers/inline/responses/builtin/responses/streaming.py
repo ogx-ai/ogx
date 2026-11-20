@@ -1878,7 +1878,7 @@ class StreamingResponseOrchestrator:
         # Resolve connector_id to server_url if provided
         if self.connectors_api is not None:
             mcp_tool = await resolve_mcp_connector_id(mcp_tool, self.connectors_api)
-        endpoint_pins: dict[str, str] | None = None
+        endpoint_pins: dict[str, list[str]] | None = None
 
         # Emit mcp_list_tools.in_progress
         self.sequence_number += 1
