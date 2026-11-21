@@ -9,8 +9,9 @@ import os
 from openai import DefaultHttpxClient, OpenAI
 
 client = OpenAI(
-    base_url="https://localhost:8321/v1",
-    api_key=os.environ["OGX_API_KEY"],
+    base_url=os.environ["OGX_BASE_URL"],
+    # Servers started with --no-auth accept any key
+    api_key=os.environ.get("OGX_API_KEY", "unused"),
     # ogx go serves a self-signed certificate, so skip verification for local use
     http_client=DefaultHttpxClient(verify=False),
 )

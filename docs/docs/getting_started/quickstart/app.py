@@ -9,11 +9,15 @@ import os
 from openai import DefaultHttpxClient, OpenAI
 
 client = OpenAI(
-    base_url="https://localhost:8321/v1",
-    api_key=os.environ["OGX_API_KEY"],
+    base_url=os.environ["OGX_BASE_URL"],
+    # Servers started with --no-auth accept any key
+    api_key=os.environ.get("OGX_API_KEY", "unused"),
     # ogx go serves a self-signed certificate, so skip verification for local use
     http_client=DefaultHttpxClient(verify=False),
 )
 
-for model in client.models.list():
-    print(model.id)
+response = client.responses.create(
+    model="ollama/llama3.2:3b",
+    input="In one sentence, what is an API server?",
+)
+print(response.output_text)

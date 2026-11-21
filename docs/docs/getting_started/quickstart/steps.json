@@ -1,0 +1,271 @@
+{
+  "$comment": "Single source for the Quickstart page (docs/src/components/QuickstartSelector) and its CI smoke test (scripts/quickstart_smoke.py). A step or code line applies when every dimension named in its `when` matches the selection. `test` tells the smoke test how to run a step; the page ignores it. See scripts/README.md.",
+  "default_model": "ollama/llama3.2:3b",
+  "dimensions": [
+    {
+      "id": "backend",
+      "label": "Backend",
+      "options": [
+        { "id": "ollama", "label": "Ollama", "model": "ollama/llama3.2:3b" },
+        { "id": "openai", "label": "OpenAI", "model": "openai/gpt-5-mini" },
+        { "id": "anthropic", "label": "Anthropic", "model": "anthropic/claude-haiku-5-5" },
+        { "id": "all", "label": "All of them", "model": "ollama/llama3.2:3b" }
+      ]
+    },
+    {
+      "id": "server",
+      "label": "Server",
+      "options": [
+        { "id": "secure", "label": "Secure (default)" },
+        { "id": "insecure", "label": "Insecure" },
+        { "id": "docker", "label": "Docker" }
+      ]
+    },
+    {
+      "id": "use_case",
+      "label": "Use case",
+      "options": [
+        { "id": "sdk", "label": "OpenAI SDK" },
+        { "id": "agent", "label": "Coding agent" },
+        { "id": "rag", "label": "RAG" },
+        { "id": "systemone", "label": "SystemOne" }
+      ]
+    },
+    {
+      "id": "agent",
+      "label": "Agent",
+      "when": { "use_case": ["agent"] },
+      "options": [
+        { "id": "claude", "label": "Claude Code" },
+        { "id": "codex", "label": "Codex" },
+        { "id": "opencode", "label": "opencode" }
+      ]
+    }
+  ],
+  "unsupported": [
+    {
+      "when": { "backend": ["openai", "anthropic"], "use_case": ["systemone"] },
+      "reason": "SystemOne needs a decision model, which runs locally on Ollama, vLLM, SGLang, or llama.cpp, or on TypeSafe's API. Pick **Ollama** or **All of them**."
+    },
+    {
+      "when": { "backend": ["anthropic"], "server": ["secure", "insecure"], "use_case": ["rag"] },
+      "reason": "RAG needs an embedding model, and Anthropic does not serve one. Pick **All of them** to add Ollama's, or **Docker**, which ships a built-in embedding model."
+    },
+    {
+      "when": { "server": ["secure"], "agent": ["codex"] },
+      "reason": "Codex cannot skip certificate checks, so it cannot connect to the self-signed certificate `ogx go` serves by default. Pick **Insecure** or **Docker**."
+    },
+    {
+      "when": { "backend": ["anthropic"], "server": ["insecure"], "agent": ["codex"] },
+      "reason": "Codex talks to the Responses API, which `ogx go` only turns on once it finds an embedding model, and Anthropic does not serve one. Pick **All of them** to add Ollama's, or **Docker**, which ships a built-in embedding model."
+    }
+  ],
+  "steps": [
+    {
+      "id": "install-ollama",
+      "phase": "setup",
+      "when": { "backend": ["ollama", "all"] },
+      "title": "Pull the models",
+      "text": "Install [Ollama](https://ollama.com/download), then pull a chat model and an embedding model. The embedding model powers the Responses API, vector stores, and file search.",
+      "language": "bash",
+      "code": [
+        "ollama pull llama3.2:3b",
+        "ollama pull nomic-embed-text",
+        { "line": "ollama pull tev1:0.8b", "when": { "use_case": ["systemone"] } }
+      ]
+    },
+    {
+      "id": "agent-context",
+      "phase": "setup",
+      "when": { "backend": ["ollama", "all"], "use_case": ["agent"] },
+      "text": "Coding agents send long prompts. Ollama's default context window cuts them off and the agent gets empty answers, so restart Ollama with a larger one:",
+      "language": "bash",
+      "code": ["OLLAMA_CONTEXT_LENGTH=16384 ollama serve"],
+      "test": { "skip": "The CI Ollama container already runs with OLLAMA_CONTEXT_LENGTH=16384." }
+    },
+    {
+      "id": "provider-keys",
+      "phase": "setup",
+      "when": { "backend": ["openai", "anthropic", "all"] },
+      "title": "Set your API keys",
+      "text": "OGX picks up provider keys from the environment.",
+      "language": "bash",
+      "code": [
+        { "line": "export OPENAI_API_KEY=sk-...", "when": { "backend": ["openai", "all"] } },
+        { "line": "export ANTHROPIC_API_KEY=sk-ant-...", "when": { "backend": ["anthropic", "all"] } }
+      ],
+      "test": { "skip": "Keys come from the smoke test's own environment.", "requires_env": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"] }
+    },
+    {
+      "id": "start-ogx-go",
+      "phase": "server",
+      "when": { "server": ["secure", "insecure"] },
+      "title": "Start the server",
+      "text": "With [uv](https://docs.astral.sh/uv/getting-started/installation/) installed, start the server. `ogx go` finds the running backends, installs what they need, and starts serving.",
+      "language": "bash",
+      "code": [
+        { "line": "uvx ogx go", "when": { "server": ["secure"] } },
+        { "line": "uvx ogx go --insecure --no-auth", "when": { "server": ["insecure"] } }
+      ],
+      "test": { "server": { "ready": "Uvicorn running" } }
+    },
+    {
+      "id": "secure-note",
+      "phase": "server",
+      "when": { "server": ["secure"] },
+      "text": "The server listens on https with a self-signed certificate and requires an API key. It prints three generated keys when it starts, and they change every time it restarts:\n\n```text\n  ✓ Simple authentication enabled\n    Here are keys you can use for authentication:\n      ogk_...\n```"
+    },
+    {
+      "id": "insecure-note",
+      "phase": "server",
+      "when": { "server": ["insecure"] },
+      "text": "`--insecure` serves plain http and `--no-auth` turns off API keys. Use them only on your own machine."
+    },
+    {
+      "id": "start-docker",
+      "phase": "server",
+      "when": { "server": ["docker"] },
+      "title": "Start the server",
+      "text": "Run the pre-built [starter image](https://hub.docker.com/r/ogxai/distribution-starter). It serves plain http without API keys, and includes a built-in embedding model.",
+      "language": "bash",
+      "code": [
+        "docker run --rm -p 8321:8321 \\",
+        { "line": "  --add-host host.docker.internal:host-gateway \\", "when": { "backend": ["ollama", "all"] } },
+        { "line": "  -e OLLAMA_URL=http://host.docker.internal:11434/v1 \\", "when": { "backend": ["ollama", "all"] } },
+        { "line": "  -e OPENAI_API_KEY \\", "when": { "backend": ["openai", "all"] } },
+        { "line": "  -e ANTHROPIC_API_KEY \\", "when": { "backend": ["anthropic", "all"] } },
+        "  ogxai/distribution-starter"
+      ],
+      "test": { "server": { "ready": "Uvicorn running", "docker_image": "ogxai/distribution-starter" } }
+    },
+    {
+      "id": "docker-linux-ollama",
+      "phase": "server",
+      "when": { "server": ["docker"], "backend": ["ollama", "all"] },
+      "text": "On Linux, Ollama only listens on `127.0.0.1`, which the container cannot reach through `host.docker.internal`. Share the host's network instead:",
+      "language": "bash",
+      "code": [
+        "docker run --rm --network host \\",
+        "  -e OLLAMA_URL=http://localhost:11434/v1 \\",
+        { "line": "  -e OPENAI_API_KEY \\", "when": { "backend": ["all"] } },
+        { "line": "  -e ANTHROPIC_API_KEY \\", "when": { "backend": ["all"] } },
+        "  ogxai/distribution-starter"
+      ],
+      "test": { "skip": "CI runs the command above, since its Ollama container listens on all interfaces." }
+    },
+    {
+      "id": "client-env",
+      "phase": "client",
+      "title": "Point your tools at the server",
+      "text": "In the terminal where you run the examples, tell clients where the server is. The Python examples and `ogx connect` both read these variables.",
+      "language": "bash",
+      "code": [
+        { "line": "export OGX_BASE_URL=https://localhost:8321/v1", "when": { "server": ["secure"] } },
+        { "line": "export OGX_API_KEY=ogk_...  # one of the keys ogx go printed", "when": { "server": ["secure"] } },
+        { "line": "export OGX_BASE_URL=http://localhost:8321/v1", "when": { "server": ["insecure", "docker"] } }
+      ],
+      "test": { "capture_from_server": { "OGX_API_KEY": "ogk_[A-Za-z0-9_-]+" } }
+    },
+    {
+      "id": "verify",
+      "phase": "client",
+      "title": "Check that it works",
+      "text": "List the models the server registered. You should see `{model}` among them.",
+      "language": "bash",
+      "code": [
+        { "line": "curl -k -s -H \"Authorization: Bearer $OGX_API_KEY\" $OGX_BASE_URL/models", "when": { "server": ["secure"] } },
+        { "line": "curl -s $OGX_BASE_URL/models", "when": { "server": ["insecure", "docker"] } }
+      ],
+      "test": { "expect": "\"{model}\"" }
+    },
+    {
+      "id": "sdk",
+      "phase": "client",
+      "when": { "use_case": ["sdk"] },
+      "title": "Call it with the OpenAI SDK",
+      "text": "Point the OpenAI SDK you already use at OGX:",
+      "language": "python",
+      "file": "app.py",
+      "test": { "expect": "\\S" }
+    },
+    {
+      "id": "sdk-run",
+      "phase": "client",
+      "when": { "use_case": ["sdk"] },
+      "language": "bash",
+      "code": ["pip install openai", "python app.py"],
+      "test": { "skip": "The smoke test runs app.py itself, in a throwaway environment." }
+    },
+    {
+      "id": "rag",
+      "phase": "client",
+      "when": { "use_case": ["rag"] },
+      "title": "Ask questions about a document",
+      "text": "Upload a file, index it in a vector store, and answer questions with file search. Save any PDF next to the script as `my-document.pdf`.",
+      "language": "python",
+      "file": "rag.py",
+      "test": { "fixture": { "my-document.pdf": "tests/integration/responses/fixtures/pdfs/ogx_and_models.pdf" }, "expect": "\\S" }
+    },
+    {
+      "id": "rag-run",
+      "phase": "client",
+      "when": { "use_case": ["rag"] },
+      "language": "bash",
+      "code": ["pip install openai", "python rag.py"],
+      "test": { "skip": "The smoke test runs rag.py itself, in a throwaway environment." }
+    },
+    {
+      "id": "systemone",
+      "phase": "client",
+      "when": { "use_case": ["systemone"] },
+      "title": "Ask SystemOne for a judgment",
+      "text": "SystemOne decision models answer yes/no, multiple-choice, and rubric questions with calibrated probabilities instead of free text.",
+      "language": "python",
+      "file": "systemone.py",
+      "test": { "expect": "\"is_complaint\"" }
+    },
+    {
+      "id": "systemone-run",
+      "phase": "client",
+      "when": { "use_case": ["systemone"] },
+      "language": "bash",
+      "code": ["pip install openai", "python systemone.py"],
+      "test": { "skip": "The smoke test runs systemone.py itself, in a throwaway environment." }
+    },
+    {
+      "id": "agent",
+      "phase": "client",
+      "when": { "use_case": ["agent"] },
+      "title": "Connect your coding agent",
+      "text": "Install the agent first: [Claude Code](https://claude.com/download), [Codex](https://github.com/openai/codex), or [opencode](https://opencode.ai). `ogx connect` lists the server's models, points the agent at them, and launches it.",
+      "language": "bash",
+      "code": [
+        { "line": "uvx ogx connect -k claude", "when": { "server": ["secure"], "agent": ["claude"] } },
+        { "line": "uvx ogx connect -k opencode", "when": { "server": ["secure"], "agent": ["opencode"] } },
+        { "line": "uvx ogx connect claude", "when": { "server": ["insecure", "docker"], "agent": ["claude"] } },
+        { "line": "uvx ogx connect codex", "when": { "server": ["insecure", "docker"], "agent": ["codex"] } },
+        { "line": "uvx ogx connect opencode", "when": { "server": ["insecure", "docker"], "agent": ["opencode"] } }
+      ],
+      "test": {
+        "agent_args": {
+          "claude": ["--", "-p", "Reply with the word ready."],
+          "codex": ["--", "exec", "--skip-git-repo-check", "Reply with the word ready."],
+          "opencode": ["--", "run", "Reply with the word ready."]
+        },
+        "expect": "\\S"
+      }
+    },
+    {
+      "id": "agent-secure-note",
+      "phase": "client",
+      "when": { "use_case": ["agent"], "server": ["secure"] },
+      "text": "`-k` accepts the server's self-signed certificate for this agent session, like `curl -k`."
+    },
+    {
+      "id": "agent-local-model-note",
+      "phase": "client",
+      "when": { "use_case": ["agent"], "backend": ["ollama", "all"] },
+      "text": "A 3B model proves the setup works, but it is too small for real coding work. Pull a larger model that supports tool calling, restart `ogx go`, and pick the model with `--model`, for example `uvx ogx connect claude --model ollama/<model>`."
+    }
+  ]
+}
