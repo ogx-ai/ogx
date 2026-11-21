@@ -10,11 +10,6 @@ import inspect
 from collections.abc import Callable
 from contextlib import contextmanager
 
-# Unfortunately the toolgroup id must be tied to the tool names because the registry
-# indexes on both toolgroups and tools independently (and not jointly). That really
-# needs to be fixed.
-MCP_TOOLGROUP_ID = "mcp::localmcp"
-
 
 def _stable_tool_description(fn: Callable) -> str:
     """fn's docstring exactly as written in source, independent of the Python

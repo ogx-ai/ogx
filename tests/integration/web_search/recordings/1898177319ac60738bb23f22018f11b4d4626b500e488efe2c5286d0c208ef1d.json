@@ -1,0 +1,106 @@
+{
+  "test_id": "tests/integration/web_search/test_web_search.py::test_response_streaming_web_search[client_with_models-txt=ollama/qwen3.5:0.8b-web_search_2025_08_26_type]::tavily-search",
+  "request": {
+    "test_id": "tests/integration/web_search/test_web_search.py::test_response_streaming_web_search[client_with_models-txt=ollama/qwen3.5:0.8b-web_search_2025_08_26_type]::tavily-search",
+    "url": "https://api.tavily.com/search",
+    "method": "POST",
+    "payload": {
+      "query": "Llama 4 Scout model experts count number of parameters weights"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "query": "Llama 4 Scout model experts count number of parameters weights",
+      "follow_up_questions": null,
+      "answer": null,
+      "images": [],
+      "results": [
+        {
+          "url": "https://explainx.ai/blog/meta-llama-4-open-source-models-guide-2026",
+          "title": "Meta Llama 4 Complete Guide 2026 \u2014 Scout, Maverick, Local Setup, and Benchmarks | explainx.ai Blog | explainx.ai",
+          "content": "### Llama 4 Scout\n\nScout is the model most people can realistically run. It uses a Mixture of Experts architecture with 17 billion active parameters across 16 experts (109 billion total parameters) and processes a 10 million token context window \u2014 the longest context window of any open-weight model at launch. [...] table \u00b7 7 cols\n\n| Model | Active Params | Total Params | Experts | Context Window | Hardware Minimum | Multimodal |\n ---  ---  --- \n| Llama 4 Scout | 17B | 109B | 16 | 10M tokens | 1\u00d7 H100 (80GB) | Yes |\n| Llama 4 Maverick | 17B | 400B | 128 | 1M tokens | 4\u00d7 H100 | Yes |\n| Llama 4 Behemoth | 288B | ~2T | 16 | TBD | Not public | Yes |\n\n## Mixture of Experts \u2014 What It Means for Llama 4 [...] Quality from scale: The 128-expert pool in Maverick means the router can select genuinely specialized experts for different domains. A prompt about Python debugging might activate different experts than a prompt about French literature, even within the same forward pass.\n\nCheck the MoE intuition:\n\nPlay \u00b7 active or total parameters?\n\nLlama 4 Scout is 17B active / 109B total. Which number decides each of these?\n\nHow fast it generates tokens\n\n1/4",
+          "score": 0.7921428,
+          "raw_content": null,
+          "id": "f700a3-00"
+        },
+        {
+          "url": "https://ai.meta.com/blog/llama-4-multimodal-intelligence",
+          "title": "The Llama 4 herd: The beginning of a new era of natively multimodal AI innovation",
+          "content": "Our smaller model, Llama 4 Scout, is a general purpose model with 17 billion active parameters, 16 experts, and 109 billion total parameters that delivers state-of-the-art performance for its class. Llama 4 Scout dramatically increases the supported context length from 128K in Llama 3 to an industry leading 10 million tokens. This opens up a world of possibilities, including multi-document summarization, parsing extensive user activity for personalized tasks, and reasoning over vast codebases. [...] Llama 4 Scout, a 17 billion active parameter model with 16 experts, is the best multimodal model in the world in its class and is more powerful than all previous generation Llama models, while fitting in a single NVIDIA H100 GPU. Additionally, Llama 4 Scout offers an industry-leading context window of 10M and delivers better results than Gemma 3, Gemini 2.0 Flash-Lite, and Mistral 3.1 across a broad range of widely reported benchmarks. [...] These Llama 4 models mark the beginning of a new era for the Llama ecosystem. We designed two efficient models in the Llama 4 series, Llama 4 Scout, a 17 billion active parameter model with 16 experts, and Llama 4 Maverick, a 17 billion active parameter model with 128 experts. The former fits on a single H100 GPU (with Int4 quantization) while the latter fits on a single H100 host. We also trained a teacher model, Llama 4 Behemoth, that outperforms GPT-4.5, Claude Sonnet 3.7, and Gemini 2.0 Pro",
+          "score": 0.7892337,
+          "raw_content": null,
+          "id": "6d8001-01"
+        },
+        {
+          "url": "https://arxiv.org/html/2510.12178v1",
+          "title": "Evolution of Meta\u2019s LLaMA Models and Parameter-Efficient Fine-Tuning of Large Language Models: A Survey",
+          "content": "The most recent expansion is LLaMA 4 . In April 2025, Meta unveiled LLaMA 4 Scout and Maverick. Both have 17B active parameters organized in a sparse Mixture-of-Experts (MoE) framework, meaning they each route tokens through subsets of many \u201cexperts\" sub-networks. LLaMA 4 Scout has 16 experts, while LLaMA 4 Maverick has 128 experts. Despite only 17B active parameters, the models effectively incorporate the capacity of much larger networks (Maverick is distilled from a 288 B-parameter base). [...] | LLaMA 3.2  (Nov 2023) | 1B, 3B (text-only);  11B, 90B (vision) | 128K | Text + Image (Vision) | Multi-modal vision-language models; early fusion of image tokens. |\n| LLaMA 3.3  (Dec 2024) | 70B (instruct) | 128K | Text only (dialogue) | Instruction-tuned for dialogue (8 languages). |\n| LLaMA 4 Scout  (Apr 2025) | 17B active  (16 experts) | 10M  (10 million) | Text + Image | Mixture-of-Experts (MoE) sparse model; distilled from LLaMA-4 Behemoth. | [...] this, LLaMA 2 (July 2023) expanded the family to models up to 70B parameters, with specialized chat versions (LLaMA-2-Chat) fine-tuned for dialogue . Most recently, LLaMA 3 (2023-2024) introduced even larger and multimodal variants, including text-only models up to 405B (3.1 series) and vision-capable models (3.2 series) with 1B-90B parameters . In April 2025, Meta released the first members of LLaMA 4 Scout and Maverick, which use a sparse Mixture-of-Experts (MoE) architecture to achieve",
+          "score": 0.7759446,
+          "raw_content": null,
+          "id": "19e7a4-02"
+        },
+        {
+          "url": "https://gradientflow.com/llama-4-what-you-need-to-know",
+          "title": "Llama 4: What You Need to Know - Gradient Flow",
+          "content": "Llama 4 Scout: A 109B total parameter model that uses a Mixture-of-Experts (MoE) architecture with 16 experts, activating 17B parameters per token. It features a claimed 10M token context window and fits on a single H100 GPU.\n Llama 4 Maverick: A 400B total parameter model with 128 experts, also activating 17B parameters per token. It has a 1M token context window. [...] The model consists of numerous smaller \u201cexpert\u201d sub-networks\n A routing mechanism selects a small subset of experts to process each token\n Only 17B parameters are active per token despite the much larger total parameter count\n This reduces computational cost compared to dense models of similar capability [...] Both models are multimodal, accepting text and image inputs while providing text-only outputs. Their knowledge cutoff is August 2024.\n\nMeta also previewed Llama 4 Behemoth, a much larger model (~2T total parameters, 16 experts with 288B active parameters) still in training, which helped train Scout and Maverick through distillation.",
+          "score": 0.7699463,
+          "raw_content": null,
+          "id": "095b80-03"
+        },
+        {
+          "url": "https://www.reddit.com/r/LocalLLaMA/comments/1jsampe/mark_presenting_four_llama_4_models_even_a_2",
+          "title": "Mark presenting four Llama 4 models, even a 2 trillion ...",
+          "content": "Llama 4 Scout: 17 Billion parameters x 16 experts. At 8-bit precision 17 Billion parameters = 17 GB RAM. At 4-bit quantization ==> 8,5 GB RAM.",
+          "score": 0.7559974,
+          "raw_content": null,
+          "id": "b57a5e-04"
+        },
+        {
+          "url": "https://github.com/meta-llama/llama-models/blob/main/models/llama4/MODEL_CARD.md",
+          "title": "llama-models/models/llama4/MODEL_CARD.md at main \u00b7 meta-llama/llama-models \u00b7 GitHub",
+          "content": "These Llama 4 models mark the beginning of a new era for the Llama ecosystem. We are launching two efficient models in the Llama 4 series, Llama 4 Scout, a 17 billion parameter model with 16 experts, and Llama 4 Maverick, a 17 billion parameter model with 128 experts.\n\nModel developer: Meta\n\nModel Architecture: The Llama 4 models are auto-regressive language models that use a mixture-of-experts (MoE) architecture and incorporate early fusion for native multimodality. [...] | Llama 4 Scout (17Bx16E) | A mix of publicly available, licensed data and information from Meta\u2019s products and services. This includes publicly shared posts from Instagram and Facebook and people\u2019s interactions with Meta AI. Learn more in our Privacy Center. | 17B (Activated) 109B (Total) | Multilingual text and image | Multilingual text and code | 10M | ~40T | August 2024 | [...] ^reported numbers for MMMU Pro is the average of Standard and Vision tasks\n\n## Quantization\n\nThe Llama 4 Scout model is released as BF16 weights, but can fit within a single H100 GPU with on-the-fly int4 quantization; the Llama 4 Maverick model is released as both BF16 and FP8 quantized weights. The FP8 quantized weights fit on a single H100 DGX host while still maintaining quality. We provide code for on-the-fly int4 quantization which minimizes performance degradation as well.",
+          "score": 0.7474317,
+          "raw_content": null,
+          "id": "c0dfe1-05"
+        },
+        {
+          "url": "https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E",
+          "title": "meta-llama/Llama-4-Scout-17B-16E \u00b7 Hugging Face",
+          "content": "These Llama 4 models mark the beginning of a new era for the Llama ecosystem. We are launching two efficient models in the Llama 4 series, Llama 4 Scout, a 17 billion parameter model with 16 experts, and Llama 4 Maverick, a 17 billion parameter model with 128 experts.\n\nModel developer: Meta\n\nModel Architecture: The Llama 4 models are auto-regressive language models that use a mixture-of-experts (MoE) architecture and incorporate early fusion for native multimodality. [...] | Model Name | Training Data | Params | Input modalities | Output modalities | Context length | Token count | Knowledge cutoff |\n ---  ---  ---  --- | [...] ^reported numbers for MMMU Pro is the average of Standard and Vision tasks\n\n## Quantization\n\nThe Llama 4 Scout model is released as BF16 weights, but can fit within a single H100 GPU with on-the-fly int4 quantization; the Llama 4 Maverick model is released as both BF16 and FP8 quantized weights. The FP8 quantized weights fit on a single H100 DGX host while still maintaining quality. We provide code for on-the-fly int4 quantization which minimizes performance degradation as well.\n\n## Safeguards",
+          "score": 0.7265227,
+          "raw_content": null,
+          "id": "ef57f3-06"
+        },
+        {
+          "url": "https://apxml.com/models/llama-4-scout",
+          "title": "Llama 4 Scout - VRAM Requirements, Specs & Benchmarks",
+          "content": "### Rankings\n\nOverall Rank\n\n#181\n\nCoding Rank\n\n#147\n\n### About Llama 4 Scout\n\nLlama 4 Scout is a multimodal Mixture-of-Experts model from Meta activating 17B parameters across a massive 10M token context window. Optimized to run on a single H100 with Int4 quantization, it excels at multi-document analysis and repository synthesis.\n\n### Technical Specifications\n\nAttention\n\nAttention Structure\n\nGrouped-Query Attention\n\nAttention Heads\n\n64\n\nKey-Value Heads\n\n8\n\nAttention Head Dimension\n\n128 [...] 128\n\nPosition Embedding\n\nROPE\n\nRoPE Theta\n\n500,000\n\nNormalization\n\nRMS Normalization\n\nActivation Function\n\nSwish\n\nDimensions\n\nAuxiliary Parameters\n\n850M\n\nHidden Dimension Size\n\n8,192\n\nNumber of Layers\n\nFFN Intermediate Size (Dense)\n\n8,192\n\nVocabulary Size\n\nMixture of Experts\n\nTotal Expert Parameters\n\nNumber of Experts\n\nActive Experts\n\n### Resources\n\nOfficial DocumentationRelease NotesDownload WeightsSource Code\n\n### About Llama 4 [...] ApX logoApX logo\n\n# Llama 4 Scout\n\nModels\nLlama 4\n\n\u2192\n\nLlama 4 Scout\n\nActive Parameters\n\nContext Length\n\nAuxiliary Parameters\n\nMixture of Experts (MoE)\n\nLicense\n\nLlama 4 Community License Agreement\n\nRelease Date\n\n6 Apr 2025\n\nKnowledge Cutoff\n\nAug 2024\n\nAPI Pricing (per 1M)\n\nInput: $0.05 \u00b7 Output: $0.10\n\n### System Requirements\n\nVRAM requirements for different quantization methods and context sizes\n\n1,024 tokens\n\n215.01 GB VRAM\n\nConsumer\n\n11xRTX 4090\n\n24GB VRAM\n\nDatacenter\n\n3xNVIDIA A100",
+          "score": 0.6633419,
+          "raw_content": null,
+          "id": "80b25c-07"
+        },
+        {
+          "url": "https://huggingface.co/docs/transformers/en/model_doc/llama4",
+          "title": "Llama4 \u00b7 Hugging Face",
+          "content": "The Llama 4 family of models comes in two flavors: 109B, and 402B parameters. Both of these flavors are extremely\nlarge and won\u2019t fit on your run-of-the-mill device. See below for some examples to reduce the memory usage of the\nmodel.\n\nFor the download to be faster and more resilient, we recommend installing the `hf_xet` dependency as followed: `pip install transformers[hf_xet]`\n\n`hf_xet`\n`pip install transformers[hf_xet]` [...] Attentions weights after the attention softmax, used to compute the weighted average in the self-attention\nheads.\n\nrouter\\_logits (`tuple(torch.FloatTensor)`, optional, returned when `output_router_probs=True` and `config.add_router_probs=True` is passed or when `config.output_router_probs=True`) \u2014 Tuple of `torch.FloatTensor` (one for each layer) of shape `(batch_size, sequence_length, num_experts)`. [...] For deployment, Llama 4 Scout is designed for accessibility, fitting on a single server-grade GPU via\non-the-fly 4-bit or 8-bit int4 quantization, while Maverick is available in BF16 and FP8 formats.\nThese models are released under the custom Llama 4 Community License Agreement, available on the model repositories.\n\nYou can find all the original Llama checkpoints under the meta-llama organization.",
+          "score": 0.32060856,
+          "raw_content": null,
+          "id": "79aaa6-08"
+        },
+        {
+          "url": "https://medium.com/@suvasism/all-about-llama-4-scout-17b-16e-instruct-model-299e3e3972bf",
+          "title": "Medium",
+          "content": "Sitemap\n\nOpen in app\n\nSign up\n\nSign in\n\n\n## Key Features:\n\n   Optimized for Long Contexts: Efficiently handles the 10M token contextwindow\n   Sparse Attention Patterns: Uses specialized patterns to reduce computational complexity from O(n\u00b2) to O(n log n)\n   Flash Attention Integration: Incorporates optimized CUDA kernels for faster computation\n   Memory Efficiency: Reduces memory\u2026\n\n[](\n\n--\n\n[](\n\n--\n\n[](\n\n[](\n\nImage 5: Suvasis M\n\nImage 6: Suvasis M\n\n## Written by Suvasis M\n\n45 followers [...] 45 followers\n\n\u00b75 following\n\nOwner of dronomy.io. and  and working on financial microstructures for stocks/crypto  and \n\nHelp\n\nStatus\n\nAbout\n\nCareers\n\nPress\n\nBlog\n\nStore\n\nPrivacy\n\nRules\n\nTerms\n\nText to speech",
+          "score": 0.0050800373,
+          "raw_content": null,
+          "id": "e7a043-09"
+        }
+      ],
+      "response_time": 1.1,
+      "request_id": "83da2107-40bf-441a-b414-56658d70c602"
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -54,6 +54,23 @@ runs:
       run: |
         free -h
         df -h
+        # Runner fingerprint: hosted runner hardware changes over time, and CPU
+        # inference flakes (vLLM membinds its worker to the first bound core's
+        # NUMA node) are impossible to diagnose without knowing the topology.
+        echo "=== CPU ==="
+        nproc
+        lscpu 2>/dev/null | grep -E "Model name|^CPU\(s\):|Thread\(s\)|Core\(s\)|Socket\(s\)|NUMA node" || true
+        lscpu -e=CPU,NODE,SOCKET 2>/dev/null | head -12 || true
+        grep -m1 ^flags /proc/cpuinfo 2>/dev/null | tr ' ' '\n' | grep -E '^(avx|amx)' | sort | tr '\n' ' ' || true
+        echo
+        echo "=== NUMA memory ==="
+        for f in /sys/devices/system/node/node*/meminfo; do
+          [ -r "$f" ] || continue
+          echo "$f:"
+          grep -E "MemTotal|MemFree|MemAvailable" "$f"
+        done
+        echo "=== cgroup memory limit ==="
+        cat /sys/fs/cgroup/memory.max 2>/dev/null || echo "max (no cgroup limit)"
 
     - name: Run Integration Tests
       shell: bash

@@ -111,7 +111,6 @@ from .common.errors import (
     RouteAccessDeniedError,
     ServiceNotEnabledError,
     TokenValidationError,
-    ToolGroupNotFoundError,
     UnsupportedModelError,
     UntrustedProxyError,
     VectorStoreNotFoundError,
@@ -207,7 +206,6 @@ from .datatypes import (
     RemoteProviderConfig,
     RemoteProviderSpec,
     RoutingTable,
-    ToolGroupsProtocolPrivate,
     VectorStoresProtocolPrivate,
 )
 from .file_processors import (
@@ -527,16 +525,9 @@ from .rag_tool import (
 from .resource import Resource, ResourceType
 from .tools import (
     ListToolDefsResponse,
-    ListToolGroupsResponse,
-    ListToolsRequest,
-    SpecialToolGroup,
     ToolDef,
-    ToolGroup,
     ToolGroupInput,
-    ToolGroups,
     ToolInvocationResult,
-    ToolRuntime,
-    ToolStore,
 )
 from .validators import validate_embeddings_input_is_text
 from .vector_io import (
@@ -783,8 +774,6 @@ __all__ = [
     "ListRoutesRequest",
     "ListRoutesResponse",
     "ListToolDefsResponse",
-    "ListToolGroupsResponse",
-    "ListToolsRequest",
     "ListToolsResponse",
     "LogProbConfig",
     "MAX_PAGINATION_LIMIT",
@@ -1035,7 +1024,6 @@ __all__ = [
     "SchemaInfo",
     "SearchRankingOptions",
     "ServiceNotEnabledError",
-    "SpecialToolGroup",
     "StringType",
     "SystemMessage",
     "SystemMessageBehavior",
@@ -1044,16 +1032,10 @@ __all__ = [
     "TokenLogProbs",
     "TokenValidationError",
     "ToolChoice",
-    "ToolGroupNotFoundError",
     "ToolDef",
-    "ToolGroup",
     "ToolGroupInput",
-    "ToolGroups",
-    "ToolGroupsProtocolPrivate",
     "ToolInvocationResult",
     "ToolResponseMessage",
-    "ToolRuntime",
-    "ToolStore",
     "TopKSamplingStrategy",
     "TopPSamplingStrategy",
     "UnsupportedModelError",

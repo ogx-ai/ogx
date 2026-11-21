@@ -6,6 +6,7 @@
 
 """Unit tests for the Connectors API implementation."""
 
+import ipaddress
 import random
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -208,10 +209,12 @@ class TestGetConnector:
                 GetConnectorRequest(connector_id="my-mcp"), authorization="Bearer token123"
             )
 
-            mock_get_info.assert_called_once_with(
-                "http://localhost:8080/mcp",
-                authorization="Bearer token123",
-            )
+            assert mock_get_info.call_count == 1
+            assert mock_get_info.call_args.args == ("http://localhost:8080/mcp",)
+            assert mock_get_info.call_args.kwargs["authorization"] == "Bearer token123"
+            # The read is pinned to a freshly resolved IP so DNS rebinding of a
+            # trusted domain cannot redirect the server's fetch.
+            assert list(mock_get_info.call_args.kwargs["endpoint_pins"]) == ["localhost"]
 
 
 # --- list_connectors tests ---
@@ -416,3 +419,71 @@ class TestConnectorIdResolution:
 
         with pytest.raises(ConnectorNotFoundError):
             await resolve_mcp_connector_id(mcp_tool, mock_connectors_api)
+
+
+# --- SSRF / URL validation tests ---
+
+
+class TestConnectorUrlValidation:
+    """URL validation on connector registration and pinned reads.
+
+    Connectors are only registered from server configuration (admin-
+    supplied), so private addresses are allowed; the guardrails are the
+    scheme check at registration and IP pinning at fetch time.
+    """
+
+    async def test_rejects_non_http_scheme(self, connector_service):
+        with pytest.raises(ValueError, match="only http and https"):
+            await connector_service.register_connector(
+                connector_id="bad-scheme",
+                connector_type=ConnectorType.MCP,
+                url="file:///etc/passwd",
+            )
+
+    async def test_accepts_private_urls(self, connector_service):
+        for url in ("http://127.0.0.1:8080/mcp", "http://10.0.0.5:8080/mcp", "http://localhost:8080/mcp"):
+            result = await connector_service.register_connector(
+                connector_id=f"connector-{url}",
+                connector_type=ConnectorType.MCP,
+                url=url,
+            )
+            assert result.url == url
+
+    async def test_registration_does_not_resolve_dns(self, connector_service):
+        # Config sidecars may not be resolvable at startup; registration is
+        # scheme-only. Resolution (and pinning) happens at fetch time.
+        result = await connector_service.register_connector(
+            connector_id="unresolved-mcp",
+            connector_type=ConnectorType.MCP,
+            url="http://not-a-real-host.invalid:8080/mcp",
+        )
+        assert result.url == "http://not-a-real-host.invalid:8080/mcp"
+
+    @patch("ogx.core.connectors.connectors.get_mcp_server_info")
+    async def test_get_connector_pins_public_ip(self, mock_info, connector_service):
+        from ogx.providers.utils.tools.mcp import MCPServerInfo
+
+        mock_info.return_value = MCPServerInfo(name="srv", version="1")
+        await connector_service.register_connector(
+            connector_id="public-mcp",
+            connector_type=ConnectorType.MCP,
+            url="http://93.184.216.34:8080/mcp",
+        )
+        await connector_service.get_connector(GetConnectorRequest(connector_id="public-mcp"))
+        assert mock_info.call_args.kwargs["endpoint_pins"] == {"93.184.216.34": ["93.184.216.34"]}
+
+    @patch("ogx.core.connectors.connectors.get_mcp_server_info")
+    async def test_get_connector_pins_resolved_private_ip(self, mock_info, connector_service):
+        from ogx.providers.utils.tools.mcp import MCPServerInfo
+
+        mock_info.return_value = MCPServerInfo(name="srv", version="1")
+        await connector_service.register_connector(
+            connector_id="local-mcp",
+            connector_type=ConnectorType.MCP,
+            url="http://localhost:8080/mcp",
+        )
+        await connector_service.get_connector(GetConnectorRequest(connector_id="local-mcp"))
+        pins = mock_info.call_args.kwargs["endpoint_pins"]
+        assert list(pins) == ["localhost"]
+        assert pins["localhost"], "expected at least one pinned address for localhost"
+        assert all(ipaddress.ip_address(ip).is_loopback for ip in pins["localhost"])

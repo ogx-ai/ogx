@@ -107,11 +107,11 @@ Api.models (RoutingTable)  <-->  Api.inference (Router)
 
 The full list of auto-routed pairs is defined in `builtin_automatically_routed_apis()` in `core/distribution.py`:
 
-| Routing Table API   | Router API         |
-|---------------------|--------------------|
-| `Api.models`        | `Api.inference`    |
-| `Api.tool_groups`   | `Api.tool_runtime` |
-| `Api.vector_stores` | `Api.vector_io`    |
+| Routing Table API      | Router API         |
+|------------------------|--------------------|
+| `Api.models`           | `Api.inference`    |
+| `Api.vector_stores`    | `Api.vector_io`    |
+| `Api.web_search_providers` | `Api.web_search` |
 
 ## The API Layer (`ogx_api`)
 
