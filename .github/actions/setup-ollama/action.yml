@@ -53,9 +53,9 @@ runs:
           pull_model "deepseek-r1:1.5b"
           pull_model "nomic-embed-text:v1.5"
         elif [ "$SETUP" == "quickstart" ]; then
-          # Exactly the models docs/docs/getting_started/quickstart.mdx tells users to pull.
-          pull_model "llama3.2:3b"
-          pull_model "nomic-embed-text"
+          # scripts/quickstart_smoke.py runs the Quickstart's own `ollama pull` commands,
+          # so a wrong model name in the docs fails the job.
+          echo "Skipping: the quickstart smoke test pulls the models the docs list"
         else
           pull_model "qwen3.5:0.8b"
           pull_model "nomic-embed-text:v1.5"
