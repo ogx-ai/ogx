@@ -6,7 +6,7 @@ inputs:
     required: false
     default: ''
   setup:
-    description: 'Setup name (ollama, ollama-vision, ollama-reasoning, etc.)'
+    description: 'Setup name (ollama, ollama-vision, ollama-reasoning, quickstart, etc.)'
     required: false
     default: 'ollama'
   ollama-version:
@@ -52,6 +52,10 @@ runs:
         elif [ "$SETUP" == "ollama-reasoning" ]; then
           pull_model "deepseek-r1:1.5b"
           pull_model "nomic-embed-text:v1.5"
+        elif [ "$SETUP" == "quickstart" ]; then
+          # scripts/quickstart_smoke.py runs the Quickstart's own `ollama pull` commands,
+          # so a wrong model name in the docs fails the job.
+          echo "Skipping: the quickstart smoke test pulls the models the docs list"
         else
           pull_model "qwen3.5:0.8b"
           pull_model "nomic-embed-text:v1.5"
