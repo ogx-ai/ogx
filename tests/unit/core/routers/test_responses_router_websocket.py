@@ -7,6 +7,7 @@
 import json
 from unittest.mock import AsyncMock
 
+import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
@@ -19,6 +20,7 @@ from ogx_api.openai_responses import (
 )
 
 # WebSocket transport tests
+from tests.unit.api.test_response_text_format import MALFORMED_TEXT_FORMATS
 
 
 def _ws_app(impl: Responses) -> FastAPI:
@@ -127,3 +129,19 @@ def test_websocket_streams_events_until_terminal():
     sent_request = impl.create_openai_response.call_args.args[0]
     assert sent_request.stream is True
     assert not hasattr(sent_request, "type") or "type" not in sent_request.model_dump()
+
+
+@pytest.mark.parametrize("text_format", MALFORMED_TEXT_FORMATS)
+def test_websocket_malformed_text_format_returns_invalid_request(text_format):
+    impl = AsyncMock(spec=Responses)
+    client = TestClient(_ws_app(impl))
+
+    with client.websocket_connect("/v1/responses") as ws:
+        ws.send_text(
+            json.dumps({"type": "response.create", "model": "test", "input": "hi", "text": {"format": text_format}})
+        )
+        event = ws.receive_json()
+
+    assert event["type"] == "error"
+    assert event["error"]["code"] == "invalid_request"
+    impl.create_openai_response.assert_not_called()
