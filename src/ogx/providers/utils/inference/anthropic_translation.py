@@ -87,6 +87,18 @@ _FINISH_TO_STOP_REASON = {
 }
 
 
+def _stop_reason(finish_reason: str, has_tool_calls: bool) -> str:
+    """Map an OpenAI finish_reason to an Anthropic stop_reason.
+
+    Some OpenAI-compatible backends (e.g. Gemini) end a turn that requested tools with
+    ``finish_reason: "stop"`` instead of ``"tool_calls"``. Anthropic clients stop their tool loop on
+    ``end_turn``, so a turn that carries tool calls reports ``tool_use`` whenever it ended normally.
+    """
+    if finish_reason == "stop" and has_tool_calls:
+        return "tool_use"
+    return _FINISH_TO_STOP_REASON.get(finish_reason, "end_turn")
+
+
 def _image_source_to_url(source: AnthropicBase64ImageSource | AnthropicURLImageSource) -> str:
     if isinstance(source, AnthropicBase64ImageSource):
         return f"data:{source.media_type};base64,{source.data}"
@@ -339,10 +351,12 @@ def openai_response_to_anthropic(
         if message and message.content:
             content.append(AnthropicTextBlock(text=message.content))
 
+        has_tool_calls = False
         if message and message.tool_calls:
             for tc in message.tool_calls:
                 if not hasattr(tc, "function") or tc.function is None:
                     continue
+                has_tool_calls = True
                 try:
                     tool_input = json.loads(tc.function.arguments) if tc.function.arguments else {}
                 except json.JSONDecodeError:
@@ -359,7 +373,7 @@ def openai_response_to_anthropic(
                 )
 
         finish_reason = choice.finish_reason or "stop"
-        stop_reason = _FINISH_TO_STOP_REASON.get(finish_reason, "end_turn")
+        stop_reason = _stop_reason(finish_reason, has_tool_calls)
     else:
         stop_reason = "end_turn"
 
@@ -413,7 +427,7 @@ async def _translate_openai_stream_events(
     output_tokens = 0
     input_tokens = 0
     cache_read_tokens: int | None = None
-    stop_reason = "end_turn"
+    finish_reason: str | None = None
 
     try:
         async for chunk in openai_stream:
@@ -499,7 +513,7 @@ async def _translate_openai_stream_events(
                         )
 
             if choice.finish_reason:
-                stop_reason = _FINISH_TO_STOP_REASON.get(choice.finish_reason, "end_turn")
+                finish_reason = choice.finish_reason
 
             if chunk.usage:
                 input_tokens = chunk.usage.prompt_tokens or 0
@@ -521,6 +535,8 @@ async def _translate_openai_stream_events(
     for _tc_idx, block_idx in tool_call_index_to_block_index.items():
         yield ContentBlockStopEvent(index=block_idx)
         yield PingEvent()
+
+    stop_reason = _stop_reason(finish_reason, bool(tool_call_index_to_block_index)) if finish_reason else "end_turn"
 
     # OpenAI's finish_reason does not report which stop string matched, so
     # stop_sequence cannot be recovered through the translation path and stays None.
