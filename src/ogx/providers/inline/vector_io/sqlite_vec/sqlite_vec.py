@@ -353,13 +353,18 @@ class SQLiteVecIndex(EmbeddingIndex):
                 emb_list = embedding.tolist() if isinstance(embedding, _get_numpy().ndarray) else list(embedding)
                 emb_blob = serialize_vector(emb_list)
 
-                # Build query with optional filter clause
+                # The filter must constrain the vec0 KNN search itself. Applied to
+                # the joined metadata row instead, it runs after the k nearest rows
+                # are chosen and returns fewer than k matches (often none).
+                filter_sql = ""
+                if filter_clause:
+                    filter_sql = f"AND v.id IN (SELECT m.id FROM [{self.metadata_table}] AS m WHERE {filter_clause})"
                 query_sql = f"""
                     SELECT m.id, m.chunk, v.distance
                     FROM [{self.vector_table}] AS v
                     JOIN [{self.metadata_table}] AS m ON m.id = v.id
                     WHERE v.embedding MATCH ? AND k = ?
-                    {"AND (" + filter_clause + ")" if filter_clause else ""}
+                    {filter_sql}
                     ORDER BY v.distance;
                 """
                 cur.execute(query_sql, (emb_blob, k, *filter_params))
