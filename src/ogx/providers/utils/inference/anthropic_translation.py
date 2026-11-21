@@ -64,16 +64,6 @@ from ogx_api.messages.models import (
 
 logger = get_logger(name=__name__, category="providers::utils")
 
-# Maps Anthropic stop_reason -> OpenAI finish_reason
-_STOP_REASON_TO_FINISH = {
-    "end_turn": "stop",
-    "stop_sequence": "stop",
-    "tool_use": "tool_calls",
-    "max_tokens": "length",
-    "pause_turn": "stop",
-    "refusal": "content_filter",
-}
-
 # Anthropic's thinking budget (max thinking tokens) mapped onto OpenAI's coarser reasoning
 # effort. Claude Code's budgets are 4000 ("think"), 10000 ("think hard") and 31999 ("ultrathink").
 _LOW_EFFORT_MAX_BUDGET_TOKENS = 2048
