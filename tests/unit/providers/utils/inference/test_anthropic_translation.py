@@ -848,6 +848,91 @@ class TestStreamingTranslation:
         msg_delta = [e for e in events if e.type == "message_delta"]
         assert msg_delta[0].delta.stop_reason == "tool_use"
 
+    @pytest.mark.parametrize(
+        ("argument_chunks", "expected_joined"),
+        [
+            (["[1, 2]"], "{}"),
+            (["[", "1, ", "2]"], "{}"),
+            (["null"], "{}"),
+            (['"text"'], "{}"),
+            (["42"], "{}"),
+            (["   ", "[1, 2]"], "{}"),
+        ],
+    )
+    async def test_tool_call_streaming_non_object_arguments_fallback(
+        self, argument_chunks, expected_joined
+    ):
+        """Streaming non-object tool-call arguments falls back to {} matching non-streaming."""
+        chunks = []
+        for i, chunk_text in enumerate(argument_chunks):
+            tc_delta = MagicMock()
+            tc_delta.index = 0
+            tc_delta.id = "call_abc" if i == 0 else None
+            tc_delta.function = MagicMock()
+            tc_delta.function.name = "get_weather" if i == 0 else None
+            tc_delta.function.arguments = chunk_text
+            tc_delta.type = "function"
+
+            chunk = MagicMock()
+            chunk.choices = [MagicMock()]
+            chunk.choices[0].delta = MagicMock()
+            chunk.choices[0].delta.content = None
+            chunk.choices[0].delta.tool_calls = [tc_delta]
+            chunk.choices[0].finish_reason = "tool_calls" if i == len(argument_chunks) - 1 else None
+            chunk.usage = None
+            chunks.append(chunk)
+
+        async def mock_stream():
+            for c in chunks:
+                yield c
+
+        events = []
+        async for event in openai_stream_to_anthropic(mock_stream(), "m"):
+            events.append(event)
+
+        json_deltas = [
+            e.delta.partial_json
+            for e in events
+            if e.type == "content_block_delta" and hasattr(e.delta, "partial_json")
+        ]
+        assert "".join(json_deltas) == expected_joined
+
+    async def test_tool_call_streaming_leading_whitespace_with_valid_object(self):
+        """Leading whitespace before a valid JSON object is preserved and streamed."""
+        chunks = []
+        for i, chunk_text in enumerate(["  ", '{"city": ', '"Boston"}']):
+            tc_delta = MagicMock()
+            tc_delta.index = 0
+            tc_delta.id = "call_abc" if i == 0 else None
+            tc_delta.function = MagicMock()
+            tc_delta.function.name = "get_weather" if i == 0 else None
+            tc_delta.function.arguments = chunk_text
+            tc_delta.type = "function"
+
+            chunk = MagicMock()
+            chunk.choices = [MagicMock()]
+            chunk.choices[0].delta = MagicMock()
+            chunk.choices[0].delta.content = None
+            chunk.choices[0].delta.tool_calls = [tc_delta]
+            chunk.choices[0].finish_reason = "tool_calls" if i == 2 else None
+            chunk.usage = None
+            chunks.append(chunk)
+
+        async def mock_stream():
+            for c in chunks:
+                yield c
+
+        events = []
+        async for event in openai_stream_to_anthropic(mock_stream(), "m"):
+            events.append(event)
+
+        json_deltas = [
+            e.delta.partial_json
+            for e in events
+            if e.type == "content_block_delta" and hasattr(e.delta, "partial_json")
+        ]
+        assert "".join(json_deltas) == '  {"city": "Boston"}'
+
 
 # -- SSE Parsing --
 
