@@ -21,6 +21,10 @@ from typing import Any, Literal
 import httpx2
 
 from ogx.log import get_logger
+from ogx.providers.utils.inference.openai_compat import (
+    ToolCallArgumentsStreamFilter,
+    normalize_tool_call_arguments,
+)
 from ogx.providers.utils.inference.stream_utils import close_async_stream
 from ogx_api import (
     OpenAIChatCompletion,
@@ -343,12 +347,7 @@ def openai_response_to_anthropic(
             for tc in message.tool_calls:
                 if not hasattr(tc, "function") or tc.function is None:
                     continue
-                try:
-                    tool_input = json.loads(tc.function.arguments) if tc.function.arguments else {}
-                except json.JSONDecodeError:
-                    tool_input = {}
-                if not isinstance(tool_input, dict):
-                    tool_input = {}
+                tool_input = normalize_tool_call_arguments(tc.function.arguments, tool_name=tc.function.name or "")
 
                 content.append(
                     AnthropicToolUseBlock(
@@ -410,6 +409,7 @@ async def _translate_openai_stream_events(
     open_block: Literal["text", "thinking"] | None = None
     in_tool_blocks: dict[int, bool] = {}
     tool_call_index_to_block_index: dict[int, int] = {}
+    tool_call_arg_filters: dict[int, ToolCallArgumentsStreamFilter] = {}
     output_tokens = 0
     input_tokens = 0
     cache_read_tokens: int | None = None
@@ -480,12 +480,14 @@ async def _translate_openai_stream_events(
 
                         in_tool_blocks[tc_idx] = True
                         tool_call_index_to_block_index[tc_idx] = content_block_index
+                        tool_name = tc_delta.function.name if tc_delta.function and tc_delta.function.name else ""
+                        tool_call_arg_filters[tc_idx] = ToolCallArgumentsStreamFilter(tool_name)
 
                         yield ContentBlockStartEvent(
                             index=content_block_index,
                             content_block=AnthropicToolUseBlock(
                                 id=tc_delta.id or f"toolu_{uuid.uuid4().hex[:24]}",
-                                name=tc_delta.function.name if tc_delta.function and tc_delta.function.name else "",
+                                name=tool_name,
                                 input={},
                             ),
                         )
@@ -493,10 +495,14 @@ async def _translate_openai_stream_events(
 
                     if tc_delta.function and tc_delta.function.arguments:
                         block_idx = tool_call_index_to_block_index[tc_idx]
-                        yield ContentBlockDeltaEvent(
-                            index=block_idx,
-                            delta=_InputJsonDelta(partial_json=tc_delta.function.arguments),
-                        )
+                        # Keeps tool_use.input an object, as on Anthropic's real API, without
+                        # buffering the whole argument string -- see ToolCallArgumentsStreamFilter.
+                        to_forward = tool_call_arg_filters[tc_idx].feed(tc_delta.function.arguments)
+                        if to_forward is not None:
+                            yield ContentBlockDeltaEvent(
+                                index=block_idx,
+                                delta=_InputJsonDelta(partial_json=to_forward),
+                            )
 
             if choice.finish_reason:
                 stop_reason = _FINISH_TO_STOP_REASON.get(choice.finish_reason, "end_turn")
@@ -518,7 +524,13 @@ async def _translate_openai_stream_events(
         yield ContentBlockStopEvent(index=content_block_index)
         yield PingEvent()
 
-    for _tc_idx, block_idx in tool_call_index_to_block_index.items():
+    for tc_idx, block_idx in tool_call_index_to_block_index.items():
+        # A tool call whose arguments never produced a non-whitespace character (e.g.
+        # truly empty arguments) never got a chance to decide; close it out as {},
+        # matching normalize_tool_call_arguments' own empty-arguments case.
+        trailing = tool_call_arg_filters[tc_idx].finalize()
+        if trailing is not None:
+            yield ContentBlockDeltaEvent(index=block_idx, delta=_InputJsonDelta(partial_json=trailing))
         yield ContentBlockStopEvent(index=block_idx)
         yield PingEvent()
 
