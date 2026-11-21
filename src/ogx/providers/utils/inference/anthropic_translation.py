@@ -349,6 +349,10 @@ def openai_response_to_anthropic(
                 except json.JSONDecodeError:
                     tool_input = {}
                 if not isinstance(tool_input, dict):
+                    logger.warning(
+                        "Tool-call arguments do not evaluate to a JSON object; replacing with empty object",
+                        tool_name=tc.function.name or "",
+                    )
                     tool_input = {}
 
                 content.append(
@@ -411,6 +415,9 @@ async def _translate_openai_stream_events(
     open_block: Literal["text", "thinking"] | None = None
     in_tool_blocks: dict[int, bool] = {}
     tool_call_index_to_block_index: dict[int, int] = {}
+    tool_call_states: dict[int, Literal["pending", "object", "non_object"]] = {}
+    tool_call_buffered_whitespace: dict[int, str] = {}
+    tool_call_names: dict[int, str] = {}
     output_tokens = 0
     input_tokens = 0
     cache_read_tokens: int | None = None
@@ -481,23 +488,71 @@ async def _translate_openai_stream_events(
 
                         in_tool_blocks[tc_idx] = True
                         tool_call_index_to_block_index[tc_idx] = content_block_index
+                        tool_name = (
+                            tc_delta.function.name
+                            if tc_delta.function and tc_delta.function.name
+                            else ""
+                        )
+                        tool_call_names[tc_idx] = tool_name
+                        tool_call_states[tc_idx] = "pending"
+                        tool_call_buffered_whitespace[tc_idx] = ""
 
                         yield ContentBlockStartEvent(
                             index=content_block_index,
                             content_block=AnthropicToolUseBlock(
                                 id=tc_delta.id or f"toolu_{uuid.uuid4().hex[:24]}",
-                                name=tc_delta.function.name if tc_delta.function and tc_delta.function.name else "",
+                                name=tool_name,
                                 input={},
                             ),
                         )
                         content_block_index += 1
 
+                    if (
+                        tc_delta.function
+                        and tc_delta.function.name
+                        and not tool_call_names.get(tc_idx)
+                    ):
+                        tool_call_names[tc_idx] = tc_delta.function.name
+
                     if tc_delta.function and tc_delta.function.arguments:
                         block_idx = tool_call_index_to_block_index[tc_idx]
-                        yield ContentBlockDeltaEvent(
-                            index=block_idx,
-                            delta=_InputJsonDelta(partial_json=tc_delta.function.arguments),
-                        )
+                        raw_args = tc_delta.function.arguments
+                        state = tool_call_states.get(tc_idx, "pending")
+
+                        if state == "non_object":
+                            continue
+
+                        if state == "pending":
+                            stripped = raw_args.lstrip()
+                            if not stripped:
+                                tool_call_buffered_whitespace[tc_idx] = (
+                                    tool_call_buffered_whitespace.get(tc_idx, "") + raw_args
+                                )
+                                continue
+
+                            if stripped[0] == "{":
+                                tool_call_states[tc_idx] = "object"
+                                buffered = tool_call_buffered_whitespace.pop(tc_idx, "")
+                                yield ContentBlockDeltaEvent(
+                                    index=block_idx,
+                                    delta=_InputJsonDelta(partial_json=buffered + raw_args),
+                                )
+                            else:
+                                tool_call_states[tc_idx] = "non_object"
+                                tool_call_buffered_whitespace.pop(tc_idx, None)
+                                logger.warning(
+                                    "Tool-call arguments do not start with a JSON object; replacing with empty object",
+                                    tool_name=tool_call_names.get(tc_idx, ""),
+                                )
+                                yield ContentBlockDeltaEvent(
+                                    index=block_idx,
+                                    delta=_InputJsonDelta(partial_json="{}"),
+                                )
+                        elif state == "object":
+                            yield ContentBlockDeltaEvent(
+                                index=block_idx,
+                                delta=_InputJsonDelta(partial_json=raw_args),
+                            )
 
             if choice.finish_reason:
                 stop_reason = _FINISH_TO_STOP_REASON.get(choice.finish_reason, "end_turn")
@@ -519,7 +574,13 @@ async def _translate_openai_stream_events(
         yield ContentBlockStopEvent(index=content_block_index)
         yield PingEvent()
 
-    for _tc_idx, block_idx in tool_call_index_to_block_index.items():
+    for tc_idx, block_idx in tool_call_index_to_block_index.items():
+        if tool_call_states.get(tc_idx) == "pending" and tool_call_buffered_whitespace.get(tc_idx):
+            yield ContentBlockDeltaEvent(
+                index=block_idx,
+                delta=_InputJsonDelta(partial_json="{}"),
+            )
+            yield PingEvent()
         yield ContentBlockStopEvent(index=block_idx)
         yield PingEvent()
 
