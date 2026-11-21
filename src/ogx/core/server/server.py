@@ -134,7 +134,10 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     return JSONResponse(
         status_code=http_exc.status_code,
         content=OpenAIErrorResponse.from_message(
-            http_exc.detail, code=exc.code if isinstance(exc, OGXError) else None
+            http_exc.detail,
+            type=getattr(http_exc, "error_type", getattr(exc, "error_type", None)),
+            code=getattr(http_exc, "code", getattr(exc, "code", None)),
+            param=getattr(http_exc, "param", getattr(exc, "param", None)),
         ).to_dict(),
     )
 
@@ -569,6 +572,7 @@ def create_app() -> StackApp:
 
     # Register specific exception handlers before the generic Exception handler
     # This prevents the re-raising behavior that causes connection resets
+    app.exception_handler(HTTPException)(global_exception_handler)
     app.exception_handler(RequestValidationError)(global_exception_handler)
     app.exception_handler(ConflictError)(global_exception_handler)
     app.exception_handler(ResourceNotFoundError)(global_exception_handler)
