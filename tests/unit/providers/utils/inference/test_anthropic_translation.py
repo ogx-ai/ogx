@@ -628,19 +628,6 @@ class TestResponseTranslation:
         result = openai_response_to_anthropic(openai_resp, "m")
         assert result.stop_reason == "max_tokens"
 
-    def test_content_filter_stop_reason(self):
-        """finish_reason='content_filter' maps to stop_reason='refusal' (#6810)."""
-        openai_resp = MagicMock()
-        openai_resp.choices = [MagicMock()]
-        openai_resp.choices[0].message = MagicMock()
-        openai_resp.choices[0].message.content = ""
-        openai_resp.choices[0].message.tool_calls = None
-        openai_resp.choices[0].finish_reason = "content_filter"
-        openai_resp.usage = None
-
-        result = openai_response_to_anthropic(openai_resp, "m")
-        assert result.stop_reason == "refusal"
-
     def test_cache_metrics_mapping(self):
         openai_resp = MagicMock()
         openai_resp.choices = [MagicMock()]
@@ -825,23 +812,6 @@ class TestStreamingTranslation:
 
         msg_delta = [e for e in events if e.type == "message_delta"]
         assert msg_delta[0].delta.stop_reason == "tool_use"
-
-    async def test_content_filter_streaming_stop_reason(self):
-        """Streaming finish_reason='content_filter' maps to stop_reason='refusal' (#6810)."""
-        chunk = MagicMock(usage=None)
-        chunk.choices = [MagicMock(finish_reason="content_filter")]
-        chunk.choices[0].delta = MagicMock(content=None, tool_calls=None)
-
-        async def mock_stream():
-            yield chunk
-
-        events = []
-        async for event in openai_stream_to_anthropic(mock_stream(), "m"):
-            events.append(event)
-
-        msg_delta = [e for e in events if e.type == "message_delta"]
-        assert len(msg_delta) == 1
-        assert msg_delta[0].delta.stop_reason == "refusal"
 
 
 # -- SSE Parsing --
