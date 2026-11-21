@@ -11,16 +11,15 @@ from moto import mock_aws
 from ogx.core.storage.datatypes import SqliteSqlStoreConfig, SqlStoreReference
 from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
 from ogx.providers.remote.files.s3 import S3FilesImplConfig, get_adapter_impl
+from ogx_api.common.upload_limits import PreReadUploadFile
 
 
-class MockUploadFile:
-    def __init__(self, content: bytes, filename: str, content_type: str = "text/plain"):
+class MockUploadFile(PreReadUploadFile):
+    """In-memory UploadFile that keeps its content for assertions."""
+
+    def __init__(self, content: bytes, filename: str, content_type: str = "text/plain") -> None:
+        super().__init__(content, filename=filename, content_type=content_type)
         self.content = content
-        self.filename = filename
-        self.content_type = content_type
-
-    async def read(self):
-        return self.content
 
 
 @pytest.fixture

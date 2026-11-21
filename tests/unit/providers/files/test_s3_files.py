@@ -4,10 +4,12 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import io
 from unittest.mock import patch
 
 import pytest
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, EndpointConnectionError
+from fastapi import UploadFile
 
 from ogx.core.stack import replace_env_vars
 from ogx.core.storage.datatypes import SqlStoreReference
@@ -22,6 +24,17 @@ from ogx_api import (
     RetrieveFileRequest,
     UploadFileRequest,
 )
+
+_MIB = 1024 * 1024
+
+
+class _FailingAfterFirstPart(io.BytesIO):
+    """Raises on reads past boto3's first 8 MiB part, like a disk error midway through a multipart upload."""
+
+    def read(self, size: int | None = -1) -> bytes:
+        if self.tell() >= 8 * _MIB:
+            raise OSError("disk read failed")
+        return super().read(size)
 
 
 class TestS3FilesImpl:
@@ -167,7 +180,7 @@ class TestS3FilesImpl:
 
     async def test_upload_file_without_filename(self, s3_provider, sample_text_file):
         """Test uploading a file without a filename uses the fallback."""
-        del sample_text_file.filename
+        sample_text_file.filename = None
         result = await s3_provider.openai_upload_file(
             request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS),
             file=sample_text_file,
@@ -197,16 +210,75 @@ class TestS3FilesImpl:
         listed_files = await s3_provider.openai_list_files(request=ListFilesRequest())
         assert uploaded.id not in [file.id for file in listed_files.data]
 
-    async def test_upload_file_s3_put_object_failure(self, s3_provider, sample_text_file, s3_config, s3_client):
-        """Test that put_object failure results in exception and no orphaned metadata."""
-        sample_text_file.filename = "test_s3_put_object_failure"
+    async def test_large_upload_is_streamed_as_multipart(self, s3_provider, s3_config, s3_client):
+        """Uploads above boto3's 8 MiB multipart threshold are sent in parts instead of one buffered put_object."""
+        content = b"a" * (5 * _MIB) + b"b" * (5 * _MIB)
+        uploaded = await s3_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS),
+            file=UploadFile(file=io.BytesIO(content), filename="large.bin"),
+        )
 
-        def failing_put_object(*args, **kwargs):
+        assert uploaded.bytes == 10 * _MIB
+        stored = s3_client.get_object(Bucket=s3_config.bucket_name, Key=uploaded.id)
+        assert stored["ETag"].strip('"').endswith("-2"), "expected a 2-part multipart upload"
+        assert stored["Body"].read() == content
+
+    async def test_read_failure_mid_upload_leaves_nothing_behind(self, s3_provider, s3_config, s3_client):
+        """A failure partway through a multipart upload aborts it and stores no metadata."""
+        with pytest.raises(OSError, match="disk read failed"):
+            await s3_provider.openai_upload_file(
+                request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS),
+                file=UploadFile(file=_FailingAfterFirstPart(b"x" * (20 * _MIB)), filename="broken.bin"),
+            )
+
+        assert (await s3_provider.openai_list_files(request=ListFilesRequest())).data == []
+        assert s3_client.list_objects_v2(Bucket=s3_config.bucket_name).get("Contents", []) == []
+        assert s3_client.list_multipart_uploads(Bucket=s3_config.bucket_name).get("Uploads", []) == []
+
+    async def test_metadata_failure_removes_uploaded_object(self, s3_provider, sample_text_file, s3_config, s3_client):
+        """If the metadata row cannot be written, the already-uploaded S3 object is deleted."""
+        with patch.object(s3_provider.sql_store, "insert", side_effect=RuntimeError("database unavailable")):
+            with pytest.raises(RuntimeError, match="database unavailable"):
+                await s3_provider.openai_upload_file(
+                    request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS),
+                    file=sample_text_file,
+                )
+
+        assert s3_client.list_objects_v2(Bucket=s3_config.bucket_name).get("Contents", []) == []
+
+    @pytest.mark.parametrize(
+        "cleanup_error",
+        [
+            ClientError(
+                error_response={"Error": {"Code": "AccessDenied", "Message": "Denied"}}, operation_name="DeleteObject"
+            ),
+            EndpointConnectionError(endpoint_url="https://s3.example.com"),
+        ],
+    )
+    async def test_metadata_failure_is_reported_when_cleanup_also_fails(
+        self, s3_provider, sample_text_file, cleanup_error
+    ):
+        """A failed cleanup is logged, and the caller still sees the metadata error that caused it."""
+        with (
+            patch.object(s3_provider.sql_store, "insert", side_effect=RuntimeError("database unavailable")),
+            patch.object(s3_provider.client, "delete_object", side_effect=cleanup_error),
+            pytest.raises(RuntimeError, match="database unavailable"),
+        ):
+            await s3_provider.openai_upload_file(
+                request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS),
+                file=sample_text_file,
+            )
+
+    async def test_upload_file_s3_failure(self, s3_provider, sample_text_file, s3_config, s3_client):
+        """Test that an S3 upload failure results in exception and no orphaned metadata."""
+        sample_text_file.filename = "test_s3_upload_failure"
+
+        def failing_upload_fileobj(*args, **kwargs):
             raise ClientError(
                 error_response={"Error": {"Code": "SolarRadiation", "Message": "Bloop"}}, operation_name="PutObject"
             )
 
-        with patch.object(s3_provider.client, "put_object", side_effect=failing_put_object):
+        with patch.object(s3_provider.client, "upload_fileobj", side_effect=failing_upload_fileobj):
             with pytest.raises(RuntimeError, match="Failed to upload file to S3"):
                 await s3_provider.openai_upload_file(
                     request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS),

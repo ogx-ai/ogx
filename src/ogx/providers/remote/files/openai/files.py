@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 from datetime import UTC, datetime
+from io import BytesIO
 from typing import Any
 
 from fastapi import Response, UploadFile
@@ -145,7 +146,7 @@ class OpenAIFilesImpl(Files):
         purpose = request.purpose
         expires_after = request.expires_after
 
-        filename = sanitize_content_disposition_filename(getattr(file, "filename", None) or "uploaded_file")
+        filename = sanitize_content_disposition_filename(file.filename or "uploaded_file")
         content = await file.read()
         file_size = len(content)
 
@@ -159,8 +160,6 @@ class OpenAIFilesImpl(Files):
             expires_at = created_at + expires_after.seconds
 
         try:
-            from io import BytesIO
-
             file_obj = BytesIO(content)
             file_obj.name = filename
 
