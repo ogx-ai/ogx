@@ -8,8 +8,8 @@ import httpx2
 from pydantic import BaseModel, Field
 
 
-class BaseToolRuntimeConfig(BaseModel):
-    """Base configuration for outbound HTTP clients used by tool runtimes.
+class BaseWebSearchConfig(BaseModel):
+    """Base configuration for outbound HTTP clients used by web search backends.
 
     Provides sensible defaults: 30s total covers slow upstream APIs (search,
     file fetch); 10s connect catches unreachable hosts fast without penalizing

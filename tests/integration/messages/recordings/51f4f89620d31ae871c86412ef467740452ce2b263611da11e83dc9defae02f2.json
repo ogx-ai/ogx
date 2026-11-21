@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_list_includes_new_batch[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_list_includes_new_batch[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say 'ok' and nothing else."
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-bfab51cbbb9c4a91",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay, the user said 'ok' and nothing else. I need to respond appropriately. Since they just said 'ok', I should acknowledge their response and confirm that I'm here to help. Maybe say something like \"You're welcome! Let me know if there's anything else I can assist you with.\" That way, I'm polite and offer further help without making it sound forced.\n",
+          "signature": "ef942e1379be4207b5305fcc7db899a5"
+        },
+        {
+          "type": "text",
+          "text": "\n\nYou're welcome! Let me know if there's anything else I can assist you with."
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 16,
+        "output_tokens": 101
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

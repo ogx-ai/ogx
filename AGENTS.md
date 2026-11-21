@@ -30,7 +30,7 @@ tests/
 
 ## Python & Tooling
 
-- **Python 3.12** is required. Pre-commit hooks only work with 3.12.
+- **Python 3.13 or 3.14** is required. Pre-commit hooks run on 3.14 (see `.pre-commit-config.yaml`).
 - Use `uv` for all dependency management and script execution.
 - Run scripts with `uv run`, never bare `python3` or `python`.
 - Use standard library modules when possible.
@@ -130,7 +130,6 @@ registered in `src/ogx/providers/registry/`. Provider specs include:
 - `config_class`: Pydantic config class path
 - `api_dependencies`: APIs this provider depends on
 - `deprecation_warning`: For deprecated providers (triggers runtime warning)
-- `toolgroup_id`: For tool_runtime providers that auto-register tool groups
 
 Configuration classes must use Pydantic `Field` with `description` parameters —
 these generate the provider documentation automatically.
@@ -203,7 +202,6 @@ When making code changes, check whether the following documentation needs updati
   - `src/ogx/providers/remote/README.md`, `src/ogx/providers/registry/README.md`
   - `src/ogx/providers/utils/README.md`, `src/ogx/providers/utils/inference/README.md`
   - `src/ogx/providers/inline/agents/README.md`
-  - `src/ogx/providers/inline/tool_runtime/README.md`
   - `src/ogx/providers/remote/inference/README.md`
   - `src/ogx/distributions/README.md`
   - `scripts/README.md`

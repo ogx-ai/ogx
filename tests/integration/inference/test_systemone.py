@@ -35,6 +35,7 @@ import requests
 
 from ogx.core.library_client import OGXAsLibraryClient
 from ogx.core.testing_context import get_test_context
+from tests.integration.fixtures.common import _client_timeout
 
 
 def _base_url(ogx_client) -> str:
@@ -63,7 +64,7 @@ def _judge(ogx_client, payload: dict[str, object]) -> "requests.Response":
         f"{_base_url(ogx_client)}/v1/systemone",
         headers=_test_context_headers(),
         json=payload,
-        timeout=30,
+        timeout=_client_timeout(),
     )
 
 
@@ -97,7 +98,7 @@ def test_systemone_models_listing_typesafe_shape(ogx_client, judge_model_id):
     resp = requests.get(
         f"{_base_url(ogx_client)}/v1/models",
         headers={"x-typesafe-sdk": "1"},
-        timeout=30,
+        timeout=_client_timeout(),
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()

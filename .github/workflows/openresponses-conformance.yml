@@ -62,7 +62,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check for recordings
         id: check-recordings
@@ -81,7 +81,7 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/setup-runner
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install ci-tests distro provider dependencies
         run: uv run ogx stack list-deps ci-tests --format uv | sh
@@ -229,7 +229,7 @@ jobs:
 
       - name: Upload conformance test results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: openresponses-conformance-results-${{ github.run_id }}
           path: |

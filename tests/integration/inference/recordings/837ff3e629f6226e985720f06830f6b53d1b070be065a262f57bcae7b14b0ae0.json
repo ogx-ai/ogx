@@ -1,0 +1,82 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_inference_store[client_with_models-txt=llama-cpp-server/qwen3-0.6b-False]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello, world!"
+        }
+      ],
+      "stream": false,
+      "reasoning_effort": "low"
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-837ff3e629f6",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Hello, world! I'm here to help you with anything you need!",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user just said \"Hello, world!\" to me. Let me think about how to respond.\n\nFirst, I should acknowledge their input. \"Hello, world!\" is a simple and direct message. I can respond with a friendly greeting, maybe saying \"Hello, world!\" as well. That way, it's a bit redundant but helpful.\n\nI should make sure to keep the response positive and encouraging. Maybe add a line about how I'm here to help, since the user might be looking for assistance. Also, I can mention that I'm here to answer their questions or provide support, which is good for building trust.\n\nI need to keep it short and straightforward. Don't add extra information unless necessary. Just a simple response that's polite and helpful. Let me check if there's any other aspect to consider, like cultural appropriateness, but since this is a common phrase, it's fine.\n\nAlright, putting it all together: \"Hello, world! I'm here to help you with anything you need!\" That should work.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11669-620d2225c",
+        "usage": {
+          "completion_tokens": 232,
+          "prompt_tokens": 12,
+          "total_tokens": 244,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 3,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 3,
+          "prompt_n": 9,
+          "prompt_ms": 82.182,
+          "prompt_per_token_ms": 9.131333333333334,
+          "prompt_per_second": 109.51303205081405,
+          "predicted_n": 232,
+          "predicted_ms": 6237.264,
+          "predicted_per_token_ms": 27.001142857142856,
+          "predicted_per_second": 37.03546939812071
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

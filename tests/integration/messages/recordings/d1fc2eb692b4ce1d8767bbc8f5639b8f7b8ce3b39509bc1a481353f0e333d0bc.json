@@ -1,0 +1,93 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_tool_use_round_trip[txt=vllm/Qwen/Qwen3-0.6B]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_tool_use_round_trip[txt=vllm/Qwen/Qwen3-0.6B]",
+    "url": "http://localhost:8000/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Use the calculator tool to compute 15 * 7."
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "\nOkay, the user wants me to compute 15 multiplied by 7 using the calculator tool. Let me check the available functions. The only tool provided is the calculator function, which takes an expression as a parameter. The expression here is \"15 * 7\". I need to make sure the expression is correctly formatted. Since multiplication is straightforward, the tool should handle that. I don't see any other parameters or functions needed here. So I'll call the calculator with the expression \"15 * 7\".\n",
+              "signature": "893f84a0765b4654a0c63b7348e27435"
+            },
+            {
+              "type": "tool_use",
+              "id": "chatcmpl-tool-a965dcd2f44d86eb",
+              "name": "calculator",
+              "input": {
+                "expression": "15 * 7"
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "chatcmpl-tool-a965dcd2f44d86eb",
+              "content": "105"
+            }
+          ]
+        }
+      ],
+      "max_tokens": 2048,
+      "tools": [
+        {
+          "type": "custom",
+          "name": "calculator",
+          "description": "Perform basic arithmetic. Use this for any math question.",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "expression": {
+                "type": "string",
+                "description": "The math expression to evaluate"
+              }
+            },
+            "required": [
+              "expression"
+            ]
+          }
+        }
+      ],
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "chatcmpl-81f4c833f660ece6",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "\nOkay, the user asked to compute 15 multiplied by 7 using the calculator tool. I called the calculator function with the expression \"15 * 7\". The response came back as 105. Now I need to present this answer clearly.\n\nI should confirm the calculation to make sure there's no mistake. Let me check: 15 times 7 is indeed 105. So the final answer is correct. I'll state the result in a simple sentence to match the user's request.\n",
+          "signature": "6e819e35509b46f8926d6341bc4a2bf1"
+        },
+        {
+          "type": "text",
+          "text": "\n\nThe result of 15 multiplied by 7 is 105."
+        }
+      ],
+      "model": "Qwen/Qwen3-0.6B",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 321,
+        "output_tokens": 127
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

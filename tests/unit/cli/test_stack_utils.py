@@ -29,13 +29,15 @@ def test_add_dependent_providers_expands_required_apis():
     # Required API dependencies for agents should be present.
     assert "inference" in provider_list
     assert "vector_io" in provider_list
-    assert "tool_runtime" in provider_list
     assert "files" in provider_list
+
+    # No providers are added for APIs whose registry is empty: the tool_runtime
+    # API has no providers left, so it is not expanded
+    assert "tool_runtime" not in provider_list
 
     # Providers should be added for those APIs.
     assert provider_list["inference"]
     assert provider_list["vector_io"]
-    assert provider_list["tool_runtime"]
     assert provider_list["files"]
 
 

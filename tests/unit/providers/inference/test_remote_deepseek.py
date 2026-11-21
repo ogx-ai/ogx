@@ -193,6 +193,45 @@ class TestMessagesPassthrough:
             assert result.usage.input_tokens == 5
 
 
+class TestToolBodyNormalization:
+    """DeepSeek's /v1/messages rejects the optional ``type: "custom"`` tool marker with a 422
+    (unknown variant), so the adapter strips it from the passthrough body."""
+
+    async def test_strips_custom_tool_type_from_the_request_body(self):
+        adapter = _adapter()
+
+        with patch("httpx2.AsyncClient") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.post = AsyncMock(return_value=MagicMock(json=lambda: _MESSAGE_RESPONSE_BODY))
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            request = AnthropicCreateMessageRequest.model_validate(
+                {
+                    "model": "test-model",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "max_tokens": 16,
+                    "tools": [
+                        {
+                            "type": "custom",
+                            "name": "calculator",
+                            "description": "Perform basic arithmetic.",
+                            "input_schema": {
+                                "type": "object",
+                                "properties": {"expression": {"type": "string"}},
+                                "required": ["expression"],
+                            },
+                        }
+                    ],
+                }
+            )
+            await adapter.anthropic_messages(request)
+
+            tool = mock_client.post.call_args.kwargs["json"]["tools"][0]
+            assert "type" not in tool
+            assert tool["name"] == "calculator"
+            assert tool["input_schema"]["required"] == ["expression"]
+
+
 @pytest.fixture
 def mock_passthrough(monkeypatch):
     mock = MagicMock()

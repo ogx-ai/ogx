@@ -12,17 +12,11 @@ import pytest
 
 from ogx.core.datatypes import RegistryEntrySource
 from ogx.core.routing_tables.models import ModelsRoutingTable
-from ogx.core.routing_tables.toolgroups import ToolGroupsRoutingTable
 from ogx_api import (
-    URL,
     Api,
-    ListToolDefsResponse,
-    ListToolsRequest,
     Model,
     ModelNotFoundError,
     ModelType,
-    ToolDef,
-    ToolGroup,
 )
 
 
@@ -70,31 +64,6 @@ class InferenceImpl(Impl):
 
     async def shutdown(self):
         pass
-
-
-class ToolGroupsImpl(Impl):
-    def __init__(self):
-        super().__init__(Api.tool_runtime)
-
-    async def register_toolgroup(self, toolgroup: ToolGroup):
-        return toolgroup
-
-    async def unregister_toolgroup(self, toolgroup_id: str):
-        return toolgroup_id
-
-    async def list_runtime_tools(self, toolgroup_id, mcp_endpoint, authorization=None):
-        return ListToolDefsResponse(
-            data=[
-                ToolDef(
-                    name="test-tool",
-                    description="Test tool",
-                    input_schema={
-                        "type": "object",
-                        "properties": {"test-param": {"type": "string", "description": "Test param"}},
-                    },
-                )
-            ]
-        )
 
 
 async def test_models_routing_table(cached_disk_dist_registry):
@@ -274,26 +243,6 @@ async def test_model_has_openai_compatible_fields(cached_disk_dist_registry):
     assert "created" in data
     assert "owned_by" in data
     assert data["id"] == model.identifier
-
-
-async def test_tool_groups_routing_table(cached_disk_dist_registry):
-    table = ToolGroupsRoutingTable({"test_provider": ToolGroupsImpl()}, cached_disk_dist_registry, {})
-    await table.initialize()
-
-    # Register multiple tool groups and verify listing
-    await table.register_tool_group(
-        toolgroup_id="test-toolgroup",
-        provider_id="test_provider",
-    )
-    tool_groups = await table.list_tool_groups()
-
-    assert len(tool_groups.data) == 1
-    tool_group_ids = {tg.identifier for tg in tool_groups.data}
-    assert "test-toolgroup" in tool_group_ids
-
-    await table.unregister_toolgroup(toolgroup_id="test-toolgroup")
-    tool_groups = await table.list_tool_groups()
-    assert len(tool_groups.data) == 0
 
 
 async def test_models_alias_registration_and_lookup(cached_disk_dist_registry):
@@ -557,28 +506,6 @@ async def test_models_source_interaction_cleanup_provider_models(cached_disk_dis
 
     # Cleanup
     await table.shutdown()
-
-
-async def test_tool_groups_routing_table_exception_handling(cached_disk_dist_registry):
-    """Test that the tool group routing table handles exceptions when listing tools, like if an MCP server is unreachable."""
-
-    exception_throwing_tool_groups_impl = ToolGroupsImpl()
-    exception_throwing_tool_groups_impl.list_runtime_tools = AsyncMock(side_effect=Exception("Test exception"))
-
-    table = ToolGroupsRoutingTable(
-        {"test_provider": exception_throwing_tool_groups_impl}, cached_disk_dist_registry, {}
-    )
-    await table.initialize()
-
-    await table.register_tool_group(
-        toolgroup_id="test-toolgroup-exceptions",
-        provider_id="test_provider",
-        mcp_endpoint=URL(uri="http://localhost:8479/foo/bar"),
-    )
-
-    tools = await table.list_tools(ListToolsRequest(toolgroup_id="test-toolgroup-exceptions"))
-
-    assert len(tools.data) == 0
 
 
 async def test_disabled_provider_models_persistence(cached_disk_dist_registry):

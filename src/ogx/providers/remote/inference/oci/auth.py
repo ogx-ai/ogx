@@ -32,7 +32,7 @@ class HttpxOciAuth(httpx2.Auth):
         self.signer = signer
 
     @override
-    def auth_flow(self, request: httpx2.Request) -> Generator[httpx2.Request, httpx2.Response, None]:
+    def auth_flow(self, request: httpx2.Request) -> Generator[httpx2.Request, httpx2.Response]:
         # Read the request content to handle streaming requests properly
         try:
             content = request.content

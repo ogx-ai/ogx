@@ -22,14 +22,14 @@ describe('Responses API - Basic', () => {
       expected: 'earth',
       // Use client_with_models fixture to match non-streaming recordings
       testId:
-        'tests/integration/responses/test_basic_responses.py::test_response_non_streaming_basic[client_with_models-txt=openai/gpt-4o-earth]',
+        'tests/integration/responses/test_basic_responses.py::test_response_non_streaming_basic[client_with_models-txt=openai/gpt-5-nano-earth]',
     },
     {
       id: 'saturn',
       input: 'Which planet has rings around it with a name starting with letter S?',
       expected: 'saturn',
       testId:
-        'tests/integration/responses/test_basic_responses.py::test_response_non_streaming_basic[client_with_models-txt=openai/gpt-4o-saturn]',
+        'tests/integration/responses/test_basic_responses.py::test_response_non_streaming_basic[client_with_models-txt=openai/gpt-5-nano-saturn]',
     },
   ];
 

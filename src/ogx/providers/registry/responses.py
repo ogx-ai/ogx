@@ -41,14 +41,12 @@ def available_providers() -> list[ProviderSpec]:
             api_dependencies=[
                 Api.inference,
                 Api.vector_io,
-                Api.tool_runtime,
-                Api.tool_groups,
                 Api.conversations,
                 Api.prompts,
                 Api.files,
                 Api.connectors,
             ],
-            optional_api_dependencies=[Api.skills],
+            optional_api_dependencies=[Api.skills, Api.web_search],
             description="Meta's reference implementation of an agent system that can use tools, access vector databases, and perform complex reasoning tasks.",
         ),
     ]

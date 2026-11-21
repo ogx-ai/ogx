@@ -175,8 +175,6 @@ def _make_responses_impl():
     """Create an OpenAIResponsesImpl with all dependencies mocked."""
     return OpenAIResponsesImpl(
         inference_api=AsyncMock(),
-        tool_groups_api=AsyncMock(),
-        tool_runtime_api=AsyncMock(),
         responses_store=AsyncMock(),
         vector_io_api=AsyncMock(),
         moderation_endpoint=None,

@@ -145,14 +145,14 @@ OGX emits metrics across five domains. All metric names use the `ogx` prefix.
 
 **Attributes:** `model`, `provider`, `stream`, `status`
 
-### Tool runtime
+### Tool operations
 
 | Metric | Type | Unit | Description |
 |---|---|---|---|
-| `ogx.tool_runtime.invocations_total` | Counter | 1 | Total tool invocations |
-| `ogx.tool_runtime.duration_seconds` | Histogram | s | Tool execution latency |
+| `ogx.tools.invocations_total` | Counter | 1 | Total tool invocations |
+| `ogx.tools.duration_seconds` | Histogram | s | Tool execution latency |
 
-**Attributes:** `tool_group`, `tool_name`, `provider`, `status`
+**Attributes:** `tool_name`, `provider`, `status`
 
 ### Vector IO
 
@@ -214,7 +214,7 @@ histogram_quantile(0.95, rate(ogx_http_server_duration_milliseconds_bucket[5m]))
 histogram_quantile(0.99, rate(ogx_inference_duration_seconds_bucket[5m]))
 
 # Tool invocation rate by tool name
-rate(ogx_tool_runtime_invocations_total[5m])
+rate(ogx_tools_invocations_total[5m])
 
 # Vector insert throughput
 rate(ogx_vector_io_inserts_total[5m])

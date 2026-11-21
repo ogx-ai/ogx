@@ -35,14 +35,18 @@ class TestProviderErrorRecording:
     """
 
     def test_provider_rejects_invalid_base64_image(self, openai_client, text_model_id):
-        """A malformed base64 image triggers a provider-level BadRequestError.
+        """A malformed base64 image triggers a provider-level error.
 
         This request passes through OGX to the inference provider, which
         rejects the invalid image data. The recording system captures this
         provider exception so that replay mode reproduces the exact same error.
         """
-        if "llama3.2:3b-instruct-fp16" not in text_model_id:
-            pytest.skip("Error recording only available for ollama/llama3.2:3b-instruct-fp16")
+        # llama.cpp servers without an mmproj adapter reject all image input
+        # (500 "image input is not supported"), so there is no invalid-image
+        # rejection to record. TODO: remove this skip once the llama-cpp-server
+        # lane serves an image-capable model, and re-record.
+        if (text_model_id or "").startswith("llama-cpp-server/"):
+            pytest.skip("llama-cpp-server does not support image input; nothing to record")
 
         with pytest.raises(BadRequestError) as exc_info:
             openai_client.chat.completions.create(

@@ -87,6 +87,8 @@ runs:
     - name: Setup vllm
       if: ${{ startsWith(inputs.setup, 'vllm') && inputs.inference-mode != 'replay' }}
       uses: ./.github/actions/setup-vllm
+      with:
+        suite: ${{ inputs.suite }}
 
     - name: Setup sglang
       if: ${{ startsWith(inputs.setup, 'sglang') && inputs.inference-mode != 'replay' }}

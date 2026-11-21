@@ -51,7 +51,7 @@ from ogx.core.utils.config_dirs import migrate_legacy_config_dir
 from ogx.core.utils.config_resolution import resolve_config_or_distro
 from ogx.log import LoggingConfig, get_logger, parse_yaml_config, setup_logging
 from ogx_api import Api, ConflictError, ResourceNotFoundError
-from ogx_api.common.errors import OpenAIErrorResponse
+from ogx_api.common.errors import OGXError, OpenAIErrorResponse
 
 from .auth import AuthenticationMiddleware, RouteAuthorizationMiddleware, TenancyMiddleware
 from .metrics import RequestMetricsMiddleware
@@ -132,7 +132,10 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         http_exc = HTTPException(status_code=httpx2.codes.BAD_REQUEST, detail=str(exc))
 
     return JSONResponse(
-        status_code=http_exc.status_code, content=OpenAIErrorResponse.from_message(http_exc.detail).to_dict()
+        status_code=http_exc.status_code,
+        content=OpenAIErrorResponse.from_message(
+            http_exc.detail, code=exc.code if isinstance(exc, OGXError) else None
+        ).to_dict(),
     )
 
 

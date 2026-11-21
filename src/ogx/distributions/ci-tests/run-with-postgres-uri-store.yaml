@@ -12,6 +12,7 @@ apis:
 - systemone
 - tool_runtime
 - vector_io
+- web_search
 providers:
   inference:
   - provider_id: ${env.CEREBRAS_API_KEY:+cerebras}
@@ -32,6 +33,7 @@ providers:
       network:
         tls:
           verify: ${env.VLLM_TLS_VERIFY:=true}
+        timeout: ${env.VLLM_TIMEOUT:=300}
   - provider_id: ${env.SGLANG_URL:+sglang}
     provider_type: remote::sglang
     config:
@@ -126,6 +128,12 @@ providers:
     provider_type: remote::text-embeddings-inference
     config:
       base_url: ${env.TEI_URL:=http://localhost:8080/v1}
+  - provider_id: ${env.DEEPSEEK_API_KEY:+deepseek}
+    provider_type: remote::deepseek
+    config:
+      base_url: ${env.DEEPSEEK_BASE_URL:=https://api.deepseek.com/v1}
+      anthropic_base_url: ${env.DEEPSEEK_ANTHROPIC_BASE_URL:=https://api.deepseek.com/anthropic}
+      api_key: ${env.DEEPSEEK_API_KEY:=}
   vector_io:
   - provider_id: faiss
     provider_type: inline::faiss
@@ -251,32 +259,6 @@ providers:
         namespace: skills
         backend: kv_default
   tool_runtime:
-  - provider_id: exa-search
-    provider_type: remote::exa-search
-    config:
-      api_key: ${env.EXA_API_KEY:=}
-      max_results: 3
-  - provider_id: brave-search
-    provider_type: remote::brave-search
-    config:
-      api_key: ${env.BRAVE_SEARCH_API_KEY:=}
-      max_results: 3
-  - provider_id: tavily-search
-    provider_type: remote::tavily-search
-    config:
-      api_key: ${env.TAVILY_SEARCH_API_KEY:=}
-      max_results: 3
-  - provider_id: nimble-search
-    provider_type: remote::nimble-search
-    config:
-      api_key: ${env.NIMBLE_API_KEY:=}
-      max_results: 3
-      search_depth: lite
-  - provider_id: serply-search
-    provider_type: remote::serply-search
-    config:
-      api_key: ${env.SERPLY_API_KEY:=}
-      max_results: 3
   - provider_id: file-search
     provider_type: inline::file-search
   - provider_id: model-context-protocol
@@ -294,6 +276,9 @@ providers:
     config:
       base_url: ${env.TYPESAFE_BASE_URL:=https://api.typesafe.ai}
       api_key: ${env.TYPESAFE_API_KEY:=}
+  web_search:
+  - provider_id: placeholder
+    provider_type: inline::placeholder
 storage:
   backends:
     kv_default:
@@ -422,6 +407,7 @@ vector_stores:
   file_ingestion_params:
     default_chunk_size_tokens: 512
     default_chunk_overlap_tokens: 128
+    embedding_batch_size: 256
   chunk_retrieval_params:
     chunk_multiplier: 5
     max_tokens_in_context: 4000

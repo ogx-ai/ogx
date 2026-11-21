@@ -186,7 +186,7 @@ def make_overlapped_chunks(
         toks = tokens[i : i + window_len]
         chunk = encoding.decode(toks)
         chunk_window = f"{i}-{i + len(toks)}"
-        chunk_id = generate_chunk_id(chunk, text, chunk_window)
+        chunk_id = generate_chunk_id(document_id=document_id, chunk_text=chunk, chunk_window=chunk_window)
         chunk_metadata = metadata.copy()
         chunk_metadata["chunk_id"] = chunk_id
         chunk_metadata["document_id"] = document_id
@@ -215,6 +215,11 @@ def make_overlapped_chunks(
                 chunk_metadata=backend_chunk_metadata,
             )
         )
+
+        # Once a window reaches the end of the text, a further step would only
+        # repeat tokens this window already holds.
+        if i + window_len >= len(tokens):
+            break
 
     return chunks
 
@@ -380,8 +385,13 @@ class VectorStoreWithIndex:
                     dimensions=params.get("embedding_dimensions"),
                 )
             else:
+                # The query must be embedded at the store's dimension, otherwise
+                # search fails (e.g. a 1536-dim default query against a 768-dim
+                # FAISS index).
                 embeddings_request = OpenAIEmbeddingsRequestWithExtraBody(
-                    model=self.vector_store.embedding_model, input=[query_string]
+                    model=self.vector_store.embedding_model,
+                    input=[query_string],
+                    dimensions=self.vector_store.embedding_dimension,
                 )
             embeddings_response = await self.inference_api.openai_embeddings(embeddings_request)
             np = _get_numpy()

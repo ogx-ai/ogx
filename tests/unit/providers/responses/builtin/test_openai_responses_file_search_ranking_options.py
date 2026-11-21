@@ -49,8 +49,6 @@ async def test_file_search_forwards_ranking_options_weights(mock_vector_io_api):
         data=[],
     )
     tool_executor = ToolExecutor(
-        tool_groups_api=None,  # type: ignore
-        tool_runtime_api=None,  # type: ignore
         vector_io_api=mock_vector_io_api,
         vector_stores_config=VectorStoresConfig(),
         mcp_session_manager=None,
@@ -83,8 +81,6 @@ async def test_file_search_forwards_hybrid_search(mock_vector_io_api):
         data=[],
     )
     tool_executor = ToolExecutor(
-        tool_groups_api=None,  # type: ignore
-        tool_runtime_api=None,  # type: ignore
         vector_io_api=mock_vector_io_api,
         vector_stores_config=vector_stores_config,
         mcp_session_manager=None,
@@ -183,8 +179,6 @@ def _hybrid_search_file_search_tool() -> OpenAIResponseInputToolFileSearch:
 
 def _tool_executor(mock_vector_io_api) -> ToolExecutor:
     return ToolExecutor(
-        tool_groups_api=None,  # type: ignore
-        tool_runtime_api=None,  # type: ignore
         vector_io_api=mock_vector_io_api,
         vector_stores_config=VectorStoresConfig(),
         mcp_session_manager=None,

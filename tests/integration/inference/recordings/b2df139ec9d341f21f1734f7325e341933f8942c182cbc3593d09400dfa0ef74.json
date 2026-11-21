@@ -1,0 +1,59 @@
+{
+  "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_score[judge=sglang/togethercomputer/Tev1-0.8B-experimental]",
+  "request": {
+    "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_score[judge=sglang/togethercomputer/Tev1-0.8B-experimental]",
+    "url": "http://localhost:30000/v1/systemone",
+    "method": "POST",
+    "payload": {
+      "state": "The agent was slightly rude but did resolve the issue.",
+      "model": "togethercomputer/Tev1-0.8B-experimental",
+      "questions": {
+        "quality": {
+          "type": "score",
+          "instructions": "Rate the quality of the interaction.",
+          "criteria": [
+            "Unacceptable",
+            "Poor",
+            "Acceptable",
+            "Good",
+            "Excellent"
+          ]
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "togethercomputer/Tev1-0.8B-experimental",
+      "answers": {
+        "quality": {
+          "type": "score",
+          "score": 2.766123565416785,
+          "confidence": 0.4918500163998677,
+          "legend": {
+            "0": "Unacceptable",
+            "1": "Poor",
+            "2": "Acceptable",
+            "3": "Good",
+            "4": "Excellent"
+          },
+          "probabilities": {
+            "0": 0.009357567765663839,
+            "1": 0.04193770918032341,
+            "2": 0.30988008579404863,
+            "3": 0.45087286439149243,
+            "4": 0.18795177286847176
+          },
+          "x_label_mass": 0.998725325827507
+        }
+      },
+      "usage": {
+        "input_tokens": 65,
+        "output_tokens": 0
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

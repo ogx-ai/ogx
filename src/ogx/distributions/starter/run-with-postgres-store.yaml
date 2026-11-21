@@ -31,6 +31,7 @@ providers:
       network:
         tls:
           verify: ${env.VLLM_TLS_VERIFY:=true}
+        timeout: ${env.VLLM_TIMEOUT:=300}
   - provider_id: ${env.SGLANG_URL:+sglang}
     provider_type: remote::sglang
     config:
@@ -244,6 +245,7 @@ providers:
   - provider_id: brave-search
     provider_type: remote::brave-search
     config:
+      base_url: ${env.BRAVE_SEARCH_BASE_URL:=https://api.search.brave.com}
       api_key: ${env.BRAVE_SEARCH_API_KEY:=}
       max_results: 3
   - provider_id: tavily-search
@@ -261,6 +263,11 @@ providers:
     provider_type: remote::serply-search
     config:
       api_key: ${env.SERPLY_API_KEY:=}
+      max_results: 3
+  - provider_id: searchapi-search
+    provider_type: remote::searchapi-search
+    config:
+      api_key: ${env.SEARCHAPI_API_KEY:=}
       max_results: 3
   - provider_id: file-search
     provider_type: inline::file-search
@@ -377,6 +384,7 @@ vector_stores:
   file_ingestion_params:
     default_chunk_size_tokens: 512
     default_chunk_overlap_tokens: 128
+    embedding_batch_size: 256
   chunk_retrieval_params:
     chunk_multiplier: 5
     max_tokens_in_context: 4000

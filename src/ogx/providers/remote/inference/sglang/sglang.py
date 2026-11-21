@@ -41,13 +41,13 @@ from .config import SGLangInferenceAdapterConfig
 
 log = get_logger(name=__name__, category="inference::sglang")
 
-# Decision checkpoints SGLang answers on /v1/systemone through their own readout: the Clef
-# family (joint schema head) and PPLX-Decider (decision_config.json). SGLang's /v1/models
+# Clef and PPLX-Decider use their own decision readout; Tev1 uses SGLang's normal
+# next-token scoring path on /v1/systemone. SGLang's /v1/models
 # exposes no capabilities and the served id is normally the HuggingFace path, so the last
 # path segment is matched by name. SGLang also scores the answer labels of any chat model
 # on /v1/systemone; such a model can be registered under ModelType.systemone explicitly.
-_SYSTEMONE_MODEL_NAMES = frozenset({"clef", "clef-flash", "clef-omni"})
-_SYSTEMONE_MODEL_PREFIXES = ("pplx-decider",)
+_SYSTEMONE_MODEL_NAMES = frozenset({"clef", "clef-flash", "clef-omni", "tev1"})
+_SYSTEMONE_MODEL_PREFIXES = ("pplx-decider", "tev1-")
 
 
 def _is_systemone_model(identifier: str) -> bool:

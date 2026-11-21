@@ -1,0 +1,126 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestEdgeCases::test_multiple_tools_with_different_schemas[txt=ollama/qwen3.5:0.8b]",
+  "request": {
+    "method": "POST",
+    "url": "http://0.0.0.0:11434/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3.5:0.8b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Use one of the available tools"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "simple",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "complex",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "$ref": "#/$defs/Complex"
+                }
+              },
+              "$defs": {
+                "Complex": {
+                  "type": "object",
+                  "properties": {
+                    "nested": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "with_output",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "input": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3.5:0.8b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-c2c915faf67b",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "I don't have a specific tool assigned, but I'll suggest I can use any suitable tool based on your needs. The available tools include \"simple\", \"complex\", and \"with_output\". \n\nSince you're asking me to choose one, could you clarify what you'd like help with?",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning": "The user is saying \"Use one of the available tools\" - this seems like they want me to help them choose or use a tool. However, I don't see any specific context about which tool they want to use or what information they need from me.\n\nLooking at the available tools:\n- simple: Takes a parameter x\n- complex: Contains a structure with \"complex\", \"Nested\" with \"type\", and \"data\" - this looks like something might fit for complex numbers/numerical analysis\n- with_output: This tool takes input and appears to output some result\n\nThe user didn't specify what they want help with, so I should be honest about this. I don't have specific context that would require using any particular tool. However, since the tool names given are generic (simple, complex, with_output), I might need to think more carefully about what information I can provide or what tools could be most helpful for various tasks.\n\nActually, looking at the \"complex\" parameter structure, it shows nested data type with arrays and numeric values - this looks like it might be suitable for mathematical/numerical problems involving complex numbers. The structure is:\n```json\n{\n  \"data\": {},\n  \"type\": \"array\",\n  \"items\": {\"type\": \"number\"},\n  \"properties\": {\n    \"description\": null,\n    \"nested_fields\": [{\n      \"property\": \"type\",\n      \"value\": [0.5]\n    }],\n    \"values\": {}\n  }\n}\n```\n\nThis doesn't quite align with typical tool usage for me generating responses or performing calculations. I should tell the user that I can use one of these tools but need more information about what specific help they need to get started."
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3.5:0.8b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "fp_ollama",
+        "usage": {
+          "completion_tokens": 430,
+          "prompt_tokens": 363,
+          "total_tokens": 793,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

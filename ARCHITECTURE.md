@@ -48,7 +48,7 @@ External Service or Local Computation
 
 ### Detailed Flow Example: Chat Completion
 
-1. Client sends `POST /v1/chat/completions` with `model: "ollama/llama3.2:3b-instruct-fp16"`.
+1. Client sends `POST /v1/chat/completions` with `model: "ollama/qwen3.5:0.8b"`.
 2. `server.py` dispatches to the inference FastAPI router.
 3. The `InferenceRouter` (`core/routers/inference.py`) calls `routing_table.get_provider_impl(model_id)`.
 4. `CommonRoutingTableImpl` looks up the model in `DistributionRegistry`, finds it belongs to provider `ollama`.
@@ -107,11 +107,11 @@ Api.models (RoutingTable)  <-->  Api.inference (Router)
 
 The full list of auto-routed pairs is defined in `builtin_automatically_routed_apis()` in `core/distribution.py`:
 
-| Routing Table API   | Router API         |
-|---------------------|--------------------|
-| `Api.models`        | `Api.inference`    |
-| `Api.tool_groups`   | `Api.tool_runtime` |
-| `Api.vector_stores` | `Api.vector_io`    |
+| Routing Table API      | Router API         |
+|------------------------|--------------------|
+| `Api.models`           | `Api.inference`    |
+| `Api.vector_stores`    | `Api.vector_io`    |
+| `Api.web_search_providers` | `Api.web_search` |
 
 ## The API Layer (`ogx_api`)
 

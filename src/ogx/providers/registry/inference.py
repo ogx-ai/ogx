@@ -27,7 +27,7 @@ def available_providers() -> list[ProviderSpec]:
             pip_packages=[
                 "torch torchvision torchao>=0.12.0 --extra-index-url https://download.pytorch.org/whl/cpu",
                 # Floor must match the `starter` extra in pyproject.toml -- update both
-                "sentence-transformers>=6.0.0",  # we installed cpu versions of pytorch so sentence-transformers doesn't pull in cuda deps
+                "sentence-transformers>=6.2.0",  # we installed cpu versions of pytorch so sentence-transformers doesn't pull in cuda deps
                 # required by some SentenceTransformers architectures for tensor rearrange/merge ops
                 "einops",
                 # fast HF tokenization backend used by SentenceTransformers models
@@ -73,7 +73,7 @@ def available_providers() -> list[ProviderSpec]:
             api=Api.inference,
             adapter_type="ollama",
             provider_type="remote::ollama",
-            pip_packages=["ollama", "aiohttp", "h11>=0.16.0", "typesafe-sdk>=0.7.2"],
+            pip_packages=["ollama", "aiohttp", "h11>=0.16.0", "typesafe-sdk>=0.7.5"],
             config_class="ogx.providers.remote.inference.ollama.OllamaImplConfig",
             module="ogx.providers.remote.inference.ollama",
             description="Ollama inference provider for running local models through the Ollama runtime.",
@@ -82,7 +82,7 @@ def available_providers() -> list[ProviderSpec]:
             api=Api.inference,
             adapter_type="vllm",
             provider_type="remote::vllm",
-            pip_packages=[],
+            pip_packages=["typesafe-sdk>=0.7.5"],
             module="ogx.providers.remote.inference.vllm",
             config_class="ogx.providers.remote.inference.vllm.VLLMInferenceAdapterConfig",
             provider_data_validator="ogx.providers.remote.inference.vllm.VLLMProviderDataValidator",
@@ -92,7 +92,7 @@ def available_providers() -> list[ProviderSpec]:
             api=Api.inference,
             adapter_type="sglang",
             provider_type="remote::sglang",
-            pip_packages=["typesafe-sdk>=0.7.2"],
+            pip_packages=["typesafe-sdk>=0.7.5"],
             module="ogx.providers.remote.inference.sglang",
             config_class="ogx.providers.remote.inference.sglang.SGLangInferenceAdapterConfig",
             provider_data_validator="ogx.providers.remote.inference.sglang.SGLangProviderDataValidator",
@@ -113,7 +113,7 @@ def available_providers() -> list[ProviderSpec]:
             adapter_type="together",
             provider_type="remote::together",
             pip_packages=[
-                "together>=2.34.0",
+                "together>=2.36.0",
             ],
             module="ogx.providers.remote.inference.together",
             config_class="ogx.providers.remote.inference.together.TogetherImplConfig",
@@ -266,16 +266,6 @@ Short names like vertexai/gemini-2.5-flash also work in API requests.""",
         ),
         RemoteProviderSpec(
             api=Api.inference,
-            adapter_type="passthrough",
-            provider_type="remote::passthrough",
-            pip_packages=[],
-            module="ogx.providers.remote.inference.passthrough",
-            config_class="ogx.providers.remote.inference.passthrough.PassthroughImplConfig",
-            provider_data_validator="ogx.providers.remote.inference.passthrough.PassthroughProviderDataValidator",
-            description="Passthrough inference provider for connecting to any external inference service not directly supported.",
-        ),
-        RemoteProviderSpec(
-            api=Api.inference,
             adapter_type="watsonx",
             provider_type="remote::watsonx",
             pip_packages=[],
@@ -325,7 +315,7 @@ https://docs.oracle.com/en-us/iaas/Content/generative-ai/home.htm
             api=Api.inference,
             adapter_type="llama-cpp-server",
             provider_type="remote::llama-cpp-server",
-            pip_packages=["typesafe-sdk>=0.7.2"],
+            pip_packages=["typesafe-sdk>=0.7.5"],
             module="ogx.providers.remote.inference.llama_cpp_server",
             config_class="ogx.providers.remote.inference.llama_cpp_server.config.LlamaCppServerConfig",
             description="llama.cpp inference provider for connecting to llama.cpp servers with OpenAI-compatible API.",
@@ -334,7 +324,7 @@ https://docs.oracle.com/en-us/iaas/Content/generative-ai/home.htm
             api=Api.inference,
             adapter_type="typesafe",
             provider_type="remote::typesafe",
-            pip_packages=["typesafe-sdk>=0.7.2"],
+            pip_packages=["typesafe-sdk>=0.7.5"],
             module="ogx.providers.remote.inference.typesafe",
             config_class="ogx.providers.remote.inference.typesafe.config.TypeSafeConfig",
             provider_data_validator="ogx.providers.remote.inference.typesafe.config.TypeSafeProviderDataValidator",

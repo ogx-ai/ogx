@@ -173,8 +173,6 @@ INTENTIONAL_FIELD_DIVERGENCES: dict[tuple[str, str], str] = {
     ("InputMessage", "id"): "OGX merges InputMessage and InputMessageResource into one model",
     # WebSearchToolCall has extra fields in spec that OGX omits
     ("WebSearchToolCall", "action"): "OGX does not surface search action details",
-    # FunctionToolCall has namespace in spec, OGX omits it
-    ("FunctionToolCall", "namespace"): "OGX does not support function namespaces",
     # OutputMessage has phase field in spec, OGX omits it
     ("OutputMessage", "phase"): "OGX does not support message phases",
     # OpenAI MCP tool has additional fields OGX handles differently

@@ -8,10 +8,11 @@
 import time
 
 import pytest
-from openai import OpenAI
 from pydantic import BaseModel
 
-from ..helpers import assert_text_contains, provider_from_model
+from ogx.providers.utils.inference.models_dev_registry import supports_reasoning
+
+from ..helpers import assert_text_contains, is_ollama_reasoning_model, provider_from_model
 from ..test_cases.test_case import TestCase
 
 
@@ -61,6 +62,9 @@ def skip_if_doesnt_support_completions_logprobs(client_with_models, model_id):
         # boolean logprobs + top_logprobs, returning a non-OAI {"content": [...]} shape.
         # Integer logprobs=N (what these tests send) isn't honored at all.
         "remote::llama-cpp-server",
+        # SGLang can return fewer than logprobs=N entries or omit the sampled token.
+        # Revisit when its top_logprobs satisfy the shared completions contract.
+        "remote::sglang",
     ):
         pytest.skip(f"Model {model_id} hosted by {provider_type} doesn't support /v1/completions logprobs.")
 
@@ -162,6 +166,39 @@ def skip_if_doesnt_support_json_schema(client_with_models, model_id):
         pytest.skip(f"Model {model_id} hosted by {provider.provider_type} doesn't support json_schema response_format.")
 
 
+def reasoning_effort_steering(model_id):
+    """Explicit reasoning-effort steering for chat-completion tests on reasoning models.
+
+    Models that reason by default apply their own medium reasoning effort
+    when the caller sends none; on the CPU record runners that rambles past
+    the client timeout even for trivial prompts. These tests assert on answer
+    content, not reasoning, so they set the effort explicitly (tests that
+    exercise reasoning set it themselves).
+    """
+    if supports_reasoning(model_id):
+        return {"reasoning_effort": "low"}
+    return {}
+
+
+_OLLAMA_REASONING_COMPLETION_MAX_TOKENS = 8192
+
+
+def ollama_reasoning_completion_max_tokens(client_with_models, model_id, default):
+    """Token budget for legacy /v1/completions requests to Ollama thinking models.
+
+    That endpoint has no reasoning-effort parameter, so the model's default
+    medium reasoning runs first and must fit in the budget alongside the
+    answer: with the small default budget the reasoning exhausts it (and the
+    server-side context) and the response comes back with empty content. The
+    raised budget also makes ollama grow the context to fit it, so the answer
+    is generated after the reasoning. At ~12 tok/s on the CPU record runners
+    these requests take minutes, so the lane raises OGX_CLIENT_TIMEOUT.
+    """
+    if is_ollama_reasoning_model(client_with_models, model_id):
+        return _OLLAMA_REASONING_COMPLETION_MAX_TOKENS
+    return default
+
+
 @pytest.mark.parametrize(
     "test_case",
     [
@@ -178,6 +215,7 @@ def test_openai_completion_non_streaming(ogx_client, client_with_models, text_mo
         model=text_model_id,
         prompt=prompt,
         stream=False,
+        max_tokens=ollama_reasoning_completion_max_tokens(client_with_models, text_model_id, None),
     )
     assert len(response.choices) > 0
     choice = response.choices[0]
@@ -227,7 +265,7 @@ def test_openai_completion_streaming(ogx_client, client_with_models, text_model_
         model=text_model_id,
         prompt=prompt,
         stream=True,
-        max_tokens=50,
+        max_tokens=ollama_reasoning_completion_max_tokens(client_with_models, text_model_id, 50),
     )
     # Without include_usage every chunk must carry a choice.
     streamed_content = []
@@ -269,7 +307,7 @@ def test_openai_completion_streaming_with_usage(ogx_client, client_with_models, 
         model=text_model_id,
         prompt=prompt,
         stream=True,
-        max_tokens=50,
+        max_tokens=ollama_reasoning_completion_max_tokens(client_with_models, text_model_id, 50),
         stream_options={"include_usage": True},
     )
     streamed_content = []
@@ -335,8 +373,8 @@ def test_openai_chat_completion_non_streaming(compat_client, client_with_models,
     question = tc["question"]
     expected = tc["expected"]
 
-    # The generated OGX client's create() does not accept a timeout keyword.
-    request_options = {"timeout": 120} if isinstance(compat_client, OpenAI) else {}
+    # No per-request timeout: it would override the client-level timeout,
+    # which scripts/integration-tests.sh raises per lane via OGX_CLIENT_TIMEOUT.
     response = compat_client.chat.completions.create(
         model=text_model_id,
         messages=[
@@ -346,7 +384,7 @@ def test_openai_chat_completion_non_streaming(compat_client, client_with_models,
             }
         ],
         stream=False,
-        **request_options,
+        **reasoning_effort_steering(text_model_id),
     )
     message_content = response.choices[0].message.content
     assert len(message_content) > 0
@@ -366,13 +404,11 @@ def test_openai_chat_completion_streaming(compat_client, client_with_models, tex
     question = tc["question"]
     expected = tc["expected"]
 
-    # The generated OGX client's create() does not accept a timeout keyword.
-    request_options = {"timeout": 120} if isinstance(compat_client, OpenAI) else {}
     response = compat_client.chat.completions.create(
         model=text_model_id,
         messages=[{"role": "user", "content": question}],
         stream=True,
-        **request_options,
+        **reasoning_effort_steering(text_model_id),
     )
     streamed_content = []
     for chunk in response:
@@ -398,14 +434,12 @@ def test_openai_chat_completion_streaming_with_n(compat_client, client_with_mode
     question = tc["question"]
     expected = tc["expected"]
 
-    # The generated OGX client's create() does not accept a timeout keyword.
-    request_options = {"timeout": 120} if isinstance(compat_client, OpenAI) else {}
     response = compat_client.chat.completions.create(
         model=text_model_id,
         messages=[{"role": "user", "content": question}],
         stream=True,
         n=2,
-        **request_options,
+        **reasoning_effort_steering(text_model_id),
     )
     streamed_content = {}
     chunks_per_index = {}
@@ -448,6 +482,7 @@ def test_inference_store(compat_client, client_with_models, text_model_id, strea
             }
         ],
         stream=stream,
+        **reasoning_effort_steering(text_model_id),
     )
     if stream:
         # accumulate the streamed content
@@ -547,6 +582,7 @@ def test_inference_store_tool_calls(compat_client, client_with_models, text_mode
             }
         ],
         stream=stream,
+        **reasoning_effort_steering(text_model_id),
         tools=[
             {
                 "type": "function",
@@ -816,6 +852,7 @@ def test_openai_chat_completion_with_tools(openai_client, text_model_id, test_ca
         tools=tc["tools"],
         tool_choice="auto",
         stream=False,
+        **reasoning_effort_steering(text_model_id),
     )
     assert len(response.choices) == 1
     assert len(response.choices[0].message.tool_calls) == 1
@@ -840,6 +877,7 @@ def test_openai_chat_completion_with_tools_and_streaming(openai_client, text_mod
         tools=tc["tools"],
         tool_choice="auto",
         stream=True,
+        **reasoning_effort_steering(text_model_id),
     )
     # Accumulate tool calls from streaming chunks
     tool_calls = []
@@ -874,6 +912,7 @@ def test_openai_chat_completion_with_tool_choice_none(openai_client, text_model_
         tools=tc["tools"],
         tool_choice="none",
         stream=False,
+        **reasoning_effort_steering(text_model_id),
     )
     assert len(response.choices) == 1
     tool_calls = response.choices[0].message.tool_calls
@@ -907,6 +946,7 @@ def test_openai_chat_completion_structured_output(openai_client, client_with_mod
             },
         },
         stream=False,
+        **reasoning_effort_steering(text_model_id),
     )
     print(response.choices[0].message.content)
     answer = AnswerFormat.model_validate_json(response.choices[0].message.content)

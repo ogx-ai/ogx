@@ -32,6 +32,12 @@ def skip_if_reasoning_content_not_provided(client_with_models, text_model_id):
         pytest.skip(f"{provider_type} doesn't return reasoning content.")
 
 
+def skip_if_reasoning_summary_not_supported(client_with_models, text_model_id):
+    provider_type = provider_from_model(client_with_models, text_model_id).provider_type
+    if provider_type == "remote::ollama":
+        pytest.skip(f"{provider_type} doesn't support reasoning summaries.")
+
+
 def test_reasoning_basic_streaming(client_with_models, text_model_id):
     """Test handling of reasoning content in streaming responses."""
 
@@ -152,6 +158,7 @@ def test_reasoning_summary_streaming(client_with_models, text_model_id, summary_
     """Test that reasoning summary is attached to the reasoning item in streaming mode."""
 
     skip_if_reasoning_content_not_provided(client_with_models, text_model_id)
+    skip_if_reasoning_summary_not_supported(client_with_models, text_model_id)
 
     stream = client_with_models.responses.create(
         model=text_model_id,
@@ -186,6 +193,7 @@ def test_reasoning_summary_non_streaming(client_with_models, text_model_id):
     """Test that reasoning summary appears in non-streaming response output."""
 
     skip_if_reasoning_content_not_provided(client_with_models, text_model_id)
+    skip_if_reasoning_summary_not_supported(client_with_models, text_model_id)
 
     response = client_with_models.responses.create(
         model=text_model_id,
@@ -211,6 +219,7 @@ def test_reasoning_summary_event_ordering(client_with_models, text_model_id):
     """Verify that the reasoning item's OutputItemDone carries the summary and comes after OutputItemAdded."""
 
     skip_if_reasoning_content_not_provided(client_with_models, text_model_id)
+    skip_if_reasoning_summary_not_supported(client_with_models, text_model_id)
 
     stream = client_with_models.responses.create(
         model=text_model_id,
@@ -276,6 +285,7 @@ def test_reasoning_summary_usage_included(client_with_models, text_model_id):
     """Test that token usage in the final response includes tokens from the summary inference call."""
 
     skip_if_reasoning_content_not_provided(client_with_models, text_model_id)
+    skip_if_reasoning_summary_not_supported(client_with_models, text_model_id)
 
     response = client_with_models.responses.create(
         model=text_model_id,

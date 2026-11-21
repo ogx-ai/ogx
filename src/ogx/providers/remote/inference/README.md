@@ -20,7 +20,6 @@ inference/
   oci/                      # Oracle Cloud Infrastructure GenAI
   ollama/                   # Ollama (local model serving, including SystemOne decision models)
   openai/                   # OpenAI API
-  passthrough/              # Generic passthrough to any endpoint
   runpod/                   # RunPod cloud GPU
   sambanova/                # SambaNova
   sglang/                   # SGLang inference server (serves llm, embedding, and SystemOne decision models)
@@ -29,7 +28,7 @@ inference/
   together/                 # Together AI
   typesafe/                 # TypeSafe SystemOne (judgment) models
   vertexai/                 # Google Vertex AI
-  vllm/                     # vLLM inference server
+  vllm/                     # vLLM inference server (serves llm, embedding, and SystemOne decision models)
   watsonx/                  # IBM WatsonX
   __init__.py
 ```

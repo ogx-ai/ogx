@@ -157,7 +157,7 @@ async def test_preserve_contexts_across_event_loops():
 async def test_preserve_contexts_restores_caller_on_cancellation() -> None:
     context_var = ContextVar("cancelled_stream", default="caller")
 
-    async def source() -> AsyncGenerator[str, None]:
+    async def source() -> AsyncGenerator[str]:
         await asyncio.sleep(10)
         yield context_var.get()
 

@@ -21,14 +21,14 @@ describe('Inference API - Chat Completions', () => {
       question: 'Which planet do humans live on?',
       expected: 'earth',
       testId:
-        'tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=ollama/llama3.2:3b-instruct-fp16-inference:chat_completion:non_streaming_01]',
+        'tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=ollama/qwen3.5:0.8b-inference:chat_completion:non_streaming_01]',
     },
     {
       id: 'non_streaming_02',
       question: 'Which planet has rings around it with a name starting with letter S?',
       expected: 'saturn',
       testId:
-        'tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=ollama/llama3.2:3b-instruct-fp16-inference:chat_completion:non_streaming_02]',
+        'tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=ollama/qwen3.5:0.8b-inference:chat_completion:non_streaming_02]',
     },
   ];
 
@@ -38,14 +38,14 @@ describe('Inference API - Chat Completions', () => {
       question: "What's the name of the Sun in latin?",
       expected: 'sol',
       testId:
-        'tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_streaming[client_with_models-txt=ollama/llama3.2:3b-instruct-fp16-inference:chat_completion:streaming_01]',
+        'tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_streaming[client_with_models-txt=ollama/qwen3.5:0.8b-inference:chat_completion:streaming_01]',
     },
     {
       id: 'streaming_02',
       question: 'What is the name of the US captial?',
       expected: 'washington',
       testId:
-        'tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_streaming[client_with_models-txt=ollama/llama3.2:3b-instruct-fp16-inference:chat_completion:streaming_02]',
+        'tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_streaming[client_with_models-txt=ollama/qwen3.5:0.8b-inference:chat_completion:streaming_02]',
     },
   ];
 

@@ -1,0 +1,54 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_stop_sequences[txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_stop_sequences[txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b]",
+    "url": "https://api.fireworks.ai/inference/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Count: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10"
+        }
+      ],
+      "max_tokens": 128,
+      "stream": false,
+      "stop_sequences": [
+        ","
+      ],
+      "thinking": {
+        "type": "disabled"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "content": [
+        {
+          "type": "text",
+          "text": "The count is 10."
+        }
+      ],
+      "id": "msg_ec2826c7b3e3e02693c97319",
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "role": "assistant",
+      "stop_details": null,
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "type": "message",
+      "usage": {
+        "input_tokens": 48,
+        "output_tokens": 8,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": null,
+        "service_tier": null,
+        "inference_geo": null
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}
