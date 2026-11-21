@@ -1,0 +1,26 @@
+---
+description: "Bing Search backend for the web_search API."
+sidebar_label: Remote - Bing-Search
+title: remote::bing-search
+---
+
+# remote::bing-search
+
+## Description
+
+Bing Search backend for the web_search API.
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `timeout` | `float` | No | 30.0 | Overall HTTP timeout in seconds for requests to external services. |
+| `connect_timeout` | `float` | No | 10.0 | TCP connect timeout in seconds. Shorter than the overall timeout to fail fast on unreachable hosts. |
+| `api_key` | `SecretStr \| None` | No |  | The Bing Search API Key. Can be overridden per-request via X-OGX-Provider-Data header. |
+| `top_k` | `int` | No | 3 | The maximum number of results to return |
+
+## Sample Configuration
+
+```yaml
+api_key: ${env.BING_API_KEY:=}
+```

@@ -1,0 +1,106 @@
+{
+  "test_id": "tests/integration/web_search/test_web_search.py::test_response_non_streaming_web_search[client_with_models-txt=ollama/qwen3.5:0.8b-web_search_2025_08_26_type]::tavily-search",
+  "request": {
+    "test_id": "tests/integration/web_search/test_web_search.py::test_response_non_streaming_web_search[client_with_models-txt=ollama/qwen3.5:0.8b-web_search_2025_08_26_type]::tavily-search",
+    "url": "https://api.tavily.com/search",
+    "method": "POST",
+    "payload": {
+      "query": "Llama 4 Scout expert count"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "query": "Llama 4 Scout expert count",
+      "follow_up_questions": null,
+      "answer": null,
+      "images": [],
+      "results": [
+        {
+          "url": "https://huggingface.co/shadowlilac/Llama-4-Scout-17B-4E-Instruct",
+          "title": "shadowlilac/Llama-4-Scout-17B-4E-Instruct \u00b7 Hugging Face",
+          "content": "These Llama 4 models mark the beginning of a new era for the Llama ecosystem. We are launching two efficient models in the Llama 4 series, Llama 4 Scout, a 17 billion parameter model with 16 experts, and Llama 4 Maverick, a 17 billion parameter model with 128 experts.\n\nModel developer: Meta\n\nModel Architecture: The Llama 4 models are auto-regressive language models that use a mixture-of-experts (MoE) architecture and incorporate early fusion for native multimodality. [...] ##### Use Docker\n\nHow to use shadowlilac/Llama-4-Scout-17B-4E-Instruct with SGLang:\n\n##### Install from pip and serve model\n\n##### Use Docker images\n\nHow to use shadowlilac/Llama-4-Scout-17B-4E-Instruct with Docker Model Runner:\n\nLlama 4 Scout but with topk=4 experts with dynamic expert fusion. Requires healing via SFT/RLHF to restore performance. Achieves 64.28% MMLU score. Barely fits on a RTX 4090 when quantized to 4bit.\n\n## Model Information [...] The Llama 4 collection of models are natively multimodal AI models that enable text and multimodal experiences. These models leverage a mixture-of-experts architecture to offer industry-leading performance in text and image understanding.",
+          "score": 0.7981868,
+          "raw_content": null,
+          "id": "4ac885-00"
+        },
+        {
+          "url": "https://aiinovationhub.com/meta-llama-4-scout-maverick-open-weight-ai",
+          "title": "Meta Llama 4 Scout Maverick: best game-changing open AI",
+          "content": "Llama 4 Scout (16 Experts): Scout uses a \u201ccoarse-grained\u201d MoE approach with only 16 experts. This design minimizes the complexity of the routing logic and ensures high cache locality. It is optimized for throughput and stability over massive context windows. [...] ### The \u201cAnalyst\u201d Archetype\n\nScout is positioned not as a creative writer, but as a \u201cSystem-Wide Analyst.\u201d Its 16-expert architecture is tuned for stability and retrieval rather than creative flair. [...] This means that when you query Llama 4 Maverick, you are accessing a knowledge base of 400 billion parameters\u2014rivaling the largest proprietary models\u2014but the inference speed is that of a 17 billion parameter model. This is achieved through a Routing Mechanism or Gating Network.\n\n### The Routing Mechanism: 16 vs. 128 Experts\n\nThe divergence between Scout and Maverick lies in the granularity of their experts.",
+          "score": 0.79502225,
+          "raw_content": null,
+          "id": "91a886-01"
+        },
+        {
+          "url": "https://clusterbid.com/blog/llama-4-gpu-requirements-scout-maverick-and-behemoth-hardware-guide-for-2026",
+          "title": "Llama 4 GPU Requirements: Scout, Maverick, and Behemoth Hardware Guide for 2026 | ClusterBid \u00b7 ClusterBid",
+          "content": "The thing that trips up most teams when sizing hardware for Llama 4 GPU requirements: the MoE parameter count is not the inference compute count, but it is still the VRAM count. Scout has 109B parameters organized as 16 experts with 17B active per forward pass. Maverick has 400B parameters across 128 experts, also 17B active. Behemoth carries ~2T parameters with ~288B active per token. You pay the activation cost - but you pay the memory cost of the full parameter count. That gap is what makes [...] Maverick is the same story at 400B total. The 17B active-parameter throughput is available to you on an 8x H200 node, but only if you can fit the full 400B weight matrix across those GPUs. The good news: MoE models tend to be more tolerant of FP8 and INT4 quantization than dense models, because quantization error is isolated to individual experts rather than propagated through the full residual stream.\n\nModel\n\nTotal Parameters\n\nActive Params / Token\n\nScout\n\n109B (16 experts)\n\n17B\n\nMaverick [...] 17B\n\nMaverick\n\n400B (128 experts)\n\n17B\n\nBehemoth\n\n~2T (estimated)\n\n~288B (estimated)\n\n02\n\n## Llama 4 Maverick VRAM and Scout VRAM at FP16, FP8, and INT4",
+          "score": 0.7814974,
+          "raw_content": null,
+          "id": "902baf-02"
+        },
+        {
+          "url": "https://lizeman.github.io/llm-arch-kb/models/llama-4-scout",
+          "title": "Llama 4 Scout \u00b7 LLM Architecture KB",
+          "content": "MoE with shared expert. 16 routed experts plus one always-on shared expert; top-1 routing. The 109B total parameter count includes all experts; only ~17B are active per token. The shared-expert pattern is conceptually adjacent to DeepSeekMoE, though the precise routing recipe is not detailed publicly. [...] |  |  |\n --- |\n| Positional encoding | iRoPE (interleaved RoPE / NoPE-style no-position layers) |\n| Norm placement | Pre-Norm |\n| Norm type | RMSNorm |\n| QK-Norm | no |\n| Activation | SwiGLU |\n| Attention | iRoPE (Llama-4) over GQA |\n| MoE | 16 routed experts + 1 shared expert, top-1 routing | [...] Llama 4 was released without an arXiv tech report; the public information comes from Meta\u2019s announcement post and the Hugging Face model card. Specifics that aren\u2019t in those sources \u2014 exact head/layer/expert counts, FFN expansion ratio, RoPE base values, the precise iRoPE interleaving pattern \u2014 are left out rather than guessed (per the citation policy).\n\nFor prior Llama generations see Llama 1 65B, Llama 2 70B, and Llama 3.1 70B.\n\n## Sources\n\n \n \n\nModels like this",
+          "score": 0.7779754,
+          "raw_content": null,
+          "id": "940035-03"
+        },
+        {
+          "url": "https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct/discussions",
+          "title": "meta-llama/Llama-4-Scout-17B-16E-Instruct \u00b7 Discussions",
+          "content": "#### Gated Repo Permission Still Pending for Llama-4\n\n#### Gated Repo Permission Still Pending for Llama-4\n\n#### Gated Repo Permission Still Pending for Llama-4\n\n#### Gated Repo Permission Still Pending for Llama-4\n\n#### World's Largest Dataset\n\n#### Is it possible to reduce the number of llama4 expert models to use less memory?\n\n#### Does LLama4 have chunked attention in generation phase ?\n\n#### The \"force\\_words\\_ids\" does not seem to be available on llama4\n\n#### Access Rejected [...] Hugging Face's logo\n\n# meta-llama / Llama-4-Scout-17B-16E-Instruct Like 1.37k Follow Meta Llama 87.6k\n\n### Instructions to use meta-llama/Llama-4-Scout-17B-16E-Instruct with libraries, inference providers, notebooks, and local apps. Follow these links to get started.\n\nHow to use meta-llama/Llama-4-Scout-17B-16E-Instruct with Transformers:\n\nHow to use meta-llama/Llama-4-Scout-17B-16E-Instruct with vLLM:\n\n##### Install from pip and serve model\n\n##### Use Docker [...] #### Access request pending for Llama 4 (HF username Rid24)\n\n#### What is the minimum hardware needed to run Llama-4-Scout-17B-16E-Instruct with vLLM?\n\n#### Update README.md\n\n#### Scout as Threshold, Cognition as Cartography\n\n#### Token Count Calculation in SFT Data Distribution Curation\n\n#### ashar\n\n#### Request to Reapply for Access to LLaMA 4 Model\n\n#### Request: DOI\n\n#### test\n\n#### Let's talk about the model\n\n#### Update README.md\n\n#### Access Request\n\n#### Request: DOI",
+          "score": 0.36670312,
+          "raw_content": null,
+          "id": "02c25b-04"
+        },
+        {
+          "url": "https://www.businessinsider.com/meta-llama-4-ai-model-contentious-questions-woke-2025-4",
+          "title": "Meta's Llama 4 Tackles More 'Contentious' Questions Than Before - Business Insider",
+          "content": "The Llama 4 models consist of the Llama 4 Scout, Llama 4 Maverick, and Llama 4 Behemoth. The Llama 4 Scout and Llama 4 Maverick were released on Saturday, while the Llama 4 Behemoth is still training, Meta said.\n\nThe Llama 4 Scout and Llama 4 Maverick were distilled from Llama 4 Behemoth, which Meta said is its \"most powerful yet and among the world's smartest LLMs.\" [...] The Llama 4 models \u2014 including the Llama 4 Scout and Llama 4 Maverick released on Saturday \u2014 are multimodal AI systems, Meta said. Multimodal systems are capable of processing and integrating various types of data, including text, video, images, and audio.\n\nMeta called the Llama 4 Scout and Llama 4 Maverick its \"most advanced models yet,\" noting that both are \"open-weight\" AI models.",
+          "score": 0.35108855,
+          "raw_content": null,
+          "id": "669409-05"
+        },
+        {
+          "url": "https://finance.yahoo.com/news/llama-4-live-day-zero-215100567.html",
+          "title": "Llama 4 Live Day-Zero on Groq at Lowest Cost",
+          "content": "Llama 4 Scout: $0.11 / M input tokens and $0.34 / M output tokens, at a blended rate of $0.13\n Llama 4 Maverick: $0.50 / M input tokens and $0.77 / M output tokens, at a blended rate of $0.53\n\nSee Groq pricing here.\n\nAbout the Models\n\nLlama 4 is Meta's latest open-source model family, featuring Mixture of Experts (MoE) architecture and native multimodality. [...] Llama 4 Scout (17Bx16E): A strong general-purpose model, ideal for summarization, reasoning, and code. Runs at over 460 tokens per second on Groq.\n Llama 4 Maverick (17Bx128E): A larger, more capable model optimized for multilingual and multimodal tasks\u2014great for assistants, chat, and creative applications.\n\nBuild Fast with Llama 4 on GroqCloud\n\nLlama 4 Scout and Maverick are accessible through:\n\n GroqChat\n GroqCloud Developer Console\n Groq API (model IDs available in-console) [...] 2 min read\n\nMOUNTAIN VIEW, Calif., April 5, 2025 /PRNewswire/ -- Groq, the pioneer in AI inference, has launched Meta's Llama 4 Scout and Maverick models, now live on GroqCloud\u2122. Developers and enterprises get day-zero access to the most advanced open-source AI models available.\n\n(PRNewsfoto/Groq)\n\n(PRNewsfoto/Groq)",
+          "score": 0.3260568,
+          "raw_content": null,
+          "id": "4a2e0f-06"
+        },
+        {
+          "url": "https://tools.tokencalculatorai.com/providers/groq/models/llama-4-scout",
+          "title": "Llama 4 Scout (Groq) Token Calculator & Pricing | TokenCalculator",
+          "content": "Verified\n\nOfficial pricing source \u00b7 Open main calculator \u00b7 Cheaper long context models\n\n## Estimate with TokenCalculator\n\nPreselect Llama 4 Scout (Groq)in the calculator to count tokens and project request or monthly cost. Exact vs Approx follows this model's tokenizer family. See theExact vs Approx guide for honesty rules.\n\nEstimate cost for Llama 4 Scout (Groq) \u00b7 Count tokens \u00b7 Pricing guide\n\n## Compare [...] Skip to content\n\nTokenCalculator\n\nRates checked\n\nHome / Providers / Groq / Llama 4 Scout (Groq)\n\n# Llama 4 Scout (Groq)token cost\n\nGroq\u00b7 context 128,000tokens \u00b7 tokenizerApprox\n\nOpen in cost calculator \u00b7 Count tokens \u00b7 Full calculator \u00b7 Official pricing\n\n## When to use Llama 4 Scout (Groq)\n\nLlama 4 Scout on Groq for newer Meta weights at low hosted rates. Trial against 3.3 70B on your quality bar.\n\n## Pricing\n\nInput\n:   $0.110/1M\n\nOutput\n:   $0.340/1M\n\nVerified [...] Official documentation used for definitions, counting methods, or rate cards. Always confirm critical budgets on the provider page.\n\n Groq official pricing",
+          "score": 0.32305968,
+          "raw_content": null,
+          "id": "24de59-07"
+        },
+        {
+          "url": "https://ca.finance.yahoo.com/news/meta-releases-ai-model-llama-200910010.html",
+          "title": "Meta releases new AI model Llama 4",
+          "content": "Reuters\n\n# Meta releases new AI model Llama 4\n\nFILE PHOTO: The logo of Meta is seen at the entrance of the company's temporary stand ahead of WEF in Davos \u00b7 Reuters\n\nReuters\n\n1 min read\n\n(Reuters) - Meta Platforms on Saturday released the latest version of its large language model (LLM) Llama, called the Llama 4 Scout and Llama 4 Maverick. [...] Meta added that Llama 4 Maverick and Llama 4 Scout will be open source software. It also said it was previewing Llama 4 Behemoth, which it called \"one of the smartest LLMs in the world and our most powerful yet to serve as a teacher for our new models.\"\n\nBig technology firms have been investing aggressively in artificial intelligence (AI) infrastructure following the success of OpenAI's ChatGPT, which altered the tech landscape and drove investment into machine learning. [...] Meta said Llama is a multimodal AI system. Multimodal systems are capable of processing and integrating various types of data including text, video, images and audio, and can convert content across these formats.\n\nMeta said in a statement that the Llama 4 Scout and Llama 4 Maverick are its \"most advanced models yet\" and \"the best in their class for multimodality.\"",
+          "score": 0.30218512,
+          "raw_content": null,
+          "id": "bc666e-08"
+        },
+        {
+          "url": "https://www.investing.com/news/stock-market-news/meta-releases-new-ai-model-llama-4-3969486",
+          "title": "Meta releases new AI model Llama 4 By Reuters",
+          "content": "\u00a9 Reuters. FILE PHOTO: The logo of Meta is seen at the entrance of the company's temporary stand in Davos, Switzerland January 18, 2025. REUTERS/Yves Herman/File Photo\n\nIn this article:\n\nMETA-2.38%\n\n(Reuters) - Meta Platforms (NASDAQ:META) on Saturday released the latest version of its large language model (LLM) Llama, called the Llama 4 Scout and Llama 4 Maverick. [...] Meta added that Llama 4 Maverick and Llama 4 Scout will be open source software. It also said it was previewing Llama 4 Behemoth, which it called \"one of the smartest LLMs in the world and our most powerful yet to serve as a teacher for our new models.\"\n\nBig technology firms have been investing aggressively in artificial intelligence (AI) infrastructure following the success of OpenAI\u2019s ChatGPT, which altered the tech landscape and drove investment into machine learning. [...] Meta said Llama is a multimodal AI system. Multimodal systems are capable of processing and integrating various types of data including text, video, images and audio, and can convert content across these formats.\n\nMeta said in a statement that the Llama 4 Scout and Llama 4 Maverick are its \"most advanced models yet\" and \"the best in their class for multimodality.\"",
+          "score": 0.29941237,
+          "raw_content": null,
+          "id": "e446eb-09"
+        }
+      ],
+      "response_time": 0.72,
+      "request_id": "5fd8ba0d-ee7c-4602-abd2-4d0ec1121133"
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

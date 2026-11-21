@@ -14,8 +14,6 @@ class ResourceType(StrEnum):
 
     model = "model"
     vector_store = "vector_store"
-    tool = "tool"
-    tool_group = "tool_group"
     prompt = "prompt"
 
 
@@ -31,4 +29,4 @@ class Resource(BaseModel):
 
     provider_id: str = Field(description="ID of the provider that owns this resource")
 
-    type: ResourceType = Field(description="Type of resource (e.g. 'model', 'vector_store', 'tool_group', etc.)")
+    type: ResourceType = Field(description="Type of resource (e.g. 'model', 'vector_store', 'prompt', etc.)")

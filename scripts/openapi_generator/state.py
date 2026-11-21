@@ -8,15 +8,9 @@
 Shared state for the OpenAPI generator module.
 """
 
-from typing import Any
-
-from ogx_api import Api
 from ogx_api.schema_utils import clear_dynamic_schema_types, register_dynamic_schema_type
 
 _dynamic_model_registry: dict[str, type] = {}
-
-# Cache for protocol methods to avoid repeated lookups
-_protocol_methods_cache: dict[Api, dict[str, Any]] | None = None
 
 # Global dict to store extra body field information by endpoint
 # Key: (path, method) tuple, Value: list of (param_name, param_type, description) tuples

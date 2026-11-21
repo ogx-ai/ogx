@@ -21,7 +21,7 @@ You have two ways to install OGX:
     cd ~/local
     git clone git@github.com:ogx-ai/ogx.git
 
-    uv venv myenv --python 3.12
+    uv venv myenv --python 3.13
     source myenv/bin/activate  # On Windows: myenv\Scripts\activate
 
     cd ogx

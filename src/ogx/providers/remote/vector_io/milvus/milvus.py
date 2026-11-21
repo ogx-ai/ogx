@@ -59,7 +59,19 @@ logger = get_logger(name=__name__, category="vector_io::milvus")
 
 
 def _fmt(v: Any) -> str:
-    return f'"{v}"' if isinstance(v, str) else str(v)
+    """Format a scalar filter value as a Milvus expression literal.
+
+    Strings are quoted with backslash escaping so a value cannot break out of
+    its literal and inject expression syntax.
+    """
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, int | float):
+        return str(v)
+    if isinstance(v, str):
+        escaped = v.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    raise ValueError(f"Failed to format filter value: unsupported type {type(v).__name__}")
 
 
 _MILVUS_OPS: dict[str, str] = {
@@ -196,6 +208,10 @@ class MilvusIndex(EmbeddingIndex):
             sym = "==" if op_type == "eq" else "!="
             return f"{json_path} {sym} {_fmt(value)}"
         elif op_type in _MILVUS_OPS:
+            if isinstance(value, bool) or not isinstance(value, int | float):
+                raise ValueError(
+                    f"Failed to translate '{op_type}' filter: numeric value required, got {type(value).__name__}"
+                )
             return f"{json_path} {_MILVUS_OPS[op_type]} {value}"
         elif op_type in ("in", "nin"):
             if not isinstance(value, list):
