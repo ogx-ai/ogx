@@ -75,7 +75,6 @@ from ogx_api.common.errors import (
     ResponseNotFoundError,
     ServiceNotEnabledError,
     TokenValidationError,
-    ToolGroupNotFoundError,
     UnsupportedModelError,
     VectorStoreNotFoundError,
 )
@@ -322,6 +321,7 @@ from ogx_api.openai_responses import (
     OpenAIResponseInputToolFileSearch,
     OpenAIResponseInputToolFunction,
     OpenAIResponseInputToolMCP,
+    OpenAIResponseInputToolNamespace,
     OpenAIResponseInputToolWebSearch,
     OpenAIResponseMCPApprovalRequest,
     OpenAIResponseMCPApprovalResponse,
@@ -443,11 +443,7 @@ from ogx_api.responses import (
 # Tools
 from ogx_api.tools import (
     ListToolDefsResponse,
-    ListToolGroupsResponse,
-    ListToolsRequest,
-    SpecialToolGroup,
     ToolDef,
-    ToolGroup,
     ToolGroupInput,
     ToolInvocationResult,
 )
@@ -546,7 +542,6 @@ __all__ = [
     "ResponseNotFoundError",
     "ServiceNotEnabledError",
     "TokenValidationError",
-    "ToolGroupNotFoundError",
     "UnsupportedModelError",
     "VectorStoreNotFoundError",
     # Common job types
@@ -771,6 +766,7 @@ __all__ = [
     "OpenAIResponseInputToolFileSearch",
     "OpenAIResponseInputToolFunction",
     "OpenAIResponseInputToolMCP",
+    "OpenAIResponseInputToolNamespace",
     "OpenAIResponseInputToolWebSearch",
     "WebSearchFilters",
     "WebSearchUserLocation",
@@ -880,11 +876,7 @@ __all__ = [
     "RetrieveResponseRequest",
     # Tools
     "ListToolDefsResponse",
-    "ListToolGroupsResponse",
-    "ListToolsRequest",
-    "SpecialToolGroup",
     "ToolDef",
-    "ToolGroup",
     "ToolGroupInput",
     "ToolInvocationResult",
     # Vector IO

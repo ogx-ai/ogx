@@ -635,7 +635,8 @@ class ReferenceBatchesImpl(Batches):
         completed_count = 0
         failed_count = 0
 
-        for chunk in itertools.batched(requests, self.config.max_concurrent_requests_per_batch):
+        # A short final chunk is expected when the request count isn't a multiple of the batch size.
+        for chunk in itertools.batched(requests, self.config.max_concurrent_requests_per_batch, strict=False):
             # we use a TaskGroup to ensure all process-single-request tasks are canceled when process-batch is cancelled
             async with asyncio.TaskGroup() as tg:
                 chunk_tasks = [tg.create_task(self._process_single_request(batch_id, request)) for request in chunk]

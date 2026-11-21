@@ -39,7 +39,6 @@ from ogx_api.datatypes import (
     RemoteProviderConfig,
     RemoteProviderSpec,
     RoutingTable,
-    ToolGroupsProtocolPrivate,
     VectorStoresProtocolPrivate,
 )
 from ogx_api.file_processors import FileProcessors
@@ -70,7 +69,6 @@ from ogx_api.schema_utils import (
     register_dynamic_schema_type,
     register_schema,
 )
-from ogx_api.tools import ToolGroup, ToolGroups, ToolRuntime, ToolStore
 from ogx_api.validators import validate_embeddings_input_is_text
 from ogx_api.vector_io import VectorIO
 from ogx_api.vector_stores import VectorStore
@@ -91,7 +89,6 @@ __all__ = [
     "RoutingTable",
     # Protocol-private mixins
     "ModelsProtocolPrivate",
-    "ToolGroupsProtocolPrivate",
     "VectorStoresProtocolPrivate",
     # Resource base classes
     "Resource",
@@ -131,12 +128,8 @@ __all__ = [
     "Prompts",
     "Providers",
     "Responses",
-    "ToolGroups",
-    "ToolRuntime",
-    "ToolStore",
     "VectorIO",
     # Shared resource/value types (canonical home in ogx_api.types)
     "Model",
-    "ToolGroup",
     "VectorStore",
 ]

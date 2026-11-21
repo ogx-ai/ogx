@@ -2060,43 +2060,6 @@ paths:
           input_items = client.responses.input_items.list("resp_abc123")
           for item in input_items:
               print(item)
-  /v1/admin/tools:
-    get:
-      responses:
-        '200':
-          description: A ListToolDefsResponse.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListToolDefsResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest400'
-          description: Bad Request
-        '429':
-          $ref: '#/components/responses/TooManyRequests429'
-          description: Too Many Requests
-        '500':
-          $ref: '#/components/responses/InternalServerError500'
-          description: Internal Server Error
-        default:
-          $ref: '#/components/responses/DefaultError'
-          description: Default Response
-      tags:
-      - Tools
-      summary: List tools with optional tool group filter.
-      description: List tools with optional tool group filter.
-      operationId: list_tools_v1_admin_tools_get
-      parameters:
-      - name: toolgroup_id
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: The ID of the tool group to filter tools by.
-          title: Toolgroup Id
-        description: The ID of the tool group to filter tools by.
   /v1/vector-io/insert:
     post:
       responses:
@@ -4348,6 +4311,8 @@ components:
             type: object
           - type: 'null'
       type: object
+      required:
+      - name
       title: OpenAIJSONSchema
       description: JSON schema specification for OpenAI-compatible structured response format.
     OpenAIResponseFormatJSONObject:
@@ -5640,6 +5605,10 @@ components:
           - type: string
           - type: 'null'
         status:
+          anyOf:
+          - type: string
+          - type: 'null'
+        namespace:
           anyOf:
           - type: string
           - type: 'null'
@@ -7156,6 +7125,7 @@ components:
           file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
           function: '#/components/schemas/OpenAIResponseInputToolFunction'
           mcp: '#/components/schemas/OpenAIResponseInputToolMCP'
+          namespace: '#/components/schemas/OpenAIResponseInputToolNamespace'
           web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
           web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
           web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
@@ -7170,7 +7140,9 @@ components:
         title: OpenAIResponseInputToolFunction
       - $ref: '#/components/schemas/OpenAIResponseInputToolMCP'
         title: OpenAIResponseInputToolMCP
-      title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+      - $ref: '#/components/schemas/OpenAIResponseInputToolNamespace'
+        title: OpenAIResponseInputToolNamespace
+      title: OpenAIResponseInputToolWebSearch | ... (5 variants)
     OpenAIResponseInputToolMCP:
       properties:
         type:
@@ -8870,11 +8842,6 @@ components:
       description: A URL reference to external content.
     ToolDef:
       properties:
-        toolgroup_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: The ID of the tool group this tool belongs to.
         name:
           type: string
           title: Name
@@ -8908,72 +8875,17 @@ components:
       title: ToolDef
       description: Tool definition used in runtime contexts.
     ListToolDefsResponse:
+      description: Response containing a list of tool definitions.
       properties:
         data:
+          description: List of tool definitions.
           items:
             $ref: '#/components/schemas/ToolDef'
-          type: array
           title: Data
-          description: List of tool definitions.
-      type: object
+          type: array
       required:
       - data
       title: ListToolDefsResponse
-      description: Response containing a list of tool definitions.
-    ToolGroup:
-      description: A group of related tools managed together.
-      properties:
-        identifier:
-          description: Unique identifier for this resource in ogx
-          title: Identifier
-          type: string
-        provider_resource_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Unique identifier for this resource in the provider
-          nullable: true
-        provider_id:
-          description: ID of the provider that owns this resource
-          title: Provider Id
-          type: string
-        type:
-          title: Type
-          type: string
-          enum:
-          - tool_group
-        mcp_endpoint:
-          anyOf:
-          - $ref: '#/components/schemas/URL'
-            title: URL
-          - type: 'null'
-          description: Model Context Protocol endpoint URL for remote tool groups.
-          nullable: true
-          title: URL
-        args:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          description: Additional arguments for the tool group.
-          nullable: true
-      required:
-      - identifier
-      - provider_id
-      title: ToolGroup
-      type: object
-    ListToolGroupsResponse:
-      description: Response containing a list of tool groups.
-      properties:
-        data:
-          description: List of tool groups.
-          items:
-            $ref: '#/components/schemas/ToolGroup'
-          title: Data
-          type: array
-      required:
-      - data
-      title: ListToolGroupsResponse
       type: object
     Chunk:
       properties:
@@ -9065,7 +8977,7 @@ components:
       description: |-
         `ChunkMetadata` is backend metadata for a `Chunk` that is used to store additional information about the chunk that
             will not be used in the context during inference, but is required for backend functionality. The `ChunkMetadata`
-            is set during chunk creation in `FileSearchToolRuntimeImpl().insert()`and is not expected to change after.
+            is set during chunk creation in `make_overlapped_chunks()` and is not expected to change after.
             Use `Chunk.metadata` for metadata that will be used in the context during inference.
     InsertChunksRequest:
       properties:
@@ -10943,17 +10855,20 @@ components:
                 title: OpenAIResponseInputToolFunction
               - $ref: '#/components/schemas/OpenAIResponseInputToolMCP'
                 title: OpenAIResponseInputToolMCP
+              - $ref: '#/components/schemas/OpenAIResponseInputToolNamespace'
+                title: OpenAIResponseInputToolNamespace
               discriminator:
                 propertyName: type
                 mapping:
                   file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
                   function: '#/components/schemas/OpenAIResponseInputToolFunction'
                   mcp: '#/components/schemas/OpenAIResponseInputToolMCP'
+                  namespace: '#/components/schemas/OpenAIResponseInputToolNamespace'
                   web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_preview_2025_03_11: '#/components/schemas/OpenAIResponseInputToolWebSearch'
-              title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+              title: OpenAIResponseInputToolWebSearch | ... (5 variants)
             type: array
           - type: 'null'
           description: List of tools available to the model. Accepted for compatibility but not used during compaction.
@@ -11251,17 +11166,20 @@ components:
                 title: OpenAIResponseInputToolFunction
               - $ref: '#/components/schemas/OpenAIResponseInputToolMCP'
                 title: OpenAIResponseInputToolMCP
+              - $ref: '#/components/schemas/OpenAIResponseInputToolNamespace'
+                title: OpenAIResponseInputToolNamespace
               discriminator:
                 propertyName: type
                 mapping:
                   file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
                   function: '#/components/schemas/OpenAIResponseInputToolFunction'
                   mcp: '#/components/schemas/OpenAIResponseInputToolMCP'
+                  namespace: '#/components/schemas/OpenAIResponseInputToolNamespace'
                   web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_preview_2025_03_11: '#/components/schemas/OpenAIResponseInputToolWebSearch'
-              title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+              title: OpenAIResponseInputToolWebSearch | ... (5 variants)
             type: array
           - type: 'null'
           description: List of tools available to the model.
@@ -12136,6 +12054,33 @@ components:
       type: object
       title: OpenAIResponseInputToolChoiceWebSearch
       description: Indicates that the model should use web search to generate a response
+    OpenAIResponseInputToolNamespace:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - namespace
+        name:
+          type: string
+          minLength: 1
+          title: Name
+        description:
+          type: string
+          title: Description
+        tools:
+          items:
+            $ref: '#/components/schemas/OpenAIResponseInputToolFunction'
+          type: array
+          minItems: 1
+          title: Tools
+      type: object
+      required:
+      - name
+      - description
+      - tools
+      title: OpenAIResponseInputToolNamespace
+      description: Namespace tool configuration grouping function tools under a shared name.
     OpenAIResponseOutputMessageFileSearchToolCallResults:
       properties:
         attributes:
@@ -13798,17 +13743,6 @@ components:
       - provider_id
       title: ToolGroupInput
       type: object
-    ListToolsRequest:
-      description: Request model for listing tools.
-      properties:
-        toolgroup_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: The ID of the tool group to filter tools by.
-          nullable: true
-      title: ListToolsRequest
-      type: object
     ConnectorInput:
       description: Input for creating a connector
       properties:
@@ -14065,11 +13999,11 @@ components:
       - responses
       - batches
       - vector_io
-      - tool_runtime
       - container_runtime
+      - web_search
       - models
       - vector_stores
-      - tool_groups
+      - web_search_providers
       - files
       - file_processors
       - prompts
@@ -14147,12 +14081,6 @@ components:
           description: Notes whether this provider is an external provider.
           title: Is External
           type: boolean
-        toolgroup_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: For tool_runtime providers, the built-in tool group ID this provider serves (e.g. 'builtin::websearch').
-          nullable: true
         deps__:
           items:
             type: string
@@ -14228,12 +14156,6 @@ components:
           description: Notes whether this provider is an external provider.
           title: Is External
           type: boolean
-        toolgroup_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: For tool_runtime providers, the built-in tool group ID this provider serves (e.g. 'builtin::websearch').
-          nullable: true
         deps__:
           items:
             type: string
@@ -14338,12 +14260,6 @@ components:
           description: Notes whether this provider is an external provider.
           title: Is External
           type: boolean
-        toolgroup_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: For tool_runtime providers, the built-in tool group ID this provider serves (e.g. 'builtin::websearch').
-          nullable: true
         deps__:
           items:
             type: string
@@ -16452,10 +16368,6 @@ tags:
 - description: Providers API for inspecting, listing, and modifying providers and their configurations.
   name: Providers
   x-displayName: Providers
-- description: ''
-  name: ToolGroups
-- description: ''
-  name: ToolRuntime
 - description: Tool listing and management.
   name: Tools
   x-displayName: Tools
@@ -16484,8 +16396,6 @@ x-tagGroups:
   - Prompts
   - Providers
   - Responses
-  - ToolGroups
-  - ToolRuntime
   - Tools
   - Vector Stores
   - VectorIO

@@ -25,6 +25,7 @@ from ogx.core.jobs.runtime import get_job_runtime
 from ogx.core.store import DistributionRegistry
 from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.log import get_logger
+from ogx.web_search import WebSearch
 from ogx_api import (
     OGX_API_V1ALPHA,
     Admin,
@@ -48,9 +49,6 @@ from ogx_api import (
     RemoteProviderSpec,
     Responses,
     Skills,
-    ToolGroups,
-    ToolGroupsProtocolPrivate,
-    ToolRuntime,
     VectorIO,
     VectorStore,
 )
@@ -86,8 +84,6 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.vector_io: VectorIO,
         Api.vector_stores: VectorStore,
         Api.models: Models,
-        Api.tool_groups: ToolGroups,
-        Api.tool_runtime: ToolRuntime,
         Api.files: Files,
         Api.prompts: Prompts,
         Api.conversations: Conversations,
@@ -96,6 +92,8 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.messages: Messages,
         Api.interactions: Interactions,
         Api.skills: Skills,
+        Api.web_search: WebSearch,
+        Api.web_search_providers: WebSearch,
     }
 
     if external_apis:
@@ -135,7 +133,6 @@ def additional_protocols_map() -> dict[Api, Any]:
     """
     return {
         Api.inference: (ModelsProtocolPrivate, Models, Api.models),
-        Api.tool_groups: (ToolGroupsProtocolPrivate, ToolGroups, Api.tool_groups),
     }
 
 
@@ -171,10 +168,21 @@ async def resolve_impls(
     # `apis:` gates the HTTP surface (see ogx.core.server.server.apis_to_serve), not what
     # gets wired in-process: providers depend on each other's impls regardless of which
     # ones are reachable over HTTP. An empty list therefore resolves everything, the same
-    # as an absent one.
-    apis_to_serve = run_config.apis or set(
-        list(providers_with_specs.keys()) + [x.value for x in routing_table_apis] + [x.value for x in router_apis]
+    # as an absent one. Router APIs a configured provider hard-depends on are wired even
+    # when an explicit `apis:` list omits them.
+    apis_to_serve = set(
+        run_config.apis
+        or set(
+            list(providers_with_specs.keys()) + [x.value for x in routing_table_apis] + [x.value for x in router_apis]
+        )
     )
+    apis_to_serve |= {
+        dep.value
+        for providers in providers_with_specs.values()
+        for provider in providers.values()
+        for dep in provider.spec.api_dependencies
+        if dep in router_apis
+    }
 
     providers_with_specs.update(specs_for_autorouted_apis(apis_to_serve))
 
@@ -481,8 +489,6 @@ async def instantiate_provider(
 
     protocols = api_protocol_map_for_compliance_check(run_config)
     additional_protocols = additional_protocols_map()
-    # TODO: check compliance for special tool groups
-    # the impl should be for Api.tool_runtime, the name should be the special tool group, the protocol should be the special tool group protocol
     check_protocol_compliance(impl, protocols[provider_spec.api])
     if not isinstance(provider_spec, AutoRoutedProviderSpec) and provider_spec.api in additional_protocols:
         additional_api, _, _ = additional_protocols[provider_spec.api]

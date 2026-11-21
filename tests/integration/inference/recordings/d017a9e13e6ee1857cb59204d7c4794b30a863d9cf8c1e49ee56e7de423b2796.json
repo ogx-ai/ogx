@@ -1,0 +1,109 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_inference_store_tool_calls[openai_client-txt=llama-cpp-server/qwen3-0.6b-False]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What's the weather in Tokyo? Use the get_weather function to get the weather."
+        }
+      ],
+      "stream": false,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Get the weather in a given city",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string",
+                  "description": "The city to get the weather for"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "reasoning_effort": "low"
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-d017a9e13e6e",
+        "choices": [
+          {
+            "finish_reason": "tool_calls",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": [
+                {
+                  "id": "nOhBLswmqg3x2ux5O1McZFstBaTgiMJM",
+                  "function": {
+                    "arguments": "{\"city\": \"Tokyo\"}",
+                    "name": "get_weather"
+                  },
+                  "type": "function"
+                }
+              ],
+              "reasoning_content": "Okay, the user is asking about the weather in Tokyo. I need to use the get_weather function for that. Let me check the function's parameters. The function requires a city parameter, which is a string. So I should call get_weather with the city set to \"Tokyo\". I'll make sure to format the tool call correctly in JSON inside the specified XML tags.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11669-620d2225c",
+        "usage": {
+          "completion_tokens": 101,
+          "prompt_tokens": 170,
+          "total_tokens": 271,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 169,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 169,
+          "prompt_n": 1,
+          "prompt_ms": 27.194,
+          "prompt_per_token_ms": 27.194,
+          "prompt_per_second": 36.7728175332794,
+          "predicted_n": 101,
+          "predicted_ms": 2799.942,
+          "predicted_per_token_ms": 27.99942,
+          "predicted_per_second": 35.715025525528745
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

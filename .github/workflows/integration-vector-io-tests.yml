@@ -25,7 +25,7 @@ on:
       - main
       - 'release-[0-9]+.[0-9]+.x'
   schedule:
-    - cron: '0 0 * * 1'  # (test on python 3.13) Weekly on Monday at 12 AM UTC
+    - cron: '0 0 * * 1'  # (test on python 3.14) Weekly on Monday at 12 AM UTC
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
@@ -39,12 +39,12 @@ jobs:
       matrix:
         # Use a smaller set of providers on PRs to reduce runner contention
         vector-io-provider: ${{ github.event_name == 'pull_request' && fromJSON('["inline::faiss", "inline::sqlite-vec", "remote::pgvector", "remote::neo4j"]') || fromJSON('["inline::faiss", "inline::sqlite-vec", "inline::milvus", "remote::chromadb", "remote::pgvector", "remote::weaviate", "remote::qdrant", "remote::elasticsearch", "remote::infinispan", "remote::neo4j"]') }}
-        python-version: ${{ github.event.schedule == '0 0 * * 1' && fromJSON('["3.12", "3.13"]') || fromJSON('["3.12"]') }}
+        python-version: ${{ github.event.schedule == '0 0 * * 1' && fromJSON('["3.13", "3.14"]') || fromJSON('["3.13"]') }}
       fail-fast: false # we want to run all tests regardless of failure
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install dependencies
         uses: ./.github/actions/setup-runner
@@ -310,7 +310,7 @@ jobs:
 
       - name: Upload all logs to artifacts
         if: ${{ always() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vector-io-logs-${{ github.run_id }}-${{ github.run_attempt }}-${{ env.SANITIZED_PROVIDER }}-${{ matrix.python-version }}
           path: |

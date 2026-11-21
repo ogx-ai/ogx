@@ -1,0 +1,51 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_content_block_array[txt=ollama/qwen3.5:0.8b]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_content_block_array[txt=ollama/qwen3.5:0.8b]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "qwen3.5:0.8b",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "What is 1+1? Reply with just the number."
+            }
+          ]
+        }
+      ],
+      "max_tokens": 2048,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_65a5e26d036c77fe47ba7f85",
+      "type": "message",
+      "role": "assistant",
+      "model": "qwen3.5:0.8b",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Thinking Process:\n\n1.  **Analyze the Request:** The user is asking a math riddle/question \"What is 1+1?\" and explicitly requests to reply with \"just the number\".\n\n2.  **Identify the Core Question:** The question is mathematical addition of two numbers, both being 1. So, 1 + 1 equals 2.\n\n3.  **Address Constraints:**\n    *   The user wants a specific format: \"Reply with just the number.\"\n    *   There is no hidden trick or constraint (e.g., \"don't say 'two'\", \"don't say 'yes'\"). Just output the mathematical result.\n\n4.  **Formulate the Output:**\n    *   Mathematical answer: 2.\n    *   Constraint check: Is there any other interpretation? No, standard addition.\n    *   Format: Just the number. Should it be \"2\"? Yes.\n\n5.  **Final Review:** Does \"just the number\" mean nothing else including the word \"I\"? It means no conversational filler like \"Sure\". Just \"2\". Wait, I need to make sure I don't add extra text.\n\n6.  **Execute Output:** 2"
+        },
+        {
+          "type": "text",
+          "text": "2"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 23,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 261
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

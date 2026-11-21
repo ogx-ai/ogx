@@ -75,8 +75,6 @@ async def test_create_response_fails_when_memory_hybrid_search_is_unsupported(mo
 
     impl = OpenAIResponsesImpl(
         inference_api=inference_api,
-        tool_groups_api=AsyncMock(),
-        tool_runtime_api=AsyncMock(),
         responses_store=mock_responses_store,
         vector_io_api=vector_io,
         moderation_endpoint=None,

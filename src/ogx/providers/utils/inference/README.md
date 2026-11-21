@@ -90,10 +90,13 @@ Persists chat completion request/response pairs to the SqlStore. Used by the inf
 
 Shared call path for SystemOne (judgment) providers that speak the TypeSafe wire protocol:
 the TypeSafe cloud API and local engines that serve `POST /v1/systemone` natively (Ollama,
-llama.cpp server). `systemone_judge()` wraps the official `typesafe_sdk` client, maps SDK
-errors to `SystemOneProviderError` (with the upstream status code), and re-validates the raw
-response body into OGX's `SystemOneResponse` wire model. `LOCAL_ENGINE_API_KEY` is the
-placeholder key for engines that ignore `Authorization`.
+llama.cpp server, SGLang, vLLM). `systemone_judge()` wraps the official `typesafe_sdk`
+client, maps SDK errors to `SystemOneProviderError` (with the upstream status code), and
+re-validates the raw response body into OGX's `SystemOneResponse` wire model, after dropping
+any per-engine extension/diagnostic fields the caller names via `extension_fields` /
+`extension_fields_by_type` / `top_level_extension_fields` (e.g. SGLang's `x_label_mass`, or
+vLLM's `id`/`object`/`created`/`diagnostics` and its extra fields on `noul` answers).
+`LOCAL_ENGINE_API_KEY` is the placeholder key for engines that ignore `Authorization`.
 
 ## Server signature verification (`server_signature.py`)
 

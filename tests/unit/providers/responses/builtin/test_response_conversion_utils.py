@@ -19,7 +19,7 @@ from ogx.providers.inline.responses.builtin.responses.utils import (
     get_message_type_by_role,
     is_function_tool_call,
 )
-from ogx_api import RetrieveFileContentRequest, RetrieveFileRequest
+from ogx_api import InvalidParameterError, RetrieveFileContentRequest, RetrieveFileRequest
 from ogx_api.inference import (
     OpenAIAssistantMessageParam,
     OpenAIChatCompletionContentPartImageParam,
@@ -405,8 +405,53 @@ class TestConvertResponseTextToChatResponseFormat:
         result = await convert_response_text_to_chat_response_format(text)
 
         assert isinstance(result, OpenAIResponseFormatJSONSchema)
-        assert result.json_schema["name"] == "test_schema"
-        assert result.json_schema["schema"] == schema_def
+        assert result.json_schema.name == "test_schema"
+        assert result.json_schema.schema_ == schema_def
+        # Unspecified optional fields are unset, so the request serializer
+        # (exclude_unset, as used by the provider SDKs) omits them rather
+        # than sending null
+        dumped = result.json_schema.model_dump(exclude_unset=True)
+        assert "strict" not in dumped
+        assert "description" not in dumped
+
+    async def test_convert_json_schema_format_with_strict_and_description(self):
+        schema_def = {"type": "object", "properties": {"test": {"type": "string"}}}
+        text = OpenAIResponseText(
+            format={
+                "type": "json_schema",
+                "name": "test_schema",
+                "schema": schema_def,
+                "description": "A test schema",
+                "strict": True,
+            }
+        )
+        result = await convert_response_text_to_chat_response_format(text)
+
+        assert isinstance(result, OpenAIResponseFormatJSONSchema)
+        assert result.json_schema.name == "test_schema"
+        assert result.json_schema.schema_ == schema_def
+        assert result.json_schema.strict is True
+        assert result.json_schema.description == "A test schema"
+        # The serialized form uses the "schema" wire key (alias)
+        dumped = result.json_schema.model_dump()
+        assert dumped["schema"] == schema_def
+        assert "schema_" not in dumped
+
+    @pytest.mark.parametrize(
+        "text_format, param",
+        [
+            ({"type": "json_schema", "schema": {"type": "object"}}, "text.format.name"),
+            ({"type": "json_schema", "name": "", "schema": {"type": "object"}}, "text.format.name"),
+            ({"type": "json_schema", "name": "test_schema"}, "text.format.schema"),
+            ({"type": "json_schema", "name": "test_schema", "schema": None}, "text.format.schema"),
+            ({"name": "test_schema", "schema": {"type": "object"}}, "text.format.type"),
+        ],
+    )
+    async def test_incomplete_text_format_is_a_bad_request(self, text_format, param):
+        text = OpenAIResponseText(format=text_format)
+
+        with pytest.raises(InvalidParameterError, match=param):
+            await convert_response_text_to_chat_response_format(text)
 
     async def test_default_text_format(self):
         text = OpenAIResponseText()

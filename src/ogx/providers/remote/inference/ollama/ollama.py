@@ -15,6 +15,7 @@ from ogx.providers.inline.responses.builtin.responses.types import (
 )
 from ogx.providers.remote.inference.ollama.config import OllamaImplConfig
 from ogx.providers.utils.inference.anthropic_mixin import AnthropicMixin
+from ogx.providers.utils.inference.models_dev_registry import classify_model
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx.providers.utils.inference.stream_utils import wrap_reasoning_chunks
 from ogx.providers.utils.inference.systemone import LOCAL_ENGINE_API_KEY, systemone_judge
@@ -139,6 +140,15 @@ class OllamaInferenceAdapter(AnthropicMixin, OpenAIMixin):
 
     def construct_model_from_identifier(self, identifier: str) -> Model:
         model = super().construct_model_from_identifier(identifier)
+        if model.model_type == ModelType.llm:
+            # Ollama `name:tag` is looked up as `name-tag` because some models.dev providers
+            # (e.g. digitalocean, scaleway) list dash-form ids that coincide with Ollama tags, so
+            # each size tag keeps its own entry and its own embedding dimension.
+            classified = classify_model(identifier.replace(":", "-"), self.__provider_id__)
+            # Ollama has no rerank API, so a rerank-named model stays an llm.
+            if classified is not None and classified.model_type == ModelType.embedding:
+                model.model_type = ModelType.embedding
+                model.metadata = classified.metadata
         if _is_systemone_model(identifier):
             # Decision models answer SystemOne judgments, not chat completions; register them
             # under ModelType.systemone so the /v1/systemone router finds them.

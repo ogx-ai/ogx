@@ -1,0 +1,83 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_input_items_hides_compaction[openai_client-txt=openai/gpt-5-nano]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-5-nano",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello"
+        },
+        {
+          "role": "assistant",
+          "content": "Hi there"
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-5-nano",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-d4b9f388b344",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Handoff Summary \u2014 Context Checkpoint Compaction\nTask: Resume continuation by another LLM\n\n1) Current progress\n- No substantive work completed yet on the checkpoint compaction task.\n- Only initial user instruction received and a brief acknowledgment response created.\n\n2) Key decisions made\n- Adopt a concise, structured handoff format with the following sections: Progress, Context/Constraints/Preferences, Remaining Work, Critical Data/References.\n- Proceed with minimal, placeholder content until substantive context is provided; future steps will fill in details as they accrue.\n\n3) Important context, constraints, or user preferences\n- User goal: Enable seamless continuation by another LLM.\n- Preference: concise, structured handoff; bullet lists allowed; avoid unnecessary verbosity.\n- No domain-specific data provided yet; ensure no sensitive data is disclosed. If any new data is introduced, summarize clearly.\n\n4) What remains to be done (next steps)\n- If continuing now, the next LLM should:\n  - Confirm the exact scope and success criteria for the checkpoint compaction task.\n  - Gather any available prior context or conversation history relevant to the checkpoint.\n  - Identify explicit data points, constraints, and user preferences to anchor the continuation.\n  - Apply a consistent compaction approach to summarize context and decisions into a concise handoff document.\n  - Produce a finalized handoff ready for the next iteration or stakeholder review.\n- Optional: maintain a running log of progress and decisions to simplify future handoffs.\n\n5) Critical data, examples, or references needed to continue\n- The user\u2019s instruction: \u201cYou are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\u201d\n- Any prior conversations, task goals, success criteria, or domain-specific constraints related to the checkpoint should be supplied to enable precise continuation.\n- If available, include a template for the handoff and any example of previously completed checkpoints to mirror style and depth.\n\n6) Assumptions and caveats\n- Assumes no sensitive data exists in the context; if it does, redact or summarize at a high level.\n- If further user preferences emerge (e.g., specific data fields to include, formatting constraints), adapt the handoff accordingly.\n\n7) Quick reference template for future handoffs (ready to populate)\n- Task Overview: [brief description]\n- Current Progress: [status]\n- Key Decisions: [summary]\n- Context/Constraints/Preferences: [notes]\n- Remaining Work / Next Steps: [list]\n- Critical Data / References: [data points, prompts, examples]\n- Risks / Assumptions: [risks, implied assumptions]\n- Additional Notes: [any other relevant info]\n\nIf you\u2019d like, I can populate a concrete handoff using any additional context you provide (scope, goals, or prior messages).",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-5-nano-2025-08-07",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": "default",
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 2182,
+          "prompt_tokens": 108,
+          "total_tokens": 2290,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 1600,
+            "rejected_prediction_tokens": 0,
+            "text_tokens": null
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

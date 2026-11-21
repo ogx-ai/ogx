@@ -6,9 +6,12 @@
 
 """Tests for message forwarding to openai_chat_completion across all input types."""
 
+import pytest
+
 from ogx.providers.utils.responses.responses_store import (
     _OpenAIResponseObjectWithInputAndMessages,
 )
+from ogx_api import InvalidParameterError
 from ogx_api.inference import (
     OpenAIAssistantMessageParam,
     OpenAIChatCompletionContentPartImageParam,
@@ -422,3 +425,86 @@ async def test_truncation_retry_drops_oldest_turn(
     assert retry_messages[0].content == "Second question"
     assert retry_messages[1].content == "Second answer"
     assert retry_messages[2].content == "Third question"
+
+
+@pytest.mark.parametrize("truncation", [None, ResponseTruncation.disabled])
+@pytest.mark.parametrize("stream", [True, False])
+@pytest.mark.parametrize(
+    "error_body",
+    [
+        {
+            "error": {
+                "code": 400,
+                "message": "This model's maximum context length is 128000 tokens. However your input contains 200000 tokens.",
+                "type": "BadRequestError",
+            }
+        },
+        {
+            "error": {
+                "code": "context_length_exceeded",
+                "message": "This model's maximum context length is 128000 tokens. However your input contains 200000 tokens.",
+                "type": "invalid_request_error",
+            }
+        },
+    ],
+    ids=["vllm_int_code", "openai_string_code"],
+)
+async def test_context_length_error_without_truncation_auto_does_not_drop_turns(
+    openai_responses_impl,
+    mock_inference_api,
+    mock_responses_store,
+    truncation,
+    stream,
+    error_body,
+):
+    """Without truncation='auto', a context-length error fails the request
+    instead of dropping the oldest turn and retrying."""
+    prev_id = "resp-prev"
+    mock_responses_store.get_response_object.return_value = _OpenAIResponseObjectWithInputAndMessages(
+        id=prev_id,
+        object="response",
+        created_at=1234567890,
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        status="completed",
+        input=[OpenAIResponseMessage(id="msg-1", role="user", content="First question")],
+        output=[OpenAIResponseMessage(id="msg-2", role="assistant", content="First answer")],
+        messages=[
+            OpenAIUserMessageParam(role="user", content="First question"),
+            OpenAIAssistantMessageParam(role="assistant", content="First answer"),
+        ],
+        store=True,
+    )
+
+    error_message = error_body["error"]["message"]
+
+    class ContextLengthError(Exception):
+        status_code = 400
+        body = error_body
+
+    mock_inference_api.openai_chat_completion.side_effect = ContextLengthError("context length exceeded")
+
+    request = CreateResponseRequest(
+        input="Second question",
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        previous_response_id=prev_id,
+        truncation=truncation,
+        stream=stream,
+        store=True,
+    )
+
+    if stream:
+        result = await openai_responses_impl.create_openai_response(request)
+        last_event = [chunk async for chunk in result][-1]
+    else:
+        with pytest.raises(InvalidParameterError, match="maximum context length") as exc_info:
+            await openai_responses_impl.create_openai_response(request)
+        assert exc_info.value.status_code == 400
+
+    mock_inference_api.openai_chat_completion.assert_called_once()
+    assert len(mock_inference_api.openai_chat_completion.call_args.args[0].messages) == 3
+
+    if stream:
+        assert last_event.type == "response.failed"
+        assert last_event.response.truncation == ResponseTruncation.disabled
+        assert last_event.response.error.code == "invalid_prompt"
+        assert last_event.response.error.message == error_message

@@ -14,9 +14,10 @@ OGX includes built-in support for connecting [OpenCode](https://opencode.ai), a 
 ### 1. Start OGX
 
 ```bash
-export OPENAI_API_KEY="your-key-here"
-ogx run starter
+ogx go --no-auth --insecure
 ```
+
+`ogx go` auto-detects running inference providers (vLLM, Ollama, OpenAI via `OPENAI_API_KEY`, and more). For a local, non-exposed server, `--no-auth` turns off the API key (no `OGX_API_KEY` needed below) and `--insecure` runs without TLS, so the connect step below needs no extra flags. Both are local-development only. By default, `ogx go` serves HTTPS with a self-signed certificate and prints API keys — pair those with `ogx connect --insecure --api-key <key>`.
 
 ### 2. Connect OpenCode
 
@@ -26,6 +27,19 @@ ogx connect opencode
 
 That's it. OpenCode starts with all your OGX models available and the first model pre-selected.
 
+:::note
+[OpenCode](https://opencode.ai) must be installed and on your `PATH`.
+:::
+
+### 3. Test it out
+
+The launched TUI is already connected — just type:
+
+```text
+> What is 2+2?
+> Create a Flask hello world app
+```
+
 ## How It Works
 
 The `ogx connect opencode` command:
@@ -33,7 +47,7 @@ The `ogx connect opencode` command:
 1. Queries the running OGX server for available models
 2. Filters out embedding models
 3. Generates an OpenCode provider configuration with all discovered models
-4. Launches OpenCode with the configuration via the `OPENCODE_CONFIG_CONTENT` environment variable
+4. Launches OpenCode with the generated configuration
 
 ```
 ogx connect opencode
@@ -45,7 +59,7 @@ ogx connect opencode
   Generate OpenCode config (all LLM models)
        |
        v
-  Launch OpenCode with OPENCODE_CONFIG_CONTENT env var
+  Launch OpenCode with the generated config
        |
        v
   OpenCode TUI (connected to OGX)
@@ -54,7 +68,7 @@ ogx connect opencode
 ## CLI Reference
 
 ```bash
-ogx connect opencode [--model MODEL] [--host HOST] [--port PORT]
+ogx connect [--url URL] opencode [--model MODEL] [-- OPENCODE_ARGS...]
 ```
 
 **Options:**
@@ -62,76 +76,24 @@ ogx connect opencode [--model MODEL] [--host HOST] [--port PORT]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--model` | First available model | Model to pre-select as the default in OpenCode |
-| `--host` | `localhost` | OGX server host |
-| `--port` | `8321` | OGX server port (also reads `OGX_PORT` env var) |
+| `--url` (group) | `https://localhost:8321/v1` | OGX server base URL, including `/v1`. Applies to all `ogx connect` subcommands (port defaults from `OGX_PORT` env var) |
+| `--api-key` (group) | `OGX_API_KEY` env var, or none | Bearer API key for the OGX server. Applies to all `ogx connect` subcommands. |
+| `--insecure` / `-k` (group) | off | Allow HTTPS connections to servers with untrusted (for example, self-signed) certificates, like `curl -k`. Only affects this connect invocation |
+
+Arguments after `--` are forwarded to the `opencode` command.
 
 All discovered LLM models are available in OpenCode regardless of which model is set as the default. You can switch models inside OpenCode at any time.
 
-## Configuration Examples
-
-### With a specific default model
+### Model selection
 
 ```bash
 ogx connect opencode --model openai/gpt-4o
 ```
 
-### With a remote OGX server
+### With a Remote OGX Server
 
 ```bash
-ogx connect opencode --host 192.168.1.100 --port 9000
-```
-
-### With Ollama backend
-
-```bash
-# Terminal 1: Start OGX with Ollama
-export OLLAMA_URL="http://localhost:11434/v1"
-ogx run starter
-
-# Terminal 2: Connect OpenCode
-ogx connect opencode
-```
-
-### With vLLM backend
-
-```bash
-# Terminal 1: Start OGX with vLLM
-export VLLM_URL="http://localhost:8000/v1"
-ogx run starter
-
-# Terminal 2: Connect OpenCode
-ogx connect opencode --model vllm/Qwen/Qwen3-8B
-```
-
-## Prerequisites
-
-- **OpenCode** must be installed and available in your `PATH`. Install it from [opencode.ai](https://opencode.ai).
-- **OGX server** must be running before connecting OpenCode. Start it with `ogx stack run` or `ogx stack letsgo`.
-
-## Troubleshooting
-
-### "Failed to find 'opencode' in PATH"
-
-Install OpenCode following the instructions at [opencode.ai](https://opencode.ai).
-
-### "Failed to connect to OGX server"
-
-The OGX server is not running or not reachable at the specified host and port. Start it first:
-
-```bash
-ogx run starter
-```
-
-### "Failed to find any LLM models"
-
-The OGX server is running but has no LLM models registered. Check your distribution configuration and ensure at least one inference provider is configured.
-
-### Model not found with `--model`
-
-The specified model ID must match exactly what the OGX server reports. List available models:
-
-```bash
-curl http://localhost:8321/v1/models | python -m json.tool
+ogx connect --url http://192.168.1.100:9000/v1 opencode
 ```
 
 ---

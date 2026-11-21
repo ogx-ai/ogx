@@ -1,0 +1,82 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=llama-cpp-server/qwen3-0.6b-inference:chat_completion:non_streaming_02]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet has rings around it with a name starting with letter S?"
+        }
+      ],
+      "stream": false,
+      "reasoning_effort": "low"
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-1dd07152ff44",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "The planet with rings around it and a name starting with the letter S is **Saturn**.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, so the user is asking which planet has rings around it and the name starts with the letter S. Let me think. I know that the planets are in order from the Sun, right? Mercury, Venus, Earth, Mars, etc. Now, the question is about a planet with rings and a name starting with S. \n\nFirst, I should recall the planets that have rings. I remember that Saturn is often associated with Saturn rings. Let me check. Yes, Saturn has rings. Now, the name starts with S. That's correct. So the answer should be Saturn. \n\nWait, are there any other planets with rings that start with S? Let me think. Neptune's rings are also a popular one, but Neptune is not the one starting with S. The next planet after Saturn is Uranus, but that's not a ringed planet. Pluto was once considered a planet but is now a dwarf planet. So no, Saturn is the only one with rings and a name starting with S.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "metadata": null,
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b11669-620d2225c",
+        "usage": {
+          "completion_tokens": 230,
+          "prompt_tokens": 22,
+          "total_tokens": 252,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
+          }
+        },
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 22,
+          "prompt_ms": 163.343,
+          "prompt_per_token_ms": 7.424681818181818,
+          "prompt_per_second": 134.6859063443184,
+          "predicted_n": 230,
+          "predicted_ms": 6169.532,
+          "predicted_per_token_ms": 26.941187772925765,
+          "predicted_per_second": 37.117888358468676
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

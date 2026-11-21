@@ -28,11 +28,11 @@ import ogx_api.types as types
 def test_provider_and_types_are_disjoint() -> None:
     """A symbol should belong to one surface only.
 
-    Shared resource/value types (Model, Shield, ToolGroup, VectorStore) are
+    Shared resource/value types (Model, Shield, VectorStore) are
     canonically in `types` and re-exported from `provider` for convenience —
     these are the only allowed overlaps.
     """
-    allowed_overlap = {"Model", "ToolGroup", "VectorStore"}
+    allowed_overlap = {"Model", "VectorStore"}
     overlap = (set(provider.__all__) & set(types.__all__)) - allowed_overlap
     assert not overlap, f"Symbols in both namespaces: {sorted(overlap)}"
 

@@ -1,0 +1,77 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=sglang/Qwen/Qwen3-0.6B-inference:chat_completion:non_streaming_01]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:30000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "Qwen/Qwen3-0.6B",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet do humans live on?"
+        }
+      ],
+      "max_tokens": 4096,
+      "stream": false,
+      "reasoning_effort": "low"
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "Qwen/Qwen3-0.6B",
+    "provider_metadata": {
+      "openai_sdk_version": "3.31.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-8f28beb05745",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "\n\nHumans live on **Earth**. It is the only known planet where humans have established a permanent population.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "\nOkay, the user is asking which planet humans live on. Let me start by recalling my knowledge. I know that Earth is our home, but I should be careful not to make up answers that aren't accurate. The question is straightforward, but maybe the user is looking for a more detailed response.\n\nFirst, I need to confirm that Earth is indeed the only known planet where humans have established a permanent population. I should mention that there are no other planets with humans. It's important to state that Earth is the planet we live on. Also, I should consider the user's possible confusion, so explaining that Earth is the correct answer would help. I should keep the answer concise but informative.\n"
+            },
+            "matched_stop": 151645
+          }
+        ],
+        "created": 0,
+        "model": "Qwen/Qwen3-0.6B",
+        "object": "chat.completion",
+        "metadata": {
+          "weight_version": "default",
+          "weight_versions": [
+            {
+              "version": "default",
+              "start": 0,
+              "end": 165
+            }
+          ]
+        },
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 165,
+          "prompt_tokens": 15,
+          "total_tokens": 180,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "reasoning_tokens": 142
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

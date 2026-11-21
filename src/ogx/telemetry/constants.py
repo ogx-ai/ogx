@@ -14,13 +14,13 @@ constants for it here.
 
 ogx_prefix = "ogx"
 
-# Tool Runtime Metrics
-# These constants define the names for OpenTelemetry metrics tracking tool runtime operations
-TOOL_RUNTIME_PREFIX = f"{ogx_prefix}.tool_runtime"
+# Tool Metrics
+# These constants define the names for OpenTelemetry metrics tracking tool operations
+TOOL_PREFIX = f"{ogx_prefix}.tools"
 
 # Tool invocation metrics
-TOOL_INVOCATIONS_TOTAL = f"{TOOL_RUNTIME_PREFIX}.invocations_total"
-TOOL_DURATION = f"{TOOL_RUNTIME_PREFIX}.duration_seconds"
+TOOL_INVOCATIONS_TOTAL = f"{TOOL_PREFIX}.invocations_total"
+TOOL_DURATION = f"{TOOL_PREFIX}.duration_seconds"
 
 # Vector IO Metrics
 # These constants define the names for OpenTelemetry metrics tracking vector store operations

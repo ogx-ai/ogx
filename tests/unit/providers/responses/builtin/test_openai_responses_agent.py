@@ -15,7 +15,9 @@ from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCallFunction,
 )
 
+from ogx.web_search import WebSearchResult
 from ogx_api import (
+    ContextLengthExceededError,
     InternalServerError,
     OpenAISystemMessageParam,
 )
@@ -26,7 +28,7 @@ from ogx_api.openai_responses import (
     OpenAIResponseObjectStreamResponseFailed,
 )
 from ogx_api.responses.models import CreateResponseRequest
-from ogx_api.tools import ToolDef, ToolInvocationResult
+from ogx_api.tools import ToolDef
 
 
 async def test_failed_stream_persists_non_system_messages(openai_responses_impl, mock_responses_store):
@@ -132,6 +134,45 @@ async def test_failed_stream_raises_internal_server_error_in_non_streaming_mode(
     assert provider_error_message in str(exc_info.value)
 
 
+async def test_context_length_failure_raises_a_400_in_non_streaming_mode(openai_responses_impl):
+    """A response that failed because the prompt exceeds the model's window is a client error.
+
+    Retrying the same request can never succeed, so it must not surface as a 500.
+    """
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+    message = "The conversation exceeds the model's context window and could not be reduced further by truncation."
+
+    failed_response = OpenAIResponseObject(
+        created_at=1,
+        id="resp_context_length_nonstream",
+        model=model,
+        output=[],
+        status="failed",
+        error=OpenAIResponseError(code="context_length_exceeded", message=message),
+        store=False,
+    )
+
+    class FakeOrchestrator:
+        def __init__(self, *, ctx, **_kwargs):
+            self.ctx = ctx
+            self.final_messages = None
+
+        async def create_response(self):
+            yield OpenAIResponseObjectStreamResponseFailed(response=failed_response, sequence_number=0)
+
+    with patch(
+        "ogx.providers.inline.responses.builtin.responses.openai_responses.StreamingResponseOrchestrator",
+        FakeOrchestrator,
+    ):
+        with pytest.raises(ContextLengthExceededError) as exc_info:
+            await openai_responses_impl.create_openai_response(
+                CreateResponseRequest(input="Hello", model=model, stream=False, store=False)
+            )
+
+    assert str(exc_info.value) == message
+    assert exc_info.value.status_code == 400
+
+
 def test_response_object_incomplete_details_null_when_completed():
     """Test that completed response has incomplete_details as null."""
     from ogx_api.openai_responses import OpenAIResponseObject
@@ -223,7 +264,7 @@ def test_response_object_incomplete_details_with_max_iterations_exceeded_reason(
 
 
 async def test_agent_loop_incomplete_due_to_max_output_tokens(
-    openai_responses_impl, mock_inference_api, mock_tool_groups_api, mock_tool_runtime_api
+    openai_responses_impl, mock_inference_api, mock_web_search_api
 ):
     """Test that agent loop marks response incomplete when max_output_tokens is reached."""
     from openai.types.completion_usage import CompletionUsage
@@ -232,10 +273,10 @@ async def test_agent_loop_incomplete_due_to_max_output_tokens(
     max_output_tokens = 25  # Set low enough to be exceeded by first tool call
 
     # Setup tool mocks - the tool call will trigger a second iteration
-    mock_tool_groups_api.get_tool.return_value = ToolDef(
+    openai_responses_impl.web_search_api.tool_def.return_value = ToolDef(
         name="web_search", description="Search the web", input_schema={}
     )
-    mock_tool_runtime_api.invoke_tool.return_value = ToolInvocationResult(content="Search results")
+    mock_web_search_api.search.return_value = WebSearchResult(content="Search results")
 
     # First stream: returns a tool call after consuming 30 tokens (exceeds limit of 25)
     async def first_stream_with_tool_call():
@@ -307,7 +348,7 @@ async def test_agent_loop_incomplete_due_to_max_output_tokens(
 
 
 async def test_agent_loop_incomplete_due_to_max_iterations(
-    openai_responses_impl, mock_inference_api, mock_tool_groups_api, mock_tool_runtime_api
+    openai_responses_impl, mock_inference_api, mock_web_search_api
 ):
     """Test that agent loop marks response incomplete when max iterations is exceeded via tool calls."""
     from openai.types.completion_usage import CompletionUsage
@@ -315,10 +356,10 @@ async def test_agent_loop_incomplete_due_to_max_iterations(
     model = "gpt-4o"
 
     # Setup tool mocks
-    mock_tool_groups_api.get_tool.return_value = ToolDef(
+    openai_responses_impl.web_search_api.tool_def.return_value = ToolDef(
         name="web_search", description="Search the web", input_schema={}
     )
-    mock_tool_runtime_api.invoke_tool.return_value = ToolInvocationResult(content="Search results")
+    mock_web_search_api.search.return_value = WebSearchResult(content="Search results")
 
     # Create a stream generator factory that returns a tool call (to trigger another iteration)
     call_counter = {"count": 0}

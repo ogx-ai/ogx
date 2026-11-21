@@ -273,10 +273,10 @@ def _parse_tool_call_arguments(arguments: str | dict[str, Any]) -> dict[str, Any
     if not isinstance(arguments, str):
         return arguments if isinstance(arguments, dict) else {}
     try:
-        parsed: dict[str, Any] = json.loads(arguments)
+        parsed = json.loads(arguments)
     except (json.JSONDecodeError, TypeError):
         return {}
-    return parsed
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def collect_tool_call_ids(messages: list[Any]) -> list[str]:

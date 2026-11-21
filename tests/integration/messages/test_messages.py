@@ -12,12 +12,14 @@ including translation between Anthropic and OpenAI formats.
 
 import os
 
-from .conftest import make_messages_request, make_streaming_messages_request
+import pytest
 
-
-def _get_text_blocks(content: list[dict]) -> list[dict]:
-    """Extract text blocks from a content list, skipping thinking blocks."""
-    return [b for b in content if b["type"] == "text"]
+from .conftest import (
+    _all_block_text,
+    _is_limited_sampling_model,
+    make_messages_request,
+    make_streaming_messages_request,
+)
 
 
 def test_messages_non_streaming_basic(messages_client, text_model_id):
@@ -37,12 +39,10 @@ def test_messages_non_streaming_basic(messages_client, text_model_id):
     # Native passthroughs return the upstream id as-is; some providers
     # (e.g. DeepSeek) do not use the "msg_" prefix.
     assert data["id"]
-    assert len(data["content"]) > 0
 
-    # Content may include thinking blocks; find first text block
-    text_blocks = _get_text_blocks(data["content"])
-    assert len(text_blocks) > 0, f"No text blocks found in content: {data['content']}"
-    assert len(text_blocks[0]["text"]) > 0
+    # Output may be thinking-only (a thinking model truncated at max_tokens);
+    # any readable content proves the turn was processed.
+    assert _all_block_text(data["content"]), f"No output content in: {data['content']}"
 
     assert data["stop_reason"] in ("end_turn", "max_tokens")
     assert "usage" in data
@@ -67,11 +67,9 @@ def test_messages_non_streaming_with_system(messages_client, text_model_id):
     assert response.status_code == 200
     data = response.json()
     assert data["type"] == "message"
-    assert len(data["content"]) > 0
-
-    text_blocks = _get_text_blocks(data["content"])
-    assert len(text_blocks) > 0
-    assert len(text_blocks[0]["text"]) > 0
+    # Any non-empty output — including a thinking-only response truncated at
+    # max_tokens — proves the system prompt was accepted and processed.
+    assert _all_block_text(data["content"]), f"No output content in: {data['content']}"
 
 
 def test_messages_non_streaming_multi_turn(messages_client, text_model_id):
@@ -90,16 +88,16 @@ def test_messages_non_streaming_multi_turn(messages_client, text_model_id):
     assert response.status_code == 200
     data = response.json()
     assert data["type"] == "message"
-    assert len(data["content"]) > 0
+    assert _all_block_text(data["content"]), f"No output content in: {data['content']}"
 
-    text_blocks = _get_text_blocks(data["content"])
-    assert len(text_blocks) > 0
-    text = text_blocks[0]["text"].lower()
+    # The name may surface in the answer or in the thinking: a thinking model
+    # truncated at max_tokens still proves the earlier turns reached it.
+    evidence = _all_block_text(data["content"]).lower()
     # Qwen3-0.6B (vllm) loses track of the earlier turn while thinking and
     # answers with a generic greeting, so only the stronger setups are
     # required to recall the name.
     if os.environ.get("OGX_TEST_SETUP") != "vllm":
-        assert "alice" in text
+        assert "alice" in evidence
 
 
 def test_messages_streaming_basic(messages_client, text_model_id):
@@ -169,11 +167,13 @@ def test_messages_non_streaming_with_temperature(messages_client, text_model_id)
     assert response.status_code == 200
     data = response.json()
     assert data["type"] == "message"
-    assert len(data["content"]) > 0
+    assert _all_block_text(data["content"]), f"No output content in: {data['content']}"
 
 
 def test_messages_non_streaming_with_stop_sequences(messages_client, text_model_id):
     """Non-streaming with stop_sequences parameter."""
+    if _is_limited_sampling_model(text_model_id):
+        pytest.skip("This model does not support stop sequences.")
     response = make_messages_request(
         messages_client,
         model=text_model_id,
@@ -391,4 +391,4 @@ def test_messages_content_block_array(messages_client, text_model_id):
     assert response.status_code == 200
     data = response.json()
     assert data["type"] == "message"
-    assert len(data["content"]) > 0
+    assert _all_block_text(data["content"]), f"No output content in: {data['content']}"

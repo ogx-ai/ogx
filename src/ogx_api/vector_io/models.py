@@ -32,7 +32,7 @@ class ChunkMetadata(BaseModel):
     """
     `ChunkMetadata` is backend metadata for a `Chunk` that is used to store additional information about the chunk that
         will not be used in the context during inference, but is required for backend functionality. The `ChunkMetadata`
-        is set during chunk creation in `FileSearchToolRuntimeImpl().insert()`and is not expected to change after.
+        is set during chunk creation in `make_overlapped_chunks()` and is not expected to change after.
         Use `Chunk.metadata` for metadata that will be used in the context during inference.
     :param chunk_id: The ID of the chunk. If not set, it will be generated based on the document ID and content.
     :param document_id: The ID of the document this chunk belongs to.
@@ -356,6 +356,12 @@ class VectorStoreChunkingStrategyStaticConfig(BaseModel):
 
     chunk_overlap_tokens: int = DEFAULT_CHUNK_OVERLAP_TOKENS
     max_chunk_size_tokens: int = Field(DEFAULT_CHUNK_SIZE_TOKENS, ge=100, le=4096)
+
+    @model_validator(mode="after")
+    def validate_config(self) -> "VectorStoreChunkingStrategyStaticConfig":
+        if self.chunk_overlap_tokens >= self.max_chunk_size_tokens:
+            raise ValueError("chunk_overlap_tokens must be less than max_chunk_size_tokens")
+        return self
 
 
 @json_schema_type

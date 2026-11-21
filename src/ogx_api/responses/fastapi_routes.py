@@ -110,7 +110,7 @@ class FormURLEncodedRoute(ExceptionTranslatingRoute):
         return handler
 
 
-def sse_generator(event_gen: AsyncIterator[Any]) -> AsyncGenerator[str, None]:
+def sse_generator(event_gen: AsyncIterator[Any]) -> AsyncGenerator[str]:
     """Convert an async generator to SSE format.
 
     This function iterates over an async generator and formats each yielded

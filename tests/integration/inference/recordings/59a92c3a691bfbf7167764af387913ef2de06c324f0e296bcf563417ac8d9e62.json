@@ -1,0 +1,54 @@
+{
+  "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_structured_state[judge=vllm/togethercomputer/Tev1-0.8B-experimental]",
+  "request": {
+    "test_id": "tests/integration/inference/test_systemone.py::test_systemone_judgment_structured_state[judge=vllm/togethercomputer/Tev1-0.8B-experimental]",
+    "url": "http://localhost:8000/v1/systemone",
+    "method": "POST",
+    "payload": {
+      "state": {
+        "message": "I was charged twice. Please help.",
+        "channel": "phone",
+        "customer_tier": "premium"
+      },
+      "model": "togethercomputer/Tev1-0.8B-experimental",
+      "questions": {
+        "billing": {
+          "type": "noul",
+          "instructions": "Is this about billing?"
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "decision-9d07c66932872aaa",
+      "object": "structured_decision",
+      "created": 1792769758,
+      "model": "togethercomputer/Tev1-0.8B-experimental",
+      "answers": {
+        "billing": {
+          "type": "noul",
+          "noul": 0.9669140223263571,
+          "probabilities": {
+            "yes": 0.9669140223263571,
+            "no": 0.03308597767364294
+          },
+          "confidence": 0.9639002542637329
+        }
+      },
+      "usage": {
+        "input_tokens": 58,
+        "output_tokens": 1
+      },
+      "diagnostics": {
+        "billing": {
+          "label_mass": 0.9968831064675501,
+          "argmax_is_label": true
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

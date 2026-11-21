@@ -82,10 +82,11 @@ class AnthropicInferenceAdapter(AnthropicMixin, OpenAIMixin):
         ):
             js = params.response_format.json_schema
             # Anthropic requires strict: true for json_schema response format
-            if js.get("strict") is None:
-                js["strict"] = True
-            schema = js.get("schema")
-            if js["strict"] and isinstance(schema, dict):
+            if js.strict is None:
+                js.strict = True
+            # schema_ (aliased to "schema" on the wire)
+            schema = js.schema_
+            if js.strict and isinstance(schema, dict):
                 _make_schema_strict(schema)
         return await super().openai_chat_completion(params)
 

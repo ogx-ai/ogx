@@ -21,6 +21,7 @@ from ogx.telemetry.constants import (
     RESPONSES_PARAMETER_USAGE_TOTAL,
     RESPONSES_TOOL_TYPES_USED_TOTAL,
 )
+from ogx.web_search import WebSearch
 from ogx_api import (
     CancelResponseRequest,
     CompactResponseRequest,
@@ -40,8 +41,6 @@ from ogx_api import (
     Prompts,
     Responses,
     RetrieveResponseRequest,
-    ToolGroups,
-    ToolRuntime,
     VectorIO,
     WebSearchToolTypes,
 )
@@ -104,20 +103,17 @@ class BuiltinResponsesImpl(Responses):
         config: BuiltinResponsesImplConfig,
         inference_api: Inference,
         vector_io_api: VectorIO,
-        tool_runtime_api: ToolRuntime,
-        tool_groups_api: ToolGroups,
         conversations_api: SyncableConversations,
         prompts_api: Prompts,
         files_api: Files,
         connectors_api: Connectors,
         policy: list[AccessRule],
         skills_api: "Skills | None" = None,
+        web_search_api: WebSearch | None = None,
     ):
         self.config = config
         self.inference_api = inference_api
         self.vector_io_api = vector_io_api
-        self.tool_runtime_api = tool_runtime_api
-        self.tool_groups_api = tool_groups_api
         self.conversations_api = conversations_api
         self.prompts_api = prompts_api
         self.files_api = files_api
@@ -125,6 +121,7 @@ class BuiltinResponsesImpl(Responses):
         self.policy = policy
         self.connectors_api = connectors_api
         self.skills_api = skills_api
+        self.web_search_api = web_search_api
 
     async def initialize(self) -> None:
         self.responses_store = ResponsesStore(self.config.persistence.responses, self.policy)
@@ -133,8 +130,6 @@ class BuiltinResponsesImpl(Responses):
             raise RuntimeError("Responses store is not initialized")
         self.openai_responses_impl = OpenAIResponsesImpl(
             inference_api=self.inference_api,
-            tool_groups_api=self.tool_groups_api,
-            tool_runtime_api=self.tool_runtime_api,
             responses_store=self.responses_store,
             vector_io_api=self.vector_io_api,
             moderation_endpoint=self.config.moderation_endpoint,
@@ -145,6 +140,7 @@ class BuiltinResponsesImpl(Responses):
             vector_stores_config=self.config.vector_stores_config,
             connectors_api=self.connectors_api,
             skills_api=self.skills_api,
+            web_search_api=self.web_search_api,
             compaction_config=self.config.compaction_config,
             memory_config=self.config.memory_config,
         )
