@@ -120,11 +120,14 @@ class BedrockInferenceAdapter(OpenAIMixin):
         if self._bedrock_config.has_bearer_token():
             return False
 
-        provider_data = self.get_request_provider_data()
-        if provider_data and provider_data.aws_bedrock_bearer_token is not None:
-            val = provider_data.aws_bedrock_bearer_token.get_secret_value()
-            if val and val.strip():
-                return False
+        try:
+            provider_data = self.get_request_provider_data()
+            if provider_data and provider_data.aws_bedrock_bearer_token is not None:
+                val = provider_data.aws_bedrock_bearer_token.get_secret_value()
+                if val and val.strip():
+                    return False
+        except AttributeError:
+            pass
 
         return True
 
@@ -185,20 +188,41 @@ class BedrockInferenceAdapter(OpenAIMixin):
     async def list_provider_model_ids(self) -> Iterable[str]:
         if self._should_use_sigv4():
             # SigV4 path: bedrock-runtime doesn't expose /v1/models,
-            # use the control-plane ListFoundationModels API instead
+            # query control-plane APIs (ListFoundationModels & ListInferenceProfiles)
             if self._bedrock_client is None:
                 return []
+            model_ids = []
             try:
                 response = await asyncio.to_thread(
                     self._bedrock_client.list_foundation_models,
                     byInferenceType="ON_DEMAND",
                 )
+                model_ids.extend(
+                    [
+                        m["modelId"]
+                        for m in response.get("modelSummaries", [])
+                        if m.get("modelLifecycleStatus") == "ACTIVE"
+                    ]
+                )
             except Exception:
                 logger.warning("Failed to list Bedrock foundation models", exc_info=True)
-                return []
-            return [
-                m["modelId"] for m in response.get("modelSummaries", []) if m.get("modelLifecycleStatus") == "ACTIVE"
-            ]
+                raise
+            try:
+                ip_response = await asyncio.to_thread(
+                    self._bedrock_client.list_inference_profiles,
+                    typeEquals="SYSTEM_DEFINED",
+                )
+                model_ids.extend(
+                    [
+                        ip["inferenceProfileId"]
+                        for ip in ip_response.get("inferenceProfileSummaries", [])
+                        if ip.get("status") == "ACTIVE"
+                    ]
+                )
+            except Exception:
+                logger.warning("Failed to list Bedrock inference profiles", exc_info=True)
+                raise
+            return model_ids
         # bearer token path: bedrock-runtime doesn't expose /v1/models,
         # but the mantle endpoint does — query it directly
         mantle_url = _BEDROCK_MANTLE_URL.format(region=self._bedrock_config.region_name or _DEFAULT_REGION)
@@ -207,7 +231,7 @@ class BedrockInferenceAdapter(OpenAIMixin):
             return [m.id async for m in client.models.list()]
         except Exception:
             logger.warning("Failed to list models from Bedrock mantle endpoint", exc_info=True)
-            return []
+            raise
 
     async def check_model_availability(self, model: str) -> bool:
         return True
