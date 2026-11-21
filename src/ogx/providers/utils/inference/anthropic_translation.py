@@ -71,6 +71,7 @@ _STOP_REASON_TO_FINISH = {
     "tool_use": "tool_calls",
     "max_tokens": "length",
     "pause_turn": "stop",
+    "refusal": "content_filter",
 }
 
 # Anthropic's thinking budget (max thinking tokens) mapped onto OpenAI's coarser reasoning
