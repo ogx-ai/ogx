@@ -697,30 +697,7 @@ class OpenAIResponsesImpl:
         input: str | list[OpenAIResponseInput],
         messages: list[OpenAIMessageParam],
     ) -> None:
-        new_input_id = f"msg_{uuid.uuid4()}"
-        # Type input_items_data as the full OpenAIResponseInput union to avoid list invariance issues
-        input_items_data: list[OpenAIResponseInput] = []
-
-        if isinstance(input, str):
-            # synthesize a message from the input string
-            input_content = OpenAIResponseInputMessageContentText(text=input)
-            input_content_item = OpenAIResponseMessage(
-                role="user",
-                content=[input_content],
-                id=new_input_id,
-            )
-            input_items_data = [input_content_item]
-        else:
-            # we already have a list of messages
-            for input_item in input:
-                if isinstance(input_item, OpenAIResponseMessage):
-                    # These may or may not already have an id, so dump to dict, check for id, and add if missing
-                    input_item_dict = input_item.model_dump()
-                    if "id" not in input_item_dict:
-                        input_item_dict["id"] = new_input_id
-                    input_items_data.append(OpenAIResponseMessage(**input_item_dict))
-                else:
-                    input_items_data.append(input_item)
+        input_items_data = self._prepare_input_items_for_storage(input)
 
         await self.responses_store.store_response_object(
             response_object=response,
@@ -734,10 +711,9 @@ class OpenAIResponsesImpl:
     ) -> list[OpenAIResponseInput]:
         """Prepare input items for storage, adding IDs where needed.
 
-        This method is called once at the start of streaming to prepare input items
-        that will be reused across multiple persistence calls during streaming.
+        This method prepares input items with unique IDs where needed so they
+        can be persisted and retrieved consistently across streaming and non-streaming responses.
         """
-        new_input_id = f"msg_{uuid.uuid4()}"
         input_items_data: list[OpenAIResponseInput] = []
 
         if isinstance(input, str):
@@ -745,15 +721,15 @@ class OpenAIResponsesImpl:
             input_content_item = OpenAIResponseMessage(
                 role="user",
                 content=[input_content],
-                id=new_input_id,
+                id=f"msg_{uuid.uuid4()}",
             )
             input_items_data = [input_content_item]
         else:
             for input_item in input:
                 if isinstance(input_item, OpenAIResponseMessage):
                     input_item_dict = input_item.model_dump()
-                    if "id" not in input_item_dict:
-                        input_item_dict["id"] = new_input_id
+                    if not input_item_dict.get("id"):
+                        input_item_dict["id"] = f"msg_{uuid.uuid4()}"
                     input_items_data.append(OpenAIResponseMessage(**input_item_dict))
                 else:
                     input_items_data.append(input_item)
