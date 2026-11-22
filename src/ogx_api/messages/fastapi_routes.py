@@ -195,9 +195,8 @@ def create_router(impl: Messages) -> APIRouter:
             result = await impl.create_message_batch(params)
         except ValueError as e:
             return _anthropic_error_response(400, str(e))
-        except Exception:
-            logger.exception("Failed to create message batch")
-            return _anthropic_error_response(500, "Internal server error")
+        except Exception as e:
+            return _anthropic_error_response_for_exception(e, "Failed to create message batch")
 
         return JSONResponse(
             content=result.model_dump(exclude_none=True),
