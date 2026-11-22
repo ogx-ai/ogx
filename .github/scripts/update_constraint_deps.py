@@ -22,9 +22,29 @@ import re
 import sys
 from pathlib import Path
 
+# One dot-separated version part: a number with an optional pre-release
+# suffix (PEP 440 style, e.g. "66" or "66b2").
+_VERSION_PART = r"\d+(?:[A-Za-z]+\d*)?"
+# A full version: dot-separated parts, each optionally suffixed.
+_VERSION_PATTERN = rf"{_VERSION_PART}(?:\.{_VERSION_PART})*"
 
-def parse_version(version_str: str) -> tuple[int, ...]:
-    return tuple(int(x) for x in version_str.split("."))
+
+def _version_part_key(part: str) -> tuple[int, int, str]:
+    """Build a sort key for one dot-separated version part.
+
+    Pre-release suffixes sort below their release, matching PEP 440
+    (e.g. 0.66b2 < 0.66), and compare numerically among themselves
+    (e.g. 0.66b1 < 0.66b2).
+    """
+    if not re.fullmatch(_VERSION_PART, part):
+        raise ValueError(f"Unrecognized version part: {part!r}")
+    digits = re.match(r"\d+", part).group(0)
+    suffix = part[len(digits) :]
+    return (int(digits), 1 if not suffix else 0, suffix)
+
+
+def parse_version(version_str: str) -> tuple[tuple[int, int, str], ...]:
+    return tuple(_version_part_key(x) for x in version_str.split("."))
 
 
 def normalize_pkg_pattern(pkg_name: str) -> str:
@@ -132,7 +152,7 @@ def update_constraint(line: str, pkg_name: str, new_version: str) -> tuple[str, 
     Returns (new_line, changed, reason).
     """
     pkg_pattern = normalize_pkg_pattern(pkg_name)
-    lower_bound_pattern = re.compile(rf'("{pkg_pattern}(?:\[[^\]]*\])?>=)([\d]+(?:\.[\d]+)*)', re.IGNORECASE)
+    lower_bound_pattern = re.compile(rf'("{pkg_pattern}(?:\[[^\]]*\])?>=)({_VERSION_PATTERN})', re.IGNORECASE)
 
     match = lower_bound_pattern.search(line)
     if not match:
@@ -143,7 +163,7 @@ def update_constraint(line: str, pkg_name: str, new_version: str) -> tuple[str, 
         return line, False, (f"{pkg_name}: new version {new_version} <= current floor {old_version}")
 
     upper_bound_match = re.search(
-        rf'"{pkg_pattern}(?:\[[^\]]*\])?>=(?:[^"]*),<([\d]+(?:\.[\d]+)*)"', line, re.IGNORECASE
+        rf'"{pkg_pattern}(?:\[[^\]]*\])?>=(?:[^"]*),<({_VERSION_PATTERN})"', line, re.IGNORECASE
     )
     if upper_bound_match:
         upper_version = upper_bound_match.group(1)
