@@ -752,8 +752,8 @@ class OpenAIResponsesImpl:
             for input_item in input:
                 if isinstance(input_item, OpenAIResponseMessage):
                     input_item_dict = input_item.model_dump()
-                    if "id" not in input_item_dict:
-                        input_item_dict["id"] = new_input_id
+                    if not input_item_dict.get("id"):
+                        input_item_dict["id"] = f"msg_{uuid.uuid4()}"
                     input_items_data.append(OpenAIResponseMessage(**input_item_dict))
                 else:
                     input_items_data.append(input_item)
