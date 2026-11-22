@@ -11,6 +11,8 @@ import pathlib
 import subprocess
 import textwrap
 
+import pytest
+
 _script_path = pathlib.Path(__file__).resolve().parents[2] / ".github" / "scripts" / "update_constraint_deps.py"
 _spec = importlib.util.spec_from_file_location("update_constraint_deps", _script_path)
 _mod = importlib.util.module_from_spec(_spec)
@@ -67,19 +69,27 @@ SAMPLE_PYPROJECT = textwrap.dedent("""\
 
 
 class TestParseVersion:
-    def test_simple_version(self):
-        assert parse_version("1.2.3") == (1, 2, 3)
-
-    def test_two_part_version(self):
-        assert parse_version("2.0") == (2, 0)
+    def test_two_part_version_orders_numerically(self):
+        assert parse_version("2.0") > parse_version("1.9.9")
 
     def test_four_part_version(self):
-        assert parse_version("1.2.3.4") == (1, 2, 3, 4)
+        assert parse_version("1.2.3.4") > parse_version("1.2.3")
 
     def test_comparison(self):
         assert parse_version("2.12.5") >= parse_version("2.12.0")
         assert parse_version("3.13.2") <= parse_version("3.13.4")
         assert parse_version("1.0.0") < parse_version("1.0.1")
+
+    def test_prerelease_suffix_orders_below_release(self):
+        assert parse_version("0.66b2") < parse_version("0.66")
+
+    def test_prerelease_suffixes_compare_among_themselves(self):
+        assert parse_version("0.66b1") < parse_version("0.66b2")
+        assert parse_version("0.66b2") > parse_version("0.60b1")
+
+    def test_unrecognized_part_raises(self):
+        with pytest.raises(ValueError):
+            parse_version("1.2.x")
 
 
 class TestNormalizePkgPattern:
@@ -310,6 +320,20 @@ class TestUpdateConstraint:
         new_line, changed, _ = update_constraint(line, "python_socketio", "5.15.0")
         assert changed is True
         assert "python-socketio>=5.15.0" in new_line
+
+    def test_updates_prerelease_floor_without_corrupting_suffix(self):
+        line = '    "opentelemetry-exporter-prometheus>=0.60b1",  # comment\n'
+        new_line, changed, _ = update_constraint(line, "opentelemetry-exporter-prometheus", "0.66b2")
+        assert changed is True
+        assert ">=0.66b2" in new_line
+        assert "b1" not in new_line
+        assert "# comment" in new_line
+
+    def test_skips_when_prerelease_not_newer_than_floor(self):
+        line = '    "opentelemetry-exporter-prometheus>=0.66b2",\n'
+        _, changed, reason = update_constraint(line, "opentelemetry-exporter-prometheus", "0.66b1")
+        assert changed is False
+        assert "<= current floor" in reason
 
 
 class TestMainCli:
