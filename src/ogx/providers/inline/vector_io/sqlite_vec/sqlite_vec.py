@@ -225,6 +225,21 @@ class SQLiteVecIndex(EmbeddingIndex):
                     batch_chunks = chunks[i : i + batch_size]
                     batch_embeddings = embeddings[i : i + batch_size]
 
+                    # vec0 has no unique key on id, so a re-inserted chunk would keep its old
+                    # vector row next to the new one. Drop the vectors of chunks already stored;
+                    # looking them up in the metadata table first avoids a vec0 scan for new chunks.
+                    batch_ids = [chunk.chunk_id for chunk in batch_chunks]
+                    cur.execute(
+                        f"SELECT id FROM [{self.metadata_table}] WHERE id IN ({','.join('?' * len(batch_ids))})",
+                        batch_ids,
+                    )
+                    existing_ids = [row[0] for row in cur.fetchall()]
+                    if existing_ids:
+                        cur.execute(
+                            f"DELETE FROM [{self.vector_table}] WHERE id IN ({','.join('?' * len(existing_ids))})",
+                            existing_ids,
+                        )
+
                     # Insert metadata
                     metadata_data = [(chunk.chunk_id, chunk.model_dump_json()) for chunk in batch_chunks]
                     cur.executemany(
