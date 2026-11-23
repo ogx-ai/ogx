@@ -888,7 +888,7 @@ class StreamingResponseOrchestrator:
 
             if last_completion_result and last_completion_result.finish_reason == "length":
                 ic.final_status = "incomplete"
-                ic.incomplete_reason = "length"
+                ic.incomplete_reason = "max_output_tokens"
 
             # Store final messages (includes assistant response from last turn)
             self.final_messages = messages.copy()

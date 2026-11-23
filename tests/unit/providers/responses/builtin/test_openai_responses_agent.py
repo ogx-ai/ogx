@@ -217,29 +217,6 @@ def test_response_object_incomplete_details_with_max_output_tokens_reason():
     assert json_data["incomplete_details"] == {"reason": "max_output_tokens"}
 
 
-def test_response_object_incomplete_details_with_length_reason():
-    """Test that incomplete response has incomplete_details with length reason."""
-    from ogx_api.openai_responses import OpenAIResponseIncompleteDetails, OpenAIResponseObject
-
-    response = OpenAIResponseObject(
-        created_at=1234567890,
-        id="resp_length",
-        model="gpt-4o",
-        object="response",
-        output=[],
-        status="incomplete",
-        store=False,
-        incomplete_details=OpenAIResponseIncompleteDetails(reason="length"),
-    )
-
-    assert response.incomplete_details is not None
-    assert response.incomplete_details.reason == "length"
-
-    # Verify JSON serialization
-    json_data = response.model_dump(mode="json")
-    assert json_data["incomplete_details"] == {"reason": "length"}
-
-
 def test_response_object_incomplete_details_with_max_iterations_exceeded_reason():
     """Test that incomplete response has incomplete_details with max_iterations_exceeded reason."""
     from ogx_api.openai_responses import OpenAIResponseIncompleteDetails, OpenAIResponseObject
@@ -419,8 +396,9 @@ async def test_agent_loop_incomplete_due_to_max_iterations(
     assert final_event.response.incomplete_details.reason == "max_iterations_exceeded"
 
 
-async def test_agent_loop_incomplete_due_to_length_finish_reason(openai_responses_impl, mock_inference_api):
-    """Test that agent loop marks response incomplete when model returns finish_reason='length'."""
+@pytest.mark.parametrize("stream", [True, False])
+async def test_agent_loop_incomplete_due_to_length_finish_reason(openai_responses_impl, mock_inference_api, stream):
+    """A chat completion cut off with finish_reason='length' surfaces as the Responses reason 'max_output_tokens'."""
     from openai.types.completion_usage import CompletionUsage
 
     model = "gpt-4o"
@@ -459,17 +437,18 @@ async def test_agent_loop_incomplete_due_to_length_finish_reason(openai_response
 
     mock_inference_api.openai_chat_completion.return_value = fake_stream_with_length_finish()
 
-    # Execute
     result = await openai_responses_impl.create_openai_response(
-        CreateResponseRequest(input="Test input", model=model, stream=True)
+        CreateResponseRequest(input="Test input", model=model, stream=stream)
     )
 
-    # Collect all events
-    events = [event async for event in result]
+    if stream:
+        events = [event async for event in result]
+        final_event = events[-1]
+        assert final_event.type == "response.incomplete"
+        response = final_event.response
+    else:
+        response = result
 
-    # Find the final event (should be response.incomplete)
-    final_event = events[-1]
-    assert final_event.type == "response.incomplete"
-    assert final_event.response.status == "incomplete"
-    assert final_event.response.incomplete_details is not None
-    assert final_event.response.incomplete_details.reason == "length"
+    assert response.status == "incomplete"
+    assert response.incomplete_details is not None
+    assert response.incomplete_details.reason == "max_output_tokens"
