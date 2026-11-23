@@ -846,3 +846,42 @@ async def test_identical_files_keep_separate_chunks(sqlite_vec_index, embedding_
     response = await sqlite_vec_index.query_keyword(query_string="fox", k=total * 2, score_threshold=0.0)
     assert len(response.chunks) == len(chunks_by_doc["file-b"])
     assert {chunk.metadata["document_id"] for chunk in response.chunks} == {"file-b"}
+
+
+async def test_reinserting_chunk_replaces_vector_and_does_not_duplicate(sqlite_vec_index, embedding_dimension):
+    """Test that re-inserting a chunk replaces the vector row instead of duplicating it (#7059)."""
+    emb_a1 = [1.0] + [0.0] * (embedding_dimension - 1)
+    emb_b = [0.9, 0.1] + [0.0] * (embedding_dimension - 2)
+
+    chunk_a = EmbeddedChunk(
+        content="chunk a",
+        chunk_id="chunk-a",
+        metadata={"document_id": "doc"},
+        chunk_metadata=ChunkMetadata(chunk_id="chunk-a", document_id="doc"),
+        embedding=emb_a1,
+        embedding_model="test-embedding-model",
+        embedding_dimension=embedding_dimension,
+    )
+    chunk_b = EmbeddedChunk(
+        content="chunk b",
+        chunk_id="chunk-b",
+        metadata={"document_id": "doc"},
+        chunk_metadata=ChunkMetadata(chunk_id="chunk-b", document_id="doc"),
+        embedding=emb_b,
+        embedding_model="test-embedding-model",
+        embedding_dimension=embedding_dimension,
+    )
+
+    # Initial insertion
+    await sqlite_vec_index.add_chunks([chunk_a, chunk_b])
+
+    # Re-insert chunk_a
+    await sqlite_vec_index.add_chunks([chunk_a])
+
+    # Query nearest 2 chunks to query vector emb_a1
+    query_vector = np.array(emb_a1, dtype=np.float32)
+    response = await sqlite_vec_index.query_vector(embedding=query_vector, k=2, score_threshold=0.0)
+
+    # Must contain both distinct chunks ['chunk-a', 'chunk-b'], not duplicated ['chunk-a', 'chunk-a']
+    retrieved_ids = [c.chunk_id for c in response.chunks]
+    assert retrieved_ids == ["chunk-a", "chunk-b"]
