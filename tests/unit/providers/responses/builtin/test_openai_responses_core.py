@@ -940,4 +940,76 @@ async def test_create_openai_response_with_output_types_as_input(
     assert len(stored_with_outputs.input) == 3
 
 
+async def test_prepare_input_items_for_storage_assigns_unique_ids(openai_responses_impl):
+    """Test that list-input messages without IDs are assigned unique msg_ IDs."""
+    messages = [
+        OpenAIResponseMessage(
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(text="Hi")],
+        ),
+        OpenAIResponseMessage(
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(text="Answer briefly.")],
+        ),
+    ]
+
+    prepared = openai_responses_impl._prepare_input_items_for_storage(messages)
+    assert len(prepared) == 2
+    assert all(isinstance(item, OpenAIResponseMessage) for item in prepared)
+    assert all(item.id is not None for item in prepared)
+    assert all(item.id.startswith("msg_") for item in prepared)
+    assert prepared[0].id != prepared[1].id
+
+
+async def test_prepare_input_items_for_storage_preserves_existing_id(openai_responses_impl):
+    """Test that messages with existing IDs retain them."""
+    messages = [
+        OpenAIResponseMessage(
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(text="Custom")],
+            id="msg_existing_12345",
+        ),
+    ]
+
+    prepared = openai_responses_impl._prepare_input_items_for_storage(messages)
+    assert len(prepared) == 1
+    assert prepared[0].id == "msg_existing_12345"
+
+
+async def test_create_openai_response_with_list_input_stores_ids(
+    openai_responses_impl, mock_inference_api, mock_responses_store
+):
+    """Test that creating a response with list of messages stores each with an ID."""
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    messages = [
+        OpenAIResponseMessage(
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(text="Hi")],
+        ),
+        OpenAIResponseMessage(
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(text="Answer briefly.")],
+        ),
+    ]
+
+    await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input=messages,
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            temperature=0.1,
+            stream=False,
+            store=True,
+        )
+    )
+
+    assert mock_responses_store.upsert_response_object.called
+    store_call_args = mock_responses_store.upsert_response_object.call_args
+    stored_input = store_call_args.kwargs["input"]
+    assert len(stored_input) == 2
+    assert all(item.id is not None for item in stored_input)
+    assert all(item.id.startswith("msg_") for item in stored_input)
+    assert stored_input[0].id != stored_input[1].id
+
+
 # End of file
