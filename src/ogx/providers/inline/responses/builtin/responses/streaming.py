@@ -669,6 +669,19 @@ class StreamingResponseOrchestrator:
                         for tool in self.ctx.chat_tools
                         if tool.get("function", {}).get("name") in allowed_tool_names
                     ]
+                # Past max_tool_calls a server-side call is only skipped, so stop offering
+                # those tools; otherwise the model can keep asking and never answer.
+                if self.max_tool_calls is not None and self.accumulated_builtin_tool_calls >= self.max_tool_calls:
+                    effective_tools = [
+                        tool
+                        for tool in effective_tools or []
+                        if not self._is_server_side_tool(tool.get("function", {}).get("name"))
+                    ] or None
+                    if not effective_tools or (
+                        isinstance(chat_tool_choice, dict)
+                        and self._is_server_side_tool(chat_tool_choice.get("function", {}).get("name"))
+                    ):
+                        chat_tool_choice = None
 
                 logprobs = (
                     True
@@ -931,6 +944,10 @@ class StreamingResponseOrchestrator:
             )
             return
 
+    def _is_server_side_tool(self, name: str | None) -> bool:
+        """Whether a chat tool name is a server-executed built-in or MCP tool."""
+        return name in _SERVER_SIDE_BUILTIN_TOOL_NAMES or name in self.mcp_tool_to_server
+
     def _separate_tool_calls(
         self, current_response, messages, reasoning_content: str | None = None
     ) -> tuple[list, list, list, list, bool]:
@@ -970,11 +987,7 @@ class StreamingResponseOrchestrator:
                     if is_function_tool_call(tool_call, self.ctx.response_tools):
                         function_tool_calls.append(tool_call)
                         executed_tool_calls.append(tool_call)
-                    elif (
-                        tool_call.function
-                        and tool_call.function.name not in _SERVER_SIDE_BUILTIN_TOOL_NAMES
-                        and tool_call.function.name not in self.mcp_tool_to_server
-                    ):
+                    elif tool_call.function and not self._is_server_side_tool(tool_call.function.name):
                         # The model hallucinated a tool name — it doesn't match
                         # any registered function tool, server-side built-in, or
                         # MCP tool.
