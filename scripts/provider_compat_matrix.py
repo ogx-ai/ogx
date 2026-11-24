@@ -280,15 +280,6 @@ def _load_provider_names() -> dict[str, str]:
 
 _REGISTRY_PROVIDERS: set[str] = set(_load_provider_names().keys())
 
-_PROVIDER_NOTES: dict[str, str] = {
-    "bedrock": (
-        "AWS Bedrock integration uses the OpenAI-compatible Chat Completions API, which only "
-        "supports GPT-OSS models (e.g. `openai.gpt-oss-20b-1:0`). Native AWS models "
-        "(Amazon Nova, Anthropic Claude, etc.) are not yet supported. "
-        "No vision model is available — image tests are skipped."
-    ),
-}
-
 
 def _pname(provider: str) -> str:
     """Display name for a provider. Uses the adapter_type as-is since those are

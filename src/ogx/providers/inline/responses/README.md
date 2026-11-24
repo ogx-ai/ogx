@@ -33,6 +33,6 @@ This provider handles:
 This provider depends on:
 
 - `Api.inference` -- for LLM calls
-- `Api.tool_runtime` -- for executing tool calls
 - `Api.vector_io` -- for file search / RAG
 - `Api.files` -- for file management
+- `Api.web_search` (optional) -- for web search tool execution

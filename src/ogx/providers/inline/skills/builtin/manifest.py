@@ -24,6 +24,9 @@ def parse_skill_manifest(content: str) -> SkillManifest:
     Raises:
         ValueError: If the frontmatter is not valid YAML.
     """
+    # A file saved with a UTF-8 byte order mark (e.g. by Windows PowerShell 5.1) decodes to a
+    # leading U+FEFF, which str.strip() does not remove, so the opening fence would be missed.
+    content = content.removeprefix("\ufeff")
     lines = content.split("\n")
 
     if not lines or lines[0].strip() != _FENCE:

@@ -33,6 +33,24 @@ from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.providers.utils.inference.model_registry import ProviderModelEntry
 from ogx_api import ConnectorInput, ConnectorType, ModelType
 
+# Provider types removed from the registry that some distribution templates
+# still list, pending a cleanup follow-up. Codegen emits their config entries
+# verbatim (no config block, since there is no spec to resolve one from); at
+# runtime the StackConfig normalizer drops the entries with a deprecation
+# warning. Any other unknown provider type still fails codegen.
+_REMOVED_PROVIDER_TYPES = {
+    "inline::file-search",
+    "remote::model-context-protocol",
+}
+
+# API sections removed from the Api enum: the distro templates keep the
+# sections verbatim until a cleanup follow-up, and the StackConfig
+# normalizer drops them at load time with a deprecation warning.
+_REMOVED_API_SECTIONS = {
+    "tool_runtime",
+    "tool_groups",
+}
+
 
 def filter_empty_values(obj: Any) -> Any:
     """Recursively filter out specific empty values from a dictionary or list.
@@ -164,11 +182,39 @@ class RunConfigSettings(BaseModel):
 
             provider_configs[api_str] = []
             for provider in provider_objs:
-                api = Api(api_str)
-                if provider.provider_type not in provider_registry[api]:
-                    raise ValueError(f"Unknown provider type: {provider.provider_type} for API: {api_str}")
+                if api_str in _REMOVED_API_SECTIONS:
+                    # The section's API no longer exists as an Api member, so the
+                    # spec is resolved by provider type only (see below).
+                    spec = None
+                else:
+                    api = Api(api_str)
+                    spec = provider_registry[api].get(provider.provider_type)
+                if spec is None:
+                    # Legacy section placement (e.g. a web search backend listed under
+                    # tool_runtime before the web_search API existed): the config keeps
+                    # the legacy spelling, so resolve the spec from the registry that
+                    # now owns the provider type.
+                    for registry in provider_registry.values():
+                        if spec := registry.get(provider.provider_type):
+                            break
+                if spec is None:
+                    if provider.provider_type not in _REMOVED_PROVIDER_TYPES:
+                        raise ValueError(f"Unknown provider type: {provider.provider_type} for API: {api_str}")
+                    # The provider was removed from the registry, but the distro config
+                    # keeps the entry until a cleanup follow-up. No spec exists to
+                    # resolve a config class or sample config from, so emit the entry
+                    # verbatim (no config block). At runtime the StackConfig normalizer
+                    # drops the entry with a deprecation warning.
+                    provider_configs[api_str].append(
+                        Provider(
+                            provider_id=provider.provider_type.split("::")[-1],
+                            provider_type=provider.provider_type,
+                            config={},
+                        ).model_dump(exclude_none=True)
+                    )
+                    continue
                 provider_id = provider.provider_type.split("::")[-1]
-                config_class = provider_registry[api][provider.provider_type].config_class
+                config_class = spec.config_class
                 assert config_class is not None, (
                     f"No config class for provider type: {provider.provider_type} for API: {api_str}"
                 )

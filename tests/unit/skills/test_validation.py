@@ -38,6 +38,13 @@ class TestValidateSkillZip:
         assert "SKILL.md" in file_paths
         assert "run.py" in file_paths
 
+    def test_skill_md_with_utf8_bom(self):
+        content = _make_zip({"SKILL.md": VALID_SKILL_MD.encode("utf-8-sig")})
+        manifest, _ = validate_skill_zip(content)
+        assert manifest.name == "test-skill"
+        assert manifest.description == "A test skill"
+        assert manifest.instructions == "Do the thing."
+
     def test_missing_skill_md(self):
         content = _make_zip({"README.md": "No skill manifest here."})
         with pytest.raises(ValueError, match="SKILL.md not found"):

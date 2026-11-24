@@ -14,6 +14,7 @@ from ogx.core.access_control.datatypes import AccessRule
 from ogx.core.datatypes import StackConfig
 from ogx.core.storage.sqlstore.authorized_sqlstore import authorized_sqlstore
 from ogx.log import get_logger
+from ogx.providers.utils.common.url_validation import check_url_scheme, pin_url
 from ogx.providers.utils.tools.mcp import get_mcp_server_info, list_mcp_tools
 from ogx_api import (
     Connector,
@@ -87,7 +88,18 @@ class ConnectorServiceImpl(Connectors):
         server_name: str | None = None,
         server_description: str | None = None,
     ) -> Connector:
-        """Register a new connector"""
+        """Register a new connector
+
+        Connectors are only registered from server configuration (admin-
+        supplied), so URLs may point at private addresses and are only
+        scheme-checked here; they are still pinned to a freshly resolved IP
+        at fetch time so DNS rebinding of a trusted domain cannot redirect
+        the server's fetch (see get_connector).
+        """
+        # Fail fast on a bad scheme (e.g. a config typo) rather than on first
+        # read. No DNS resolution here: config sidecars may not be resolvable
+        # at startup.
+        check_url_scheme(url)
 
         connector = Connector(
             connector_id=connector_id,
@@ -166,7 +178,8 @@ class ConnectorServiceImpl(Connectors):
 
         connector = self._row_to_connector(row)
 
-        server_info = await get_mcp_server_info(connector.url, authorization=authorization)
+        pins = pin_url(connector.url, allow_private=True)
+        server_info = await get_mcp_server_info(connector.url, authorization=authorization, endpoint_pins=pins)
         connector.server_name = server_info.name
         connector.server_description = server_info.description
         connector.server_version = server_info.version
@@ -195,7 +208,8 @@ class ConnectorServiceImpl(Connectors):
         connector = await self.get_connector(
             GetConnectorRequest(connector_id=request.connector_id), authorization=authorization
         )
-        tools = await list_mcp_tools(endpoint=connector.url, authorization=authorization)
+        pins = pin_url(connector.url, allow_private=True)
+        tools = await list_mcp_tools(endpoint=connector.url, authorization=authorization, endpoint_pins=pins)
         return ListToolsResponse(data=tools.data)
 
     def _row_to_connector(self, row: dict[str, Any]) -> Connector:

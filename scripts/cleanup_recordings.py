@@ -227,6 +227,21 @@ def get_base_test_id(test_id: str) -> str:
     return test_id.split("[")[0] if "[" in test_id else test_id
 
 
+def _references_collected_test(test_id: str, ci_test_ids: set[str]) -> bool:
+    """Whether a runtime-suffixed recording test ID is referenced by a collected node ID.
+
+    The web_search suite appends the active backend to the test ID at runtime
+    (e.g. "tests/integration/web_search/test_foo.py::test_bar[case]::tavily-search")
+    so each backend lane keeps self-consistent recordings. Collection cannot know
+    the suffix, so strip trailing "::" segments and match on the base node ID.
+    """
+    while "::" in test_id:
+        test_id = test_id.rsplit("::", 1)[0]
+        if test_id in ci_test_ids:
+            return True
+    return False
+
+
 def find_all_recordings():
     """Find all recording JSON files."""
     return list((REPO_ROOT / "tests/integration").rglob("recordings/*.json"))
@@ -475,8 +490,9 @@ def analyze_recordings(ci_test_ids, dry_run=True, model_only=False):
                 shared_recordings.append(json_file)
                 continue
 
-            # Match exact test_id (with full parameterization)
-            if test_id in ci_test_ids:
+            # Match exact test_id (with full parameterization), or a runtime-suffixed
+            # test ID whose base node ID was collected (see _references_collected_test).
+            if test_id in ci_test_ids or _references_collected_test(test_id, ci_test_ids):
                 used_recordings.append(json_file)
             else:
                 unused_recordings.append((json_file, test_id))

@@ -33,7 +33,6 @@ from .models import models
 from .post_training import post_training
 from .providers import providers
 from .scoring_functions import scoring_functions
-from .toolgroups import toolgroups
 from .vector_stores import vector_stores
 
 
@@ -100,7 +99,6 @@ ogx_client.add_command(eval, "eval")
 ogx_client.add_command(inference, "inference")
 ogx_client.add_command(post_training, "post_training")
 ogx_client.add_command(inspect, "inspect")
-ogx_client.add_command(toolgroups, "toolgroups")
 
 
 def main():

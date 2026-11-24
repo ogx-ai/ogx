@@ -55,7 +55,7 @@ class NeedsRequestProviderData:
 
     __provider_spec__: "ProviderSpec"
 
-    def get_request_provider_data(self) -> Any:
+    def get_request_provider_data(self, quiet: bool = False) -> Any:
         spec = self.__provider_spec__
         if not spec:
             raise ValueError(f"Provider spec not set on {self.__class__}")
@@ -74,7 +74,11 @@ class NeedsRequestProviderData:
             provider_data = validator(**val)
             return provider_data
         except Exception as e:
-            log.error(f"Error parsing provider data: {e}")
+            # quiet=True for providers where a missing per-request key is a normal
+            # condition (e.g. web search backends, which fall back to their config
+            # key) rather than a misconfiguration to flag on every request.
+            if not quiet:
+                log.error("Error parsing provider data", error=str(e))
             return None
 
 

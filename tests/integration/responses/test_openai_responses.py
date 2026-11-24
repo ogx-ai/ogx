@@ -1195,10 +1195,22 @@ class TestOpenAIResponses:
         exits after the first tool-calling iteration.
         Note: _function_tools cannot be used here because function (client-side) tools
         break the loop immediately, so n_iter never increments.
+
+        The input offers the model a search or a notice fallback: these lanes
+        resolve web search to the placeholder provider, whose tool description
+        tells the model the call yields no results, and models such as gpt-5-nano
+        heed that and skip the tool for ordinary search questions (probe: 0/4
+        calls), completing the response instead of hitting the cap. Offering the
+        notice as an alternative keeps the call worth making (probe: 4/4, and
+        the model searches the news branch).
         """
         response = openai_client.responses.create(
             model=text_model_id,
-            input="Search for the latest news about artificial intelligence.",
+            input=(
+                "Search for the latest news about artificial intelligence. "
+                "If the web search returns a notice instead of results, "
+                "tell me exactly what it says."
+            ),
             tools=[{"type": "web_search"}],
             extra_body={"max_infer_iters": 1},
         )
@@ -1210,10 +1222,19 @@ class TestOpenAIResponses:
 
     def test_openai_response_incomplete_details_max_iterations_exceeded_streaming(self, openai_client, text_model_id):
         """Test streaming incomplete_details.reason is 'max_iterations_exceeded' when the agent loop
-        hits the max_infer_iters limit."""
+        hits the max_infer_iters limit.
+
+        Streaming variant of the max_iterations test above; the input offers the
+        model a search or a notice fallback (see the non-streaming test docstring
+        for the placeholder-provider rationale).
+        """
         stream = openai_client.responses.create(
             model=text_model_id,
-            input="Search for the latest news about artificial intelligence.",
+            input=(
+                "Search for the latest news about artificial intelligence. "
+                "If the web search returns a notice instead of results, "
+                "tell me exactly what it says."
+            ),
             tools=[{"type": "web_search"}],
             extra_body={"max_infer_iters": 1},
             stream=True,

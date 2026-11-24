@@ -31,8 +31,6 @@ from ogx_api import (
 @pytest.fixture
 def tool_executor():
     return ToolExecutor(
-        tool_groups_api=AsyncMock(),
-        tool_runtime_api=AsyncMock(),
         vector_io_api=AsyncMock(),
     )
 
@@ -257,7 +255,6 @@ class TestMalformedToolCallArguments:
             )
         ]
 
-        tool_executor.tool_runtime_api.invoke_tool.assert_not_called()
         final = next(r for r in results if r.final_input_message is not None)
         assert "Failed to parse tool call arguments as a JSON object" in final.final_input_message.content
         assert final.final_output_message.status == "failed"
@@ -278,14 +275,13 @@ class TestMalformedToolCallArguments:
             )
         ]
 
-        tool_executor.tool_runtime_api.invoke_tool.assert_not_called()
         final = next(r for r in results if r.final_input_message is not None)
         assert "Failed to parse tool call arguments as a JSON object" in final.final_input_message.content
         assert "list" in final.final_input_message.content
 
     async def test_malformed_arguments_for_an_mcp_tool_never_reach_invoke_mcp_tool(self, tool_executor, monkeypatch):
         """The issue explicitly calls out MCP tool calls as affected; confirm the fix
-        covers that path too, not just the tool_runtime_api.invoke_tool path.
+        covers that path too, not just the non-MCP tool paths.
         """
         invoke_mcp_tool = AsyncMock()
         monkeypatch.setattr("ogx.providers.utils.tools.mcp.invoke_mcp_tool", invoke_mcp_tool)
