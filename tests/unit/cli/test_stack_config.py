@@ -231,11 +231,11 @@ def test_providers_flag_generates_config_with_api_keys():
     import argparse
     from unittest.mock import patch
 
-    from ogx.cli.stack.run import StackRun
+    from ogx.cli.run import Run
 
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
-    stack_run = StackRun(subparsers)
+    run_cmd = Run(subparsers)
 
     # Create args with --providers flag set
     args = argparse.Namespace(
@@ -250,7 +250,7 @@ def test_providers_flag_generates_config_with_api_keys():
 
     # Mock _uvicorn_run to prevent starting a server
     with patch("ogx.cli.stack.run._uvicorn_run"):
-        stack_run._run_stack_run_cmd(args)
+        run_cmd._run_cmd(args)
 
     # Read the generated config file
     from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR

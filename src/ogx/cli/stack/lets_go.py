@@ -17,7 +17,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import warnings
 from collections.abc import Awaitable, Callable, Coroutine, Generator
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -26,7 +25,6 @@ import yaml
 from termcolor import cprint
 
 from ogx.cli.stack.run import _start_ui_development_server, _uvicorn_run
-from ogx.cli.subcommand import Subcommand
 from ogx.core.build import get_provider_dependencies
 from ogx.core.datatypes import Provider, QualifiedModel, StackConfig, VectorStoresConfig
 from ogx.core.distribution import get_provider_registry
@@ -539,7 +537,7 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
 
 
 def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    """Entry point for `ogx letsgo`.
+    """Entry point for `ogx go`.
 
     Provider probing and embedding detection run inside asyncio.run() on
     _run_letsgo_cmd_impl. After it returns, we call _uvicorn_run in a sync
@@ -1002,31 +1000,3 @@ async def _probe_provider_availability(
         except Exception as e:
             cprint(f"  ✗ Unexpected error during provider probing {provider_type}: {str(e)[:300]}", color="red")
             return _ProbeStatus.UNREACHABLE, [], base_url, base_source, None
-
-
-class StackLetsGo(Subcommand):
-    """Auto-detect providers, generate runtime config, and start the stack (deprecated, use 'ogx go' instead)."""
-
-    def __init__(self, subparsers: Any) -> None:
-        super().__init__()
-        self.parser = subparsers.add_parser(
-            "go",
-            prog="ogx stack go",
-            description="""Auto-detect providers and start the stack.
-
-NOTE: 'ogx stack go' is deprecated. Use 'ogx go' instead.""",
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        )
-        self._add_arguments()
-        self.parser.set_defaults(func=self._run_stack_lets_go_cmd)
-
-    def _add_arguments(self) -> None:
-        add_letsgo_arguments(self.parser)
-
-    def _run_stack_lets_go_cmd(self, args: argparse.Namespace) -> None:
-        warnings.warn(
-            "'ogx stack go' is deprecated and will be removed in a future release. Use 'ogx go' instead.",
-            FutureWarning,
-            stacklevel=1,
-        )
-        run_letsgo_cmd(args, self.parser)

@@ -11,11 +11,9 @@ from ogx.cli.stack.list_stacks import StackListBuilds
 from ogx.cli.stack.utils import print_subcommand_description
 from ogx.cli.subcommand import Subcommand
 
-from .lets_go import StackLetsGo
 from .list_apis import StackListApis
 from .list_deps import StackListDeps
 from .list_providers import StackListProviders
-from .run import StackRun
 
 
 class StackParser(Subcommand):
@@ -44,7 +42,5 @@ class StackParser(Subcommand):
         StackListDeps.create(subparsers)
         StackListApis.create(subparsers)
         StackListProviders.create(subparsers)
-        StackRun.create(subparsers)
-        StackLetsGo.create(subparsers)
         StackListBuilds.create(subparsers)
         print_subcommand_description(self.parser, subparsers)

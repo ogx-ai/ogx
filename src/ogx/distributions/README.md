@@ -50,7 +50,7 @@ Run a distribution with:
 ```bash
 ogx run starter
 # or
-ogx stack run --config path/to/config.yaml
+ogx run --config path/to/config.yaml
 ```
 
 ## Disabling Chat Completions Persistence
