@@ -3696,38 +3696,6 @@ paths:
             schema:
               $ref: '#/components/schemas/SystemOneRequest'
         required: true
-  /v1alpha/file-processors/process:
-    post:
-      responses:
-        '200':
-          description: The processed file chunks.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProcessFileResponse'
-        '400':
-          description: Bad Request
-          $ref: '#/components/responses/BadRequest400'
-        '429':
-          description: Too Many Requests
-          $ref: '#/components/responses/TooManyRequests429'
-        '500':
-          description: Internal Server Error
-          $ref: '#/components/responses/InternalServerError500'
-        default:
-          description: Default Response
-          $ref: '#/components/responses/DefaultError'
-      tags:
-      - File Processors
-      summary: Process a file into chunks ready for vector database storage.
-      description: Deprecated. This endpoint blocks until processing completes, which can hold a connection open for large files. Use POST /file-processors/jobs to submit the file asynchronously and poll GET /file-processors/jobs/{job_id} for the result. Supports direct upload via multipart form or processing files already uploaded to file storage via file_id. Exactly one of file or file_id must be provided.
-      operationId: process_file_v1alpha_file_processors_process_post
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Body_process_file_v1alpha_file_processors_process_post'
-      deprecated: true
   /v1alpha/file-processors/jobs:
     get:
       responses:
@@ -11701,32 +11669,6 @@ components:
       required:
       - file
       title: Body_create_skill_version_v1alpha_skills__skill_id__versions_post
-    Body_process_file_v1alpha_file_processors_process_post:
-      properties:
-        file:
-          anyOf:
-          - type: string
-            contentMediaType: application/octet-stream
-          - type: 'null'
-          description: The File object to be uploaded and processed. Mutually exclusive with file_id.
-        file_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: ID of file already uploaded to file storage. Mutually exclusive with file.
-        options:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          description: Optional processing options. Provider-specific parameters (e.g., OCR settings, output format).
-        chunking_strategy:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Optional chunking strategy for splitting content into chunks. Must be valid JSON string.
-      type: object
-      title: Body_process_file_v1alpha_file_processors_process_post
     Body_upload_file_v1_files_post:
       properties:
         file:
