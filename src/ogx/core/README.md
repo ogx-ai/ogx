@@ -7,7 +7,7 @@ Server core for OGX: routing, provider resolution, storage, and the FastAPI serv
 ```text
 core/
   server/              # FastAPI server, auth middleware, quota middleware
-  routers/             # API-specific routers (inference, vector_io, tool_runtime)
+  routers/             # API-specific routers (inference, vector_io, web_search)
   routing_tables/      # Resource-to-provider mapping tables
   jobs/                # Out-of-process job execution (durable queue + worker pool)
   storage/             # KVStore and SqlStore backends

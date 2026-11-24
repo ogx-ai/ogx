@@ -12,6 +12,7 @@ apis:
 - systemone
 - tool_runtime
 - vector_io
+- web_search
 providers:
   inference:
   - provider_id: ${env.CEREBRAS_API_KEY:+cerebras}
@@ -235,6 +236,9 @@ providers:
   - provider_id: builtin
     provider_type: inline::builtin
     config:
+      sqlstore:
+        table_name: message_batches
+        backend: sql_default
       kvstore:
         namespace: message_batches
         backend: kv_default
@@ -258,33 +262,6 @@ providers:
         namespace: skills
         backend: kv_default
   tool_runtime:
-  - provider_id: exa-search
-    provider_type: remote::exa-search
-    config:
-      api_key: ${env.EXA_API_KEY:=}
-      max_results: 3
-  - provider_id: brave-search
-    provider_type: remote::brave-search
-    config:
-      base_url: ${env.BRAVE_SEARCH_BASE_URL:=https://api.search.brave.com}
-      api_key: ${env.BRAVE_SEARCH_API_KEY:=}
-      max_results: 3
-  - provider_id: tavily-search
-    provider_type: remote::tavily-search
-    config:
-      api_key: ${env.TAVILY_SEARCH_API_KEY:=}
-      max_results: 3
-  - provider_id: nimble-search
-    provider_type: remote::nimble-search
-    config:
-      api_key: ${env.NIMBLE_API_KEY:=}
-      max_results: 3
-      search_depth: lite
-  - provider_id: serply-search
-    provider_type: remote::serply-search
-    config:
-      api_key: ${env.SERPLY_API_KEY:=}
-      max_results: 3
   - provider_id: file-search
     provider_type: inline::file-search
   - provider_id: model-context-protocol
@@ -302,6 +279,9 @@ providers:
     config:
       base_url: ${env.TYPESAFE_BASE_URL:=https://api.typesafe.ai}
       api_key: ${env.TYPESAFE_API_KEY:=}
+  web_search:
+  - provider_id: placeholder
+    provider_type: inline::placeholder
 storage:
   backends:
     kv_default:
@@ -425,6 +405,7 @@ vector_stores:
   file_ingestion_params:
     default_chunk_size_tokens: 512
     default_chunk_overlap_tokens: 128
+    embedding_batch_size: 256
   chunk_retrieval_params:
     chunk_multiplier: 5
     max_tokens_in_context: 4000

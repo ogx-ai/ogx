@@ -399,7 +399,6 @@ integration/
   scoring/             # Scoring tests
   telemetry/           # Telemetry tests
   test_cases/          # Shared test case definitions
-  tool_runtime/        # Tool runtime tests
   tools/               # Tool integration tests
   vector_io/           # Vector I/O tests
   conftest.py          # Main conftest (client setup, recording mode, fixtures)

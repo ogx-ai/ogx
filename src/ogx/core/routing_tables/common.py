@@ -55,8 +55,6 @@ async def register_object_with_provider(obj: RoutableObject, p: Any) -> Routable
         return await p.register_model(obj)
     elif api == Api.vector_io:
         return await p.register_vector_store(obj)
-    elif api == Api.tool_runtime:
-        return await p.register_toolgroup(obj)
     else:
         raise ValueError(f"Unknown API {api} for registering object with provider")
 
@@ -76,8 +74,6 @@ async def unregister_object_from_provider(obj: RoutableObject, p: Any) -> None:
         return await p.unregister_vector_store(obj.identifier)
     elif api == Api.inference:
         return await p.unregister_model(obj.identifier)
-    elif api == Api.tool_runtime:
-        return await p.unregister_toolgroup(obj.identifier)
     else:
         raise ValueError(f"Unregister not supported for {api}")
 
@@ -117,8 +113,6 @@ class CommonRoutingTableImpl(RoutingTable):
                 p.model_store = self
             elif api == Api.vector_io:
                 p.vector_store_store = self
-            elif api == Api.tool_runtime:
-                p.tool_store = self
 
     async def shutdown(self) -> None:
         for p in self.impls_by_provider_id.values():
@@ -129,7 +123,6 @@ class CommonRoutingTableImpl(RoutingTable):
 
     async def get_provider_impl(self, routing_key: str, provider_id: str | None = None) -> Any:
         from .models import ModelsRoutingTable
-        from .toolgroups import ToolGroupsRoutingTable
         from .vector_stores import VectorStoresRoutingTable
 
         def apiname_object():
@@ -137,8 +130,6 @@ class CommonRoutingTableImpl(RoutingTable):
                 return ("Inference", "model")
             elif isinstance(self, VectorStoresRoutingTable):
                 return ("VectorIO", "vector_store")
-            elif isinstance(self, ToolGroupsRoutingTable):
-                return ("ToolGroups", "tool_group")
             else:
                 raise ValueError("Unknown routing table type")
 

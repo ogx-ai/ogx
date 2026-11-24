@@ -148,7 +148,7 @@ class TestRouteCallInProcessDerivesTestContext:
         try:
 
             async def endpoint() -> StreamingResponse:
-                async def gen() -> AsyncGenerator[str, None]:
+                async def gen() -> AsyncGenerator[str]:
                     yield json.dumps({"test_id": get_test_context()})
 
                 return StreamingResponse(gen(), media_type="text/event-stream")
@@ -208,7 +208,7 @@ class TestAsyncLibraryClientRequestDerivesTestContext:
         try:
 
             async def endpoint():
-                async def gen() -> AsyncGenerator[dict, None]:
+                async def gen() -> AsyncGenerator[dict]:
                     yield {"test_id": get_test_context()}
 
                 return gen()

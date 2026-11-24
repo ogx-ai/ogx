@@ -228,7 +228,7 @@ def sample_chunks(compat_client, embedding_model_id):
 
     embedded_chunks = []
     for (content, doc_id, topic), embedding in zip(chunks_data, embeddings, strict=True):
-        chunk_id = generate_chunk_id(doc_id, content)
+        chunk_id = generate_chunk_id(document_id=doc_id, chunk_text=content)
         embedded_chunk = EmbeddedChunk(
             content=content,
             chunk_id=chunk_id,

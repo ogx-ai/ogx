@@ -49,7 +49,9 @@ class _FakeMCPContext:
 def _make_manager(contexts: list[_FakeMCPContext]) -> MCPSessionManager:
     manager = MCPSessionManager()
 
-    async def fake_create_session(endpoint: str, headers: dict[str, str]) -> tuple[Any, Any, Any]:
+    async def fake_create_session(
+        endpoint: str, headers: dict[str, str], endpoint_pins: dict[str, str] | None = None
+    ) -> tuple[Any, Any, Any]:
         client_ctx = _FakeMCPContext()
         await client_ctx.__aenter__()
         session = _FakeMCPContext()

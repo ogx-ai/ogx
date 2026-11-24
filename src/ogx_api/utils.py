@@ -44,7 +44,7 @@ async def sse_stream(
     event_gen: AsyncIterator[Any],
     format_event: Callable[[Any], str],
     format_error_event: Callable[[Exception], str],
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[str]:
     """Yield SSE events from an async generator.
 
     Each item is serialized with ``format_event``. Cancellation or

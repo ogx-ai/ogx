@@ -21,6 +21,7 @@ from ogx.core.storage.datatypes import (
     StorageConfig,
 )
 from ogx.log import LoggingConfig
+from ogx.web_search import WebSearch
 from ogx_api import (
     Api,
     ConnectorInput,
@@ -29,9 +30,7 @@ from ogx_api import (
     ModelInput,
     ProviderSpec,
     Resource,
-    ToolGroup,
     ToolGroupInput,
-    ToolRuntime,
     VectorIO,
     VectorStore,
     VectorStoreInput,
@@ -83,20 +82,14 @@ class VectorStoreWithOwner(VectorStore, ResourceWithOwner):
     pass
 
 
-class ToolGroupWithOwner(ToolGroup, ResourceWithOwner):
-    """A ToolGroup resource extended with ownership information for access control."""
-
-    pass
-
-
-RoutableObject = Model | VectorStore | ToolGroup
+RoutableObject = Model | VectorStore
 
 RoutableObjectWithProvider = Annotated[
-    ModelWithOwner | VectorStoreWithOwner | ToolGroupWithOwner,
+    ModelWithOwner | VectorStoreWithOwner,
     Field(discriminator="type"),
 ]
 
-RoutedProtocol = Inference | VectorIO | ToolRuntime
+RoutedProtocol = Inference | VectorIO | WebSearch
 
 
 # Example: /inference, /vector_io
@@ -624,6 +617,12 @@ class FileIngestionParams(BaseModel):
         default=128,
         description="Default overlap in tokens between chunks (original default: 512 // 4 = 128)",
     )
+    embedding_batch_size: int = Field(
+        default=256,
+        ge=1,
+        le=2048,
+        description="Maximum number of chunks sent in one embeddings request when attaching a file. A file with more chunks is embedded in several sequential requests. At most 2048, the embeddings API input limit.",
+    )
 
 
 class ChunkRetrievalParams(BaseModel):
@@ -823,8 +822,9 @@ class RegisteredResources(BaseModel):
     def _warn_deprecated_tool_groups(self) -> Self:
         if self.tool_groups:
             warnings.warn(
-                "'registered_resources.tool_groups' is deprecated and will be removed in a future release. "
-                "Built-in tool groups are now auto-registered based on configured tool_runtime providers. "
+                "'registered_resources.tool_groups' was removed and has no effect. "
+                "Tool groups no longer exist: MCP tools are served by the Responses API, "
+                "optionally via MCP connectors. "
                 "Please remove 'tool_groups' from your configuration.",
                 DeprecationWarning,
                 stacklevel=2,
@@ -990,6 +990,107 @@ can be instantiated multiple times (with different configs) if necessary.
             self.apis = [a for a in self.apis if a != "systemone"]
             if "inference" not in self.apis:
                 self.apis.append("inference")
+        return self
+
+    @model_validator(mode="after")
+    def normalize_tool_runtime_web_search_to_web_search(self) -> "StackConfig":
+        """Move web-search providers configured under ``tool_runtime`` to ``web_search``.
+
+        Web search backends were historically tool_runtime providers; they are now
+        first-class providers of the web_search API. Existing configs keep working:
+        at read time their entries are translated, and ``web_search`` is added to the
+        served APIs so the translated providers are reachable.
+        """
+        import warnings
+
+        legacy_types = {
+            "remote::brave-search",
+            "remote::bing-search",
+            "remote::tavily-search",
+            "remote::exa-search",
+            "remote::nimble-search",
+            "remote::serply-search",
+            "remote::searchapi-search",
+            "inline::placeholder",
+        }
+        tool_runtime_providers = self.providers.get("tool_runtime") or []
+        to_move = [p for p in tool_runtime_providers if p.provider_type in legacy_types]
+        if not to_move:
+            return self
+
+        warnings.warn(
+            "Web search providers configured under 'tool_runtime' are deprecated; "
+            "move them to a 'web_search' section. Affected provider types: "
+            + ", ".join(sorted({p.provider_type for p in to_move})),
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        self.providers["tool_runtime"] = [p for p in tool_runtime_providers if p.provider_type not in legacy_types]
+        self.providers["web_search"] = [*self.providers.get("web_search", []), *to_move]
+
+        if self.apis and "web_search" not in self.apis:
+            self.apis.append("web_search")
+        return self
+
+    @model_validator(mode="after")
+    def normalize_removed_file_search_tool_runtime(self) -> "StackConfig":
+        """Drop the removed ``inline::file-search`` provider from ``tool_runtime``.
+
+        The file-search tool runtime no longer exists: file search runs built
+        into the Responses API on top of the vector stores API and requires no
+        tool_runtime provider. Existing configs keep loading: the entries are
+        dropped at read time, with a warning prompting cleanup.
+        """
+        import warnings
+
+        tool_runtime_providers = self.providers.get("tool_runtime") or []
+        if not any(p.provider_type == "inline::file-search" for p in tool_runtime_providers):
+            return self
+
+        warnings.warn(
+            "The 'inline::file-search' tool_runtime provider was removed; file search "
+            "now runs built into the Responses API over the vector stores API. "
+            "Remove the entry from your 'tool_runtime' section.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        self.providers["tool_runtime"] = [p for p in tool_runtime_providers if p.provider_type != "inline::file-search"]
+        return self
+
+    @model_validator(mode="after")
+    def normalize_removed_tool_runtime_providers(self) -> "StackConfig":
+        """Drop all remaining ``tool_runtime`` providers.
+
+        The tool_runtime API has no providers left: file search runs built into
+        the Responses API over the vector stores API, and MCP tools are served
+        by the Responses API directly, optionally via MCP connectors. Existing
+        configs keep loading: the entries are dropped at read time, with a
+        warning prompting cleanup.
+        """
+        import warnings
+
+        tool_runtime_providers = self.providers.get("tool_runtime") or []
+        if tool_runtime_providers:
+            warnings.warn(
+                "The 'tool_runtime' API and its providers were removed. File search "
+                "runs built into the Responses API over the vector stores API, and MCP "
+                "tools are served by the Responses API, optionally via MCP connectors. "
+                "Remove the 'tool_runtime' section from your configuration. Affected "
+                "provider types: " + ", ".join(sorted({p.provider_type for p in tool_runtime_providers})),
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
+        if self.apis:
+            stripped_apis = [a for a in self.apis if a not in ("tool_runtime", "tool_groups")]
+            if len(stripped_apis) != len(self.apis):
+                self.apis = stripped_apis
+        # Drop the section entirely: the Api enum no longer has a tool_runtime
+        # member, so a leftover key (even empty) would fail Api() coercion in
+        # the resolver.
+        self.providers.pop("tool_runtime", None)
         return self
 
     @model_validator(mode="after")

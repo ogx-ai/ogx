@@ -85,26 +85,6 @@ multi_turn_test_cases = [
     ),
 ]
 
-# Web search test cases
-web_search_test_cases = [
-    pytest.param(
-        ResponsesTestCase(
-            input="How many experts does the Llama 4 Maverick model have?",
-            tools=[{"type": "web_search", "search_context_size": "low"}],
-            expected="128",
-        ),
-        id="llama_experts",
-    ),
-    pytest.param(
-        ResponsesTestCase(
-            input="What is the latest version of Python?",
-            tools=[{"type": "web_search_2025_08_26"}],
-            expected="python",
-        ),
-        id="web_search_2025_08_26_type",
-    ),
-]
-
 # File search test cases
 file_search_test_cases = [
     pytest.param(
@@ -132,7 +112,7 @@ mcp_tool_test_cases = [
     pytest.param(
         ResponsesTestCase(
             input="What is the boiling point of myawesomeliquid in Celsius?",
-            tools=[{"type": "mcp", "server_label": "localmcp", "server_url": "<FILLED_BY_TEST_RUNNER>"}],
+            tools=[{"type": "mcp", "server_label": "localmcp", "connector_id": "test-mcp-connector"}],
             expected="Hello, world!",
         ),
         id="boiling_point_tool",
@@ -233,7 +213,7 @@ multi_turn_tool_execution_test_cases = [
     pytest.param(
         ResponsesTestCase(
             input="I need to check if user 'alice' can access the file 'document.txt'. First, get alice's user ID, then check if that user ID can access the file 'document.txt'. Do this as a series of steps, where each step is a separate message. Return only one tool call per step. Summarize the final result with a single 'yes' or 'no' response.",
-            tools=[{"type": "mcp", "server_label": "localmcp", "server_url": "<FILLED_BY_TEST_RUNNER>"}],
+            tools=[{"type": "mcp", "server_label": "localmcp", "connector_id": "test-mcp-connector"}],
             expected="yes",
         ),
         id="user_file_access_check",
@@ -241,7 +221,7 @@ multi_turn_tool_execution_test_cases = [
     pytest.param(
         ResponsesTestCase(
             input="I need to get the results for the 'boiling_point' experiment. First, get the experiment ID for 'boiling_point', then use that ID to get the experiment results. Tell me the boiling point in Celsius.",
-            tools=[{"type": "mcp", "server_label": "localmcp", "server_url": "<FILLED_BY_TEST_RUNNER>"}],
+            tools=[{"type": "mcp", "server_label": "localmcp", "connector_id": "test-mcp-connector"}],
             expected="100°C",
         ),
         id="experiment_results_lookup",
@@ -253,7 +233,7 @@ multi_turn_tool_execution_streaming_test_cases = [
     pytest.param(
         ResponsesTestCase(
             input="Help me with this security check: First, get the user ID for 'charlie', then get the permissions for that user ID, and finally check if that user can access 'secret_file.txt'. Stream your progress as you work through each step. Return only one tool call per step. Summarize the final result with a single 'yes' or 'no' response.",
-            tools=[{"type": "mcp", "server_label": "localmcp", "server_url": "<FILLED_BY_TEST_RUNNER>"}],
+            tools=[{"type": "mcp", "server_label": "localmcp", "connector_id": "test-mcp-connector"}],
             expected="no",
             stream=True,
         ),
@@ -262,7 +242,7 @@ multi_turn_tool_execution_streaming_test_cases = [
     pytest.param(
         ResponsesTestCase(
             input="I need a complete analysis: First, get the experiment ID for 'chemical_reaction', then get the results for that experiment, and tell me if the yield was above 80%. Return only one tool call per step.  Please stream your analysis process.",
-            tools=[{"type": "mcp", "server_label": "localmcp", "server_url": "<FILLED_BY_TEST_RUNNER>"}],
+            tools=[{"type": "mcp", "server_label": "localmcp", "connector_id": "test-mcp-connector"}],
             expected="85%",
             stream=True,
         ),

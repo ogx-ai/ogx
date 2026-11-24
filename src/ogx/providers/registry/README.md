@@ -14,8 +14,8 @@ registry/
   interactions.py      # Interaction providers
   responses.py         # Responses API providers (inline::builtin)
   skills.py            # Skills API providers (inline::builtin)
-  tool_runtime.py      # Tool runtime providers
   vector_io.py         # Vector I/O providers
+  web_search.py        # Web search backends
 ```
 
 ## How It Works

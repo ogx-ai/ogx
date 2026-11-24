@@ -201,7 +201,7 @@ class _SSEAsyncByteStream(httpx.AsyncByteStream):
 
 
 @contextlib.contextmanager
-def _test_context_from_header_scope() -> Generator[None, None, None]:
+def _test_context_from_header_scope() -> Generator[None]:
     """Derive TEST_CONTEXT from the request's provider data for the duration of the context.
 
     Uses the same sync_test_context_from_provider_data() the server middleware uses (see
@@ -536,7 +536,7 @@ class OGXAsLibraryClient(OgxClient):
         # the giant timeout here is to prevent it from hanging forever:
         return future.result(timeout=_HANG_GUARD_TIMEOUT)
 
-    def _stream_request(self, *args: Any, **kwargs: Any) -> Generator[Any, None, None]:
+    def _stream_request(self, *args: Any, **kwargs: Any) -> Generator[Any]:
         """Thread-safe synchronous generator wrapper around an async generator."""
         # 32 chunks of buffering. LLM token rate makes OOM from unbounded queue unlikely
         # but a bound prevents runaway memory if the consumer stalls.
@@ -1019,7 +1019,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
         if isinstance(result, FastAPIResponse):
             content_type = result.media_type or content_type
 
-        async def gen() -> AsyncGenerator[bytes, None]:
+        async def gen() -> AsyncGenerator[bytes]:
             # Handle FastAPI StreamingResponse (returned by router endpoints)
             # Extract the async generator from the StreamingResponse body
             from fastapi.responses import StreamingResponse

@@ -13,12 +13,9 @@ The starter distribution consists of the following provider configurations:
 | API | Provider(s)                                                                                                                                                                                                                                                                                                                                    |
 |-----|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | responses | `inline::builtin`                                                                                                                                                                                                                                                                                                                       |
-| datasetio | `remote::huggingface`, `inline::localfs`                                                                                                                                                                                                                                                                                                       |
-| eval | `inline::builtin`                                                                                                                                                                                                                                                                                                                       |
 | files | `inline::localfs`                                                                                                                                                                                                                                                                                                                              |
 | inference | `remote::openai`, `remote::fireworks`, `remote::together`, `remote::ollama`, `remote::anthropic`, `remote::gemini`, `remote::groq`, `remote::sambanova`, `remote::vllm`, `remote::cerebras`, `remote::llama-openai-compat`, `remote::nvidia`, `inline::sentence-transformers` |
-| scoring | `inline::basic`, `inline::llm-as-judge`, `inline::braintrust`                                                                                                                                                                                                                                                                                  |
-| tool_runtime | `remote::exa-search`, `remote::brave-search`, `remote::tavily-search`, `remote::nimble-search`, `remote::serply-search`, `inline::file-search`, `remote::model-context-protocol`                                                                                                                                                                                     |
+| tool_runtime | `remote::exa-search`, `remote::brave-search`, `remote::tavily-search`, `remote::nimble-search`, `remote::serply-search`, `remote::searchapi-search`, `inline::file-search`, `remote::model-context-protocol`                                                                                                                                                         |
 | vector_io | `inline::faiss`, `inline::sqlite-vec`, `inline::milvus`, `remote::chromadb`, `remote::pgvector`, `remote::qdrant`, `remote::weaviate`, `remote::elasticsearch`, `remote::infinispan`                                                                                                                                                                 |
 
 ## Inference Providers
@@ -128,6 +125,7 @@ The following environment variables can be configured:
 - `EXA_API_KEY`: Exa Search API key
 - `NIMBLE_API_KEY`: Nimble Search API key
 - `SERPLY_API_KEY`: Serply Search API key
+- `SEARCHAPI_API_KEY`: SearchApi Search API key
 
 ## Enabling Providers
 

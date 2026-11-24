@@ -6,13 +6,21 @@
 
 
 from ogx.core.datatypes import Provider
-from ogx.distributions.template import DistributionTemplate
+from ogx.distributions.template import BuildProvider, DistributionTemplate
+from ogx.providers.inline.web_search.placeholder.config import PlaceholderWebSearchConfig
 from ogx.providers.remote.inference.deepseek.config import DEFAULT_ANTHROPIC_BASE_URL as DEEPSEEK_ANTHROPIC_BASE_URL
 from ogx.providers.remote.inference.deepseek.config import DEFAULT_BASE_URL as DEEPSEEK_BASE_URL
 from ogx.providers.remote.inference.llama_cpp_server.config import LlamaCppServerConfig
 from ogx.providers.remote.inference.text_embeddings_inference.config import TextEmbeddingsInferenceConfig
 from ogx.providers.remote.inference.typesafe.config import TypeSafeConfig
 from ogx.providers.remote.inference.watsonx.config import WatsonXConfig
+from ogx.providers.remote.web_search.bing_search.config import BingSearchConfig
+from ogx.providers.remote.web_search.brave_search.config import BraveSearchConfig
+from ogx.providers.remote.web_search.exa_search.config import ExaSearchConfig
+from ogx.providers.remote.web_search.nimble_search.config import NimbleSearchConfig
+from ogx.providers.remote.web_search.searchapi_search.config import SearchApiSearchConfig
+from ogx.providers.remote.web_search.serply_search.config import SerplySearchConfig
+from ogx.providers.remote.web_search.tavily_search.config import TavilySearchConfig
 from ogx_api import ConnectorInput, ModelInput, ModelType
 
 from ..starter.starter import get_distribution_template as get_starter_distribution_template
@@ -31,6 +39,25 @@ def get_distribution_template() -> DistributionTemplate:
     # `systemone` provider section; the StackConfig normalizer reads that spelling as
     # `inference` at load time (see StackConfig.normalize_systemone_to_inference).
     template.providers["systemone"] = []
+
+    # The web search backends are first-class providers of the web_search API now, not
+    # legacy tool_runtime tool groups. The base config keeps only the placeholder so the
+    # general integration suites never depend on a live search key; the web_search
+    # integration suite runs the web-search.yaml config, where each backend is enabled
+    # individually via an env-gated provider_id.
+    _legacy_search_provider_types = {
+        "remote::brave-search",
+        "remote::bing-search",
+        "remote::exa-search",
+        "remote::nimble-search",
+        "remote::serply-search",
+        "remote::searchapi-search",
+        "remote::tavily-search",
+    }
+    template.providers["tool_runtime"] = [
+        p for p in template.providers["tool_runtime"] if p.provider_type not in _legacy_search_provider_types
+    ]
+    template.providers["web_search"] = [BuildProvider(provider_type="inline::placeholder")]
 
     # Pre-register a test MCP connector used by test_response_connector_resolution_mcp_tool.
     # The test starts an MCP server on port 5199 and references it by connector_id.
@@ -155,7 +182,70 @@ def get_distribution_template() -> DistributionTemplate:
         config=TypeSafeConfig.sample_run_config(),
     )
 
+    # The web-search.yaml run config for the web_search integration suite. Each backend
+    # is env-gated on its own API key, so a run targets exactly the backends whose keys
+    # are set; the placeholder is always present and listed last, so a keyless run (the
+    # web-search-placeholder setup) resolves to it.
+    _distro_dir = "~/.ogx/distributions/ci-tests"
+    web_search_providers = [
+        Provider(
+            provider_id="${env.BRAVE_SEARCH_API_KEY:+brave-search}",
+            provider_type="remote::brave-search",
+            config=BraveSearchConfig.sample_run_config(__distro_dir__=_distro_dir),
+        ),
+        Provider(
+            provider_id="${env.BING_API_KEY:+bing-search}",
+            provider_type="remote::bing-search",
+            config=BingSearchConfig.sample_run_config(__distro_dir__=_distro_dir),
+        ),
+        Provider(
+            provider_id="${env.EXA_API_KEY:+exa-search}",
+            provider_type="remote::exa-search",
+            config=ExaSearchConfig.sample_run_config(__distro_dir__=_distro_dir),
+        ),
+        Provider(
+            provider_id="${env.NIMBLE_API_KEY:+nimble-search}",
+            provider_type="remote::nimble-search",
+            config=NimbleSearchConfig.sample_run_config(__distro_dir__=_distro_dir),
+        ),
+        Provider(
+            provider_id="${env.SERPLY_API_KEY:+serply-search}",
+            provider_type="remote::serply-search",
+            config=SerplySearchConfig.sample_run_config(__distro_dir__=_distro_dir),
+        ),
+        Provider(
+            provider_id="${env.SEARCHAPI_API_KEY:+searchapi-search}",
+            provider_type="remote::searchapi-search",
+            config=SearchApiSearchConfig.sample_run_config(__distro_dir__=_distro_dir),
+        ),
+        Provider(
+            provider_id="${env.TAVILY_SEARCH_API_KEY:+tavily-search}",
+            provider_type="remote::tavily-search",
+            config=TavilySearchConfig.sample_run_config(__distro_dir__=_distro_dir),
+        ),
+        Provider(
+            provider_id="placeholder",
+            provider_type="inline::placeholder",
+            config=PlaceholderWebSearchConfig.sample_run_config(__distro_dir__=_distro_dir),
+        ),
+    ]
+
+    web_search_run_settings = template.run_configs["config.yaml"].model_copy(deep=True)
+    web_search_run_settings.provider_overrides["web_search"] = web_search_providers
+    template.run_configs["web-search.yaml"] = web_search_run_settings
+
     for run_config in template.run_configs.values():
+        # The starter's provider overrides carry the web search backends under the
+        # legacy tool_runtime spelling (overrides win over the BuildProvider list
+        # above when rendering); drop them so only the placeholder remains in the
+        # web_search section of every config except web-search.yaml.
+        if "tool_runtime" in run_config.provider_overrides:
+            run_config.provider_overrides["tool_runtime"] = [
+                p
+                for p in run_config.provider_overrides["tool_runtime"]
+                if p.provider_type not in _legacy_search_provider_types
+            ]
+
         if run_config.default_connectors is None:
             run_config.default_connectors = []
         run_config.default_connectors.append(test_mcp_connector)
