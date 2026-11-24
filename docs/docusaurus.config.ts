@@ -339,15 +339,6 @@ const config: Config = {
               categoryLinkSource: "tag",
             },
           } satisfies OpenApiPlugin.Options,
-          deprecated: {
-            specPath: "static/deprecated-ogx-spec.yaml",
-            outputDir: "docs/api-deprecated",
-            downloadUrl: "https://raw.githubusercontent.com/ogx-ai/ogx/main/docs/static/deprecated-ogx-spec.yaml",
-            sidebarOptions: {
-              groupPathsBy: "tag",
-              categoryLinkSource: "tag",
-            },
-          } satisfies OpenApiPlugin.Options,
         } satisfies Plugin.PluginOptions,
       },
     ],
