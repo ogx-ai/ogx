@@ -21,6 +21,8 @@ Conversations API (POST /conversations/items):
   C4   id already in same conv  -> 400 "Item already in conversation"
 
 Responses API:
+  R0a  string input, no ids           -> stored user item carries a minted msg_ id
+  R0b  list input, no ids             -> each stored user item carries a minted msg_ id
   R1   unknown client id in input      -> replaced (visible via input_items)
   R2   re-send id from previous_response_id chain -> 400 "Duplicate item found"
   R3   conversation= + unknown client id -> replaced; the mirror uses the new id
@@ -40,6 +42,7 @@ target only — see conftest.py):
   D2 = R1/R3 — client ids kept verbatim instead of replaced
   D3 = R2    — silent duplication in the stored input chain instead of 400
   D5 = R4    — silent skip in the conversation mirror instead of 400
+  D6 = R0b  — list-input messages stored with id: null (dead mint check, #7057)
 
 The marked tests run in full on the local target: their expected failures
 (the divergence itself, or a missing replay recording) convert to XP instead
@@ -165,6 +168,34 @@ def test_conversation_duplicate_id_same_conversation_rejected(id_sem_client: Ope
 
 
 # --- Responses API --------------------------------------------------------------
+
+
+def test_responses_input_without_id_string_mints(request, id_sem_client: OpenAI, text_model_id: str):
+    """R0a: string input — the stored user item carries a server-minted id."""
+    resp = id_sem_client.responses.create(model=_live_model(request, text_model_id), input="hi")
+    item = user_item(id_sem_client.responses.input_items.list(resp.id).data)
+    assert item.id
+    assert item.id.startswith("msg_")
+    assert item_text(item) == "hi"
+
+
+@pytest.mark.divergence(
+    "D6",
+    "OGX stores list-input messages with id: null — the mint check in "
+    "_prepare_input_items_for_storage is dead because OpenAIResponseMessage.id "
+    "defaults to None, so 'id' is always present in model_dump() (#7057)",
+)
+def test_responses_input_without_id_list_mints(request, id_sem_client: OpenAI, text_model_id: str):
+    """R0b: list input without ids — every stored user item carries a minted id."""
+    resp = id_sem_client.responses.create(
+        model=_live_model(request, text_model_id),
+        input=[{"role": "user", "content": "Hi"}, {"role": "user", "content": "Answer briefly."}],
+    )
+    users = [it for it in id_sem_client.responses.input_items.list(resp.id).data if getattr(it, "role", None) == "user"]
+    assert len(users) == 2
+    for user in users:
+        assert user.id, "list-input message was stored without an id"
+        assert user.id.startswith("msg_")
 
 
 @pytest.mark.divergence(
