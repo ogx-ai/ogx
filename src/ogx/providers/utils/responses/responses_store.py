@@ -8,6 +8,7 @@ import hashlib
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 
@@ -37,6 +38,7 @@ from ogx_api import (
     ResponseNotFoundError,
 )
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
+from ogx_api.openai_responses import LENIENT_STORED_TEXT_FORMAT_CONTEXT_KEY
 
 logger = get_logger(name=__name__, category="openai_responses")
 
@@ -126,6 +128,24 @@ class _OpenAIResponseObjectWithInputAndMessages(OpenAIResponseObject):
     def to_response_object(self) -> OpenAIResponseObject:
         """The public, OpenAI-shaped response object, without the internal fields."""
         return OpenAIResponseObject(**self.model_dump(exclude={"input", "messages", "input_storage_mode"}))
+
+
+def _load_stored_response(response_data: dict[str, Any]) -> _OpenAIResponseObjectWithInputAndMessages:
+    """Parse a persisted response row, tolerating a text.format stored before it was
+    validated at request time (read back as None, i.e. plain text) so that row stays
+    readable instead of failing every get, list, continuation and delete.
+    """
+    response = _OpenAIResponseObjectWithInputAndMessages.model_validate(
+        response_data, context={LENIENT_STORED_TEXT_FORMAT_CONTEXT_KEY: True}
+    )
+    stored_text = response_data.get("text")
+    if isinstance(stored_text, dict) and stored_text.get("format") is not None and response.text.format is None:
+        logger.warning(
+            "Read stored response with an invalid legacy text.format as plain text",
+            response_id=response.id,
+            stored_format=stored_text.get("format"),
+        )
+    return response
 
 
 @dataclass(frozen=True)
@@ -391,10 +411,7 @@ class ResponsesStore:
 
         # Listed responses carry no input (OpenAI's response object has none), so incremental
         # rows need no input reconstruction here; input_items serves the input instead.
-        data = [
-            _OpenAIResponseObjectWithInputAndMessages(**row["response_object"]).to_response_object()
-            for row in paginated_result.data
-        ]
+        data = [_load_stored_response(row["response_object"]).to_response_object() for row in paginated_result.data]
 
         return ListOpenAIResponseObject(
             data=data,
@@ -425,7 +442,7 @@ class ResponsesStore:
             raise ResponseNotFoundError(response_id) from None
 
         response_data = row["response_object"]
-        response = _OpenAIResponseObjectWithInputAndMessages(**response_data)
+        response = _load_stored_response(response_data)
 
         if reconstruct_input and self._is_incremental_response(response) and response.previous_response_id:
             response.input = await self._reconstruct_full_input(response)
@@ -452,7 +469,7 @@ class ResponsesStore:
             response_cache[response_id] = None
             return None
 
-        response = _OpenAIResponseObjectWithInputAndMessages(**row["response_object"])
+        response = _load_stored_response(row["response_object"])
         response_cache[response_id] = response
         return response
 
@@ -579,7 +596,7 @@ class ResponsesStore:
             if response_data.get("input_storage_mode") != "incremental":
                 continue
 
-            child_response = _OpenAIResponseObjectWithInputAndMessages(**response_data)
+            child_response = _load_stored_response(response_data)
             rewritten_input: list[OpenAIResponseInput] = list(parent_response.input)
             rewritten_input.extend(parent_response.output)
             rewritten_input.extend(child_response.input)
@@ -621,7 +638,7 @@ class ResponsesStore:
         if not row:
             raise ResponseNotFoundError(response_id)
 
-        parent_response = _OpenAIResponseObjectWithInputAndMessages(**row["response_object"])
+        parent_response = _load_stored_response(row["response_object"])
 
         # Ensure delete access before running any internal materialization writes.
         await self.sql_store.check_access_for_rows(

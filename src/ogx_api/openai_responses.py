@@ -8,8 +8,7 @@ from collections.abc import Sequence
 from enum import Enum, StrEnum
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
-from typing_extensions import TypedDict
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from ogx_api.inference import OpenAITokenLogProb
 from ogx_api.schema_utils import json_schema_type, register_schema, remove_default_from_schema, remove_null_from_anyof
@@ -453,25 +452,74 @@ OpenAIResponseOutput = Annotated[
 register_schema(OpenAIResponseOutput, name="OpenAIResponseOutput")
 
 
-# This has to be a TypedDict because we need a "schema" field and our strong
-# typing code in the schema generator doesn't support Pydantic aliases. That also
-# means we can't use a discriminator field here, because TypedDicts don't support
-# default values which the strong typing code requires for discriminators.
-class OpenAIResponseTextFormat(TypedDict, total=False):
-    """Configuration for Responses API text format.
+@json_schema_type
+class OpenAIResponseTextFormatText(BaseModel):
+    """Plain text output format for the Responses API.
 
-    :param type: Must be "text", "json_schema", or "json_object" to identify the format type
-    :param name: The name of the response format. Only used for json_schema.
-    :param schema: The JSON schema the response should conform to. In a Python SDK, this is often a `pydantic` model. Only used for json_schema.
-    :param description: (Optional) A description of the response format. Only used for json_schema.
-    :param strict: (Optional) Whether to strictly enforce the JSON schema. If true, the response must match the schema exactly. Only used for json_schema.
+    :param type: Must be "text"
     """
 
-    type: Literal["text"] | Literal["json_schema"] | Literal["json_object"]
-    name: str | None
-    schema: dict[str, Any] | None
-    description: str | None
-    strict: bool | None
+    type: Literal["text"] = "text"
+
+
+@json_schema_type
+class OpenAIResponseTextFormatJSONObject(BaseModel):
+    """JSON object output format for the Responses API (JSON mode, no schema).
+
+    :param type: Must be "json_object"
+    """
+
+    type: Literal["json_object"] = "json_object"
+
+
+@json_schema_type
+class OpenAIResponseTextFormatJSONSchema(BaseModel):
+    """JSON schema output format (structured outputs) for the Responses API.
+
+    :param type: Must be "json_schema"
+    :param name: The name of the response format
+    :param schema: The JSON schema the response should conform to. In a Python SDK, this is often a `pydantic` model.
+    :param description: (Optional) A description of the response format
+    :param strict: (Optional) Whether to strictly enforce the JSON schema. If true, the response must match the schema exactly.
+    """
+
+    # A field named "schema" would shadow the (deprecated) BaseModel.schema(); the alias
+    # keeps the wire key, and serialize_by_alias makes it the serialization default.
+    model_config = ConfigDict(serialize_by_alias=True, populate_by_name=True)
+
+    type: Literal["json_schema"] = "json_schema"
+    name: str = Field(min_length=1)
+    schema_: dict[str, Any] = Field(alias="schema")
+    # Unset optional fields are left out of dumps, so a stored or echoed format carries
+    # exactly the keys the client sent and no explicit nulls.
+    description: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    strict: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
+OpenAIResponseTextFormat = Annotated[
+    OpenAIResponseTextFormatText | OpenAIResponseTextFormatJSONObject | OpenAIResponseTextFormatJSONSchema,
+    Field(discriminator="type"),
+]
+register_schema(OpenAIResponseTextFormat, name="OpenAIResponseTextFormat")
+
+# Validation-context key set only when re-reading responses that are already persisted.
+# Before text.format was validated at parse time, a response with an incomplete json_schema
+# format (e.g. "schema": null) could be stored; such a format is read back as None instead of
+# making the whole stored response unreadable. New requests never pass this context.
+LENIENT_STORED_TEXT_FORMAT_CONTEXT_KEY = "lenient_stored_text_format"
+
+_TEXT_FORMAT_TYPES = frozenset({"text", "json_object", "json_schema"})
+
+
+def _is_legacy_invalid_text_format(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    format_type = value.get("type")
+    if format_type not in _TEXT_FORMAT_TYPES:
+        return True
+    if format_type == "json_schema":
+        return not value.get("name") or value.get("schema") is None
+    return False
 
 
 @json_schema_type
@@ -486,6 +534,14 @@ class OpenAIResponseText(BaseModel):
     # Defaults to "medium" to match OpenAI: the OpenResponses schema types verbosity as an
     # optional enum that rejects an explicit null, so the response must not serialize it as null.
     verbosity: Literal["low", "medium", "high"] | None = "medium"
+
+    @field_validator("format", mode="before")
+    @classmethod
+    def _drop_legacy_stored_format(cls, value: Any, info: ValidationInfo) -> Any:
+        if info.context and info.context.get(LENIENT_STORED_TEXT_FORMAT_CONTEXT_KEY):
+            if _is_legacy_invalid_text_format(value):
+                return None
+        return value
 
 
 @json_schema_type
@@ -890,7 +946,7 @@ class OpenAIResponseObject(BaseModel):
     status: str
     temperature: float | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
     text: OpenAIResponseText = Field(
-        default=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        default=OpenAIResponseText(format=OpenAIResponseTextFormatText()),
         json_schema_extra=remove_default_from_schema,
     )
     top_p: float | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
