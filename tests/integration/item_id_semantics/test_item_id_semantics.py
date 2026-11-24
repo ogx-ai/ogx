@@ -27,25 +27,30 @@ Responses API:
   R4   conversation= + re-send live conv item id  -> 400 "Duplicate item found"
 
 Targets (see conftest.py):
-  - local OGX server (default; replay needs recordings for C1-C4):
+  - local OGX server (default):
         pytest tests/integration/item_id_semantics --setup gpt
   - live OpenAI (reference target; no recordings needed):
         pytest tests/integration/item_id_semantics --live-openai --setup gpt
         OGX_LIVE_OPENAI=1 pytest tests/integration/item_id_semantics --text-model openai/gpt-5-nano
 
-Known OGX divergences (marked with `_expected_divergence`, which xfails the
-test on the local target only, so it xfail-fires before any API call and
-needs no recordings):
+Known OGX divergences, pinned by these tests and marked
+`@pytest.mark.divergence` (converted to a non-strict xfail on the local
+target only — see conftest.py):
   D1 = C2b  — no msg_ prefix validation, arbitrary ids accepted and re-minted
   D2 = R1/R3 — client ids kept verbatim instead of replaced
   D3 = R2    — silent duplication in the stored input chain instead of 400
   D5 = R4    — silent skip in the conversation mirror instead of 400
+
+The marked tests run in full on the local target: their expected failures
+(the divergence itself, or a missing replay recording) convert to XP instead
+of failures, and they report XPASS automatically once the parity fixes land,
+with no test edits. On live OpenAI no xfail is applied — they must pass.
 """
 
 import pytest
 from openai import BadRequestError, OpenAI
 
-from tests.integration.item_id_semantics.conftest import _is_live_openai
+from tests.integration.item_id_semantics.conftest import is_live_openai
 
 HEX48_A = "ab" * 24
 HEX48_B = "cd" * 24
@@ -76,20 +81,9 @@ def _live_model(request, text_model_id: str) -> str:
     without a configured text model are skipped by the suite's
     skip_if_no_model fixture before the test body executes.
     """
-    if _is_live_openai(request) and text_model_id.startswith("openai/"):
+    if is_live_openai(request.config) and text_model_id.startswith("openai/"):
         return text_model_id.split("/", 1)[1]
     return text_model_id
-
-
-def _expected_divergence(request, code: str, description: str) -> None:
-    """xfail (rather than fail) tests that pin the OpenAI reference where OGX
-    is known to diverge, on the local target only.
-
-    Called before any API call: in replay mode the test stops here, so these
-    scenarios need no recordings. On live OpenAI the test must pass.
-    """
-    if not _is_live_openai(request):
-        pytest.xfail(f"known OGX divergence {code}: {description}")
 
 
 def _text_item(text: str) -> dict:
@@ -126,8 +120,8 @@ def test_conversation_unknown_id_replaced(id_sem_client: OpenAI, conversation_re
     assert item_text(item) == "sent with unknown id"
 
 
-def test_conversation_non_msg_id_rejected(request, id_sem_client: OpenAI, conversation_registry: list[str]):
-    _expected_divergence(request, "D1", "OGX accepts arbitrary client ids and re-mints them instead of 400ing on shape")
+@pytest.mark.divergence("D1", "OGX accepts arbitrary client ids and re-mints them instead of 400ing on shape")
+def test_conversation_non_msg_id_rejected(id_sem_client: OpenAI, conversation_registry: list[str]):
     conv = id_sem_client.conversations.create()
     conversation_registry.append(conv.id)
     with pytest.raises(BadRequestError) as exc:
@@ -173,10 +167,10 @@ def test_conversation_duplicate_id_same_conversation_rejected(id_sem_client: Ope
 # --- Responses API --------------------------------------------------------------
 
 
+@pytest.mark.divergence(
+    "D2", "OGX keeps client-supplied ids verbatim in the stored response input instead of replacing them"
+)
 def test_responses_unknown_input_id_replaced(request, id_sem_client: OpenAI, text_model_id: str):
-    _expected_divergence(
-        request, "D2", "OGX keeps client-supplied ids verbatim in the stored response input instead of replacing them"
-    )
     sent = f"msg_{HEX48_B}"
     resp = id_sem_client.responses.create(
         model=_live_model(request, text_model_id), input=[{"role": "user", "id": sent, "content": "hi"}]
@@ -187,8 +181,8 @@ def test_responses_unknown_input_id_replaced(request, id_sem_client: OpenAI, tex
     assert item_text(item) == "hi"
 
 
+@pytest.mark.divergence("D3", "OGX silently duplicates the item in the stored input chain instead of 400ing")
 def test_responses_resend_id_from_previous_response_rejected(request, id_sem_client: OpenAI, text_model_id: str):
-    _expected_divergence(request, "D3", "OGX silently duplicates the item in the stored input chain instead of 400ing")
     model = _live_model(request, text_model_id)
     resp1 = id_sem_client.responses.create(
         model=model,
@@ -209,14 +203,13 @@ def test_responses_resend_id_from_previous_response_rejected(request, id_sem_cli
     assert "Duplicate item found with id" in exc.value.message
 
 
+@pytest.mark.divergence(
+    "D2",
+    "OGX keeps client-supplied ids verbatim (in the response input and the conversation mirror) instead of replacing them",
+)
 def test_responses_conversation_unknown_input_id_replaced(
     request, id_sem_client: OpenAI, conversation_registry: list[str], text_model_id: str
 ):
-    _expected_divergence(
-        request,
-        "D2",
-        "OGX keeps client-supplied ids verbatim (in the response input and the conversation mirror) instead of replacing them",
-    )
     sent = f"msg_{HEX48_C}"
     conv = id_sem_client.conversations.create()
     conversation_registry.append(conv.id)
@@ -236,10 +229,10 @@ def test_responses_conversation_unknown_input_id_replaced(
     assert conv_users[0].id == resp_item.id
 
 
+@pytest.mark.divergence("D5", "OGX silently skips the duplicate in the conversation mirror instead of 400ing")
 def test_responses_conversation_resend_existing_item_id_rejected(
     request, id_sem_client: OpenAI, conversation_registry: list[str], text_model_id: str
 ):
-    _expected_divergence(request, "D5", "OGX silently skips the duplicate in the conversation mirror instead of 400ing")
     model = _live_model(request, text_model_id)
     conv = id_sem_client.conversations.create()
     conversation_registry.append(conv.id)
