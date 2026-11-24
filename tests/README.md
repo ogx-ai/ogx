@@ -37,6 +37,7 @@ For running integration tests, you must provide a few things:
 - A stack config. This is a pointer to a stack. You have a few ways to point to a stack:
   - **`server:<config>`** - automatically start a server with the given config (e.g., `server:starter`). This provides one-step testing by auto-starting the server if the port is available, or reusing an existing server if already running.
   - **`server:<config>:<port>`** - same as above but with a custom port (e.g., `server:starter:8322`)
+  - **`docker:<distro>`** - build and run the distribution's container (only through `scripts/integration-tests.sh`)
   - a URL which points to a OGX distribution server
   - a distribution name (e.g., `starter`) or a path to a `config.yaml` file
   - a comma-separated list of api=provider pairs, e.g. `inference=fireworks,responses=builtin,agents=builtin`. This is most useful for testing a single API surface.

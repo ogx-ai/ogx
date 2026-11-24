@@ -6,10 +6,21 @@
 
 import os
 import re
+import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+
+# Stub `python` for the runner: setup-env lookups are no-ops, but stack_config.py runs on the
+# real interpreter, since the runner dispatches on its output.
+PYTHON_STUB = f"""#!/bin/bash
+if [[ "$*" == *stack_config.py* ]]; then
+    exec {shlex.quote(sys.executable)} "$@"
+fi
+exit 0
+"""
 
 
 @pytest.mark.parametrize("install_exit_code", [0, 42])
@@ -40,7 +51,7 @@ else
     exit 99
 fi
 """,
-        "python": "#!/bin/bash\nexit 0\n",
+        "python": PYTHON_STUB,
         "pytest": '#!/bin/bash\necho "$*" > "$PYTEST_LOG"\n',
     }
     for name, contents in commands.items():
@@ -149,7 +160,7 @@ else
     exit 99
 fi
 """,
-        "python": "#!/bin/bash\nexit 0\n",
+        "python": PYTHON_STUB,
         "pytest": '#!/bin/bash\necho "$*" > "$PYTEST_LOG"\n',
     }
     for name, contents in commands.items():
@@ -220,7 +231,7 @@ else
     exit 99
 fi
 """,
-        "python": "#!/bin/bash\nexit 0\n",
+        "python": PYTHON_STUB,
         "pytest": '#!/bin/bash\necho "$*" > "$PYTEST_LOG"\n',
     }
     for name, contents in commands.items():
@@ -275,7 +286,7 @@ else
     exit 99
 fi
 """,
-        "python": "#!/bin/bash\nexit 0\n",
+        "python": PYTHON_STUB,
         "pytest": '#!/bin/bash\necho "$*" > "$PYTEST_LOG"\n',
     }
     for name, contents in commands.items():

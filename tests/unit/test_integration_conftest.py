@@ -42,6 +42,13 @@ class TestIsServerStackConfig:
         assert is_server_stack_config(None) is False
 
 
+@pytest.fixture(autouse=True)
+def _no_ogx_config(monkeypatch):
+    """Gating falls back to OGX_CONFIG when --stack-config is absent; keep a developer's
+    shell environment from leaking into these tests."""
+    monkeypatch.delenv("OGX_CONFIG", raising=False)
+
+
 def _fake_item(rootpath: Path, *rel_parts: str) -> MagicMock:
     item = MagicMock()
     item.fspath = str(rootpath.joinpath(*rel_parts))
@@ -104,3 +111,17 @@ class TestCollectionSkipsTheStackConfigGatedFiles:
         pytest_collection_modifyitems(_fake_config(tmp_path, "server:ci-tests"), [item])
 
         item.add_marker.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("stack_config", "skips_server_only"),
+        [("server:ci-tests", False), ("ci-tests", True)],
+    )
+    def test_ogx_config_alone_is_gated_like_the_equivalent_stack_config(
+        self, tmp_path, monkeypatch, stack_config, skips_server_only
+    ):
+        monkeypatch.setenv("OGX_CONFIG", stack_config)
+        item = _fake_item(tmp_path, *next(iter(SERVER_ONLY_TEST_PATHS)))
+
+        pytest_collection_modifyitems(_fake_config(tmp_path, None), [item])
+
+        assert item.add_marker.called is skips_server_only
