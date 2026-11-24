@@ -30,7 +30,6 @@ from ogx_api import (
     ModelInput,
     ProviderSpec,
     Resource,
-    ToolGroupInput,
     VectorIO,
     VectorStore,
     VectorStoreInput,
@@ -816,21 +815,6 @@ class RegisteredResources(BaseModel):
 
     models: list[ModelInput] = Field(default_factory=list)
     vector_stores: list[VectorStoreInput] = Field(default_factory=list)
-    tool_groups: list[ToolGroupInput] = Field(default_factory=list, deprecated=True)
-
-    @model_validator(mode="after")
-    def _warn_deprecated_tool_groups(self) -> Self:
-        if self.tool_groups:
-            warnings.warn(
-                "'registered_resources.tool_groups' was removed and has no effect. "
-                "Tool groups no longer exist: MCP tools are served by the Responses API, "
-                "optionally via MCP connectors. "
-                "Please remove 'tool_groups' from your configuration.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            self.tool_groups = []
-        return self
 
 
 class ServerConfig(BaseModel):
@@ -867,15 +851,6 @@ class StackConfig(BaseModel):
     distro_name: str | None = Field(
         default=None,
         description="""
-Reference to the distribution this package refers to. For unregistered (adhoc) packages,
-this could be just a hash
-""",
-    )
-    image_name: str | None = Field(
-        default=None,
-        deprecated=True,
-        description="""
-DEPRECATED: Use 'distro_name' instead. This field is maintained for backward compatibility.
 Reference to the distribution this package refers to. For unregistered (adhoc) packages,
 this could be just a hash
 """,
@@ -948,31 +923,9 @@ can be instantiated multiple times (with different configs) if necessary.
         return v
 
     @model_validator(mode="after")
-    def validate_distro_name_migration(self) -> "StackConfig":
-        """Handle migration from image_name to distro_name."""
-        import warnings
-
-        if self.distro_name is None and self.image_name is None:
-            raise ValueError("Either 'distro_name' or 'image_name' must be provided")
-
-        if self.image_name is not None and self.distro_name is None:
-            # Migrate from image_name to distro_name
-            warnings.warn(
-                "The 'image_name' field is deprecated. Please use 'distro_name' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            self.distro_name = self.image_name
-        elif self.image_name is not None and self.distro_name is not None:
-            # Both provided - warn and prefer distro_name
-            warnings.warn(
-                "Both 'image_name' and 'distro_name' were provided. "
-                "The 'image_name' field is deprecated and will be ignored. "
-                "Please use only 'distro_name' in your configuration.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
+    def validate_distro_name(self) -> "StackConfig":
+        if self.distro_name is None:
+            raise ValueError("'distro_name' is required")
         return self
 
     @model_validator(mode="after")
@@ -1001,7 +954,6 @@ can be instantiated multiple times (with different configs) if necessary.
         at read time their entries are translated, and ``web_search`` is added to the
         served APIs so the translated providers are reachable.
         """
-        import warnings
 
         legacy_types = {
             "remote::brave-search",
@@ -1042,7 +994,6 @@ can be instantiated multiple times (with different configs) if necessary.
         tool_runtime provider. Existing configs keep loading: the entries are
         dropped at read time, with a warning prompting cleanup.
         """
-        import warnings
 
         tool_runtime_providers = self.providers.get("tool_runtime") or []
         if not any(p.provider_type == "inline::file-search" for p in tool_runtime_providers):
@@ -1069,7 +1020,6 @@ can be instantiated multiple times (with different configs) if necessary.
         configs keep loading: the entries are dropped at read time, with a
         warning prompting cleanup.
         """
-        import warnings
 
         tool_runtime_providers = self.providers.get("tool_runtime") or []
         if tool_runtime_providers:
