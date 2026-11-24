@@ -11,7 +11,6 @@ The `ogxai/distribution-nvidia` distribution consists of the following provider 
 | files | `inline::localfs` |
 | inference | `remote::nvidia` |
 | responses | `inline::builtin` |
-| tool_runtime | `inline::file-search` |
 | vector_io | `inline::faiss` |
 
 ## Environment Variables

@@ -132,11 +132,6 @@ const config: Config = {
               sidebarId: 'experimentalApiSidebar',
               label: 'Experimental',
             },
-            {
-              type: 'docSidebar',
-              sidebarId: 'deprecatedApiSidebar',
-              label: 'Deprecated',
-            },
           ],
         },
         {

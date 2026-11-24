@@ -10,7 +10,6 @@ apis:
 - responses
 - skills
 - systemone
-- tool_runtime
 - vector_io
 - web_search
 providers:
@@ -261,11 +260,9 @@ providers:
       persistence:
         namespace: skills
         backend: kv_default
-  tool_runtime:
-  - provider_id: file-search
-    provider_type: inline::file-search
-  - provider_id: model-context-protocol
-    provider_type: remote::model-context-protocol
+  web_search:
+  - provider_id: placeholder
+    provider_type: inline::placeholder
   batches:
   - provider_id: reference
     provider_type: inline::reference
@@ -279,9 +276,6 @@ providers:
     config:
       base_url: ${env.TYPESAFE_BASE_URL:=https://api.typesafe.ai}
       api_key: ${env.TYPESAFE_API_KEY:=}
-  web_search:
-  - provider_id: placeholder
-    provider_type: inline::placeholder
 storage:
   backends:
     kv_default:
