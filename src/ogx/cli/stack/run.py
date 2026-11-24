@@ -10,14 +10,12 @@ import os
 import ssl
 import subprocess
 import sys
-import warnings
 from pathlib import Path
 
 import uvicorn
 import yaml
 from termcolor import cprint
 
-from ogx.cli.subcommand import Subcommand
 from ogx.core.datatypes import StackConfig
 from ogx.core.distribution import builtin_automatically_routed_apis, get_provider_registry
 from ogx.core.resolver import validate_and_prepare_providers
@@ -273,31 +271,3 @@ def _start_ui_development_server(stack_server_port: int) -> None:
         )
     except Exception as e:
         logger.error("Failed to start UI development server", ui_dir=ui_dir, error=str(e))
-
-
-class StackRun(Subcommand):
-    """CLI subcommand to start a OGX distribution server (deprecated, use 'ogx run' instead)."""
-
-    def __init__(self, subparsers: argparse._SubParsersAction) -> None:
-        super().__init__()
-        self.parser = subparsers.add_parser(
-            "run",
-            prog="ogx stack run",
-            description="""Start the server for a OGX Distribution. You should have already built (or downloaded) and configured the distribution.
-
-NOTE: 'ogx stack run' is deprecated. Use 'ogx run' instead.""",
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        )
-        self._add_arguments()
-        self.parser.set_defaults(func=self._run_stack_run_cmd)
-
-    def _add_arguments(self) -> None:
-        add_run_arguments(self.parser)
-
-    def _run_stack_run_cmd(self, args: argparse.Namespace) -> None:
-        warnings.warn(
-            "'ogx stack run' is deprecated and will be removed in a future release. Use 'ogx run' instead.",
-            FutureWarning,
-            stacklevel=1,
-        )
-        run_stack_cmd(args, self.parser)

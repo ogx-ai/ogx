@@ -45,7 +45,7 @@ Behind that command, OGX does the mechanical work that is easy to get wrong by h
 3. Selects the requested model, or the first available LLM model.
 4. Creates a temporary `CODEX_HOME`.
 5. Writes `ogx.config.toml` and `ogx-model-catalog.json`.
-6. Launches `codex -p ogx`, or `codex exec -p ogx` when `--exec` is used.
+6. Launches `codex -p ogx`, forwarding anything after `--` to the codex command (for example `exec <prompt>` for a non-interactive run).
 
 The generated profile uses the Responses wire API:
 
@@ -110,12 +110,12 @@ uv run ogx connect codex \
   --model ollama/llama3.2:3b
 ```
 
-For a quick non-interactive run, use `--exec`:
+For a quick non-interactive run, forward the codex `exec` subcommand after `--`:
 
 ```bash
 uv run ogx connect codex \
   --model ollama/llama3.2:3b \
-  --exec "Explain in one sentence why OGX is useful with Codex CLI."
+  -- exec "Explain in one sentence why OGX is useful with Codex CLI."
 ```
 
 This is useful when you want a quick answer before opening an interactive Codex session. Codex sends the prompt through OGX, OGX routes it to the selected model, and the final answer comes back through the same Responses API path.
@@ -181,7 +181,7 @@ Now connect Codex through OGX:
 ```bash
 uv run ogx connect codex \
   --model vllm/Qwen/Qwen3-8B \
-  --exec "Explain in one sentence how this Codex request is reaching the vLLM model."
+  -- exec "Explain in one sentence how this Codex request is reaching the vLLM model."
 ```
 
 That is the main point: Codex still uses the same OGX command, while OGX changes the provider behind the model ID. Ollama is a good first local path for basic text flows. vLLM is useful when you want an OpenAI-compatible server for open models. Provider and model compatibility still matter, but those details stay behind the OGX boundary instead of becoming permanent Codex configuration.
