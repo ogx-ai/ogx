@@ -1601,8 +1601,8 @@ class TestStopReasonWithToolCalls:
     def test_stop_without_tool_calls_stays_end_turn(self):
         assert openai_response_to_anthropic(self._response("stop", with_tool_call=False), "m").stop_reason == "end_turn"
 
-    def test_content_filter_with_tool_calls_stays_end_turn(self):
-        assert openai_response_to_anthropic(self._response("content_filter"), "m").stop_reason == "end_turn"
+    def test_content_filter_with_tool_calls_stays_refusal(self):
+        assert openai_response_to_anthropic(self._response("content_filter"), "m").stop_reason == "refusal"
 
     async def test_streamed_stop_with_tool_calls_is_tool_use(self):
         events = await _stream_events(
