@@ -1697,31 +1697,18 @@ class OpenAICompactedResponse(BaseModel):
 
 
 @json_schema_type
-class OpenAIResponseObjectWithInput(OpenAIResponseObject):
-    """OpenAI response object extended with input context information.
-
-    :param input: List of input items that led to this response
-    """
-
-    input: Sequence[OpenAIResponseInput]
-
-    def to_response_object(self) -> OpenAIResponseObject:
-        """Convert to OpenAIResponseObject by excluding input field."""
-        return OpenAIResponseObject(**{k: v for k, v in self.model_dump().items() if k != "input"})
-
-
-@json_schema_type
 class ListOpenAIResponseObject(BaseModel):
     """Paginated list of OpenAI response objects with navigation metadata.
 
-    :param data: List of response objects with their input context
+    :param data: List of response objects. As in OpenAI's API, a response object carries no
+        input; use the /responses/{response_id}/input_items endpoint to retrieve it.
     :param has_more: Whether there are more results available beyond this page
     :param first_id: Identifier of the first item in this page
     :param last_id: Identifier of the last item in this page
     :param object: Object type identifier, always "list"
     """
 
-    data: Sequence[OpenAIResponseObjectWithInput]
+    data: Sequence[OpenAIResponseObject]
     has_more: bool
     first_id: str
     last_id: str
