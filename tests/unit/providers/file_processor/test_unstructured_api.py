@@ -409,6 +409,7 @@ class TestUnstructuredApiFileProcessor:
             # Mock API to raise 401 error
             mock_response = MagicMock()
             mock_response.text = '{"detail":"Unauthorized - invalid API key"}'
+            mock_response.status_code = 401
             mock_client.general.partition_async = AsyncMock(
                 side_effect=SDKError("API error occurred", mock_response, mock_response.text)
             )
@@ -433,6 +434,7 @@ class TestUnstructuredApiFileProcessor:
             # Mock API to raise 500 error
             mock_response = MagicMock()
             mock_response.text = '{"detail":"Internal server error"}'
+            mock_response.status_code = 500
             mock_client.general.partition_async = AsyncMock(
                 side_effect=SDKError("API error occurred", mock_response, mock_response.text)
             )
