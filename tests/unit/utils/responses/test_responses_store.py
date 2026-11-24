@@ -662,3 +662,43 @@ async def test_responses_store_input_items_reasoning_include_preserves_content()
         assert len(result.data) == 1
         assert get_reasoning_item(result.data[0]).content is not None
         assert get_reasoning_item(result.data[0]).content[0].text == "Reasoning content"
+
+
+async def test_stored_response_with_legacy_null_schema_text_format_reads_back():
+    """Before text.format was validated at parse time, {"type": "json_schema", "schema": null}
+    was accepted and persisted verbatim. Such a row must stay readable on every read path
+    (get, list, previous_response_id continuation, delete) rather than failing validation.
+    """
+    with TemporaryDirectory() as tmp_dir:
+        store = build_store(tmp_dir + "/test.db")
+        await store.initialize()
+
+        parent = create_test_response_object("legacy-parent", int(time.time()))
+        await store.store_response_object(parent, [create_test_response_input("hi", "in-1")], [])
+        child = create_test_response_object("legacy-child", int(time.time()) + 1)
+        child.previous_response_id = "legacy-parent"
+        await store.store_response_object(
+            child, [create_test_response_input("again", "in-2")], [], incremental_input=True
+        )
+        await store.flush()
+
+        row = await store.sql_store.fetch_one("responses", where={"id": "legacy-parent"})
+        legacy_data = dict(row["response_object"])
+        legacy_data["text"] = {
+            "format": {"type": "json_schema", "name": "x", "schema": None},
+            "verbosity": "medium",
+        }
+        await store.sql_store.update("responses", {"response_object": legacy_data}, where={"id": "legacy-parent"})
+
+        retrieved = await store.get_response_object("legacy-parent")
+        assert retrieved.text.format is None
+
+        listed = await store.list_responses(limit=10)
+        assert {r.id for r in listed.data} == {"legacy-parent", "legacy-child"}
+
+        continued = await store.get_response_object("legacy-child")
+        assert continued.previous_response_id == "legacy-parent"
+
+        await store.delete_response_object("legacy-parent")
+        with pytest.raises(ResponseNotFoundError):
+            await store.get_response_object("legacy-parent")

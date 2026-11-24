@@ -8,7 +8,9 @@ import json
 from unittest.mock import AsyncMock
 
 import httpx2
+import pytest
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from openai import AsyncOpenAI
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
@@ -32,6 +34,7 @@ from ogx_api.responses.models import (
     ListResponsesRequest,
     RetrieveResponseRequest,
 )
+from tests.unit.api.test_response_text_format import MALFORMED_TEXT_FORMATS
 
 
 async def _collect_stream_events(app: FastAPI, model: str) -> list[object]:
@@ -888,3 +891,28 @@ def test_parameter_usage_ignores_extra_keys():
             description="Tracks which optional parameters are explicitly provided in Responses API calls",
             unit="1",
         )
+
+
+@pytest.mark.parametrize("extra", [{}, {"stream": True}, {"background": True}], ids=["sync", "stream", "background"])
+@pytest.mark.parametrize("text_format", MALFORMED_TEXT_FORMATS)
+def test_malformed_text_format_is_a_400_in_the_standard_envelope_before_the_impl_runs(text_format, extra):
+    """Rejected at request parse time, so even stream=true gets a real 400 rather than
+    a post-200 SSE error event, and the provider never sees the request.
+    """
+    app = FastAPI()
+    # Same registration as the real server (server.py), which overrides FastAPI's default 422.
+    app.add_exception_handler(RequestValidationError, global_exception_handler)
+    app.add_exception_handler(Exception, global_exception_handler)
+    impl = AsyncMock(spec=Responses)
+    router = build_fastapi_router(Api.responses, impl)
+    assert router is not None
+    app.include_router(router)
+
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.post("/v1/responses", json={"input": "hi", "model": "test", "text": {"format": text_format}, **extra})
+
+    assert resp.status_code == 400
+    body = resp.json()
+    assert set(body) == {"error"}
+    assert "text" in json.dumps(body["error"])
+    impl.create_openai_response.assert_not_called()

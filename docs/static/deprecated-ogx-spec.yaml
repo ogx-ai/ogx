@@ -3445,10 +3445,22 @@ components:
       properties:
         format:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseTextFormat'
-            title: OpenAIResponseTextFormat
+          - oneOf:
+            - $ref: '#/components/schemas/OpenAIResponseTextFormatText'
+              title: OpenAIResponseTextFormatText
+            - $ref: '#/components/schemas/OpenAIResponseTextFormatJSONObject'
+              title: OpenAIResponseTextFormatJSONObject
+            - $ref: '#/components/schemas/OpenAIResponseTextFormatJSONSchema'
+              title: OpenAIResponseTextFormatJSONSchema
+            discriminator:
+              propertyName: type
+              mapping:
+                json_object: '#/components/schemas/OpenAIResponseTextFormatJSONObject'
+                json_schema: '#/components/schemas/OpenAIResponseTextFormatJSONSchema'
+                text: '#/components/schemas/OpenAIResponseTextFormatText'
+            title: OpenAIResponseTextFormatText | OpenAIResponseTextFormatJSONObject | OpenAIResponseTextFormatJSONSchema
           - type: 'null'
-          title: OpenAIResponseTextFormat
+          title: Format
         verbosity:
           anyOf:
           - type: string
@@ -7302,29 +7314,31 @@ components:
         Configuration for reasoning effort in OpenAI responses.
 
         Controls how much reasoning the model performs before generating a response.
-    OpenAIResponseTextFormat:
+    OpenAIResponseTextFormatJSONObject:
       properties:
         type:
-          anyOf:
-          - type: string
-            enum:
-            - text
-          - type: string
-            enum:
-            - json_schema
-          - type: string
-            enum:
-            - json_object
-          title: string
+          type: string
+          title: Type
+          enum:
+          - json_object
+      type: object
+      title: OpenAIResponseTextFormatJSONObject
+      description: JSON object output format for the Responses API (JSON mode, no schema).
+    OpenAIResponseTextFormatJSONSchema:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - json_schema
         name:
-          anyOf:
-          - type: string
-          - type: 'null'
+          type: string
+          minLength: 1
+          title: Name
         schema:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
+          additionalProperties: true
+          type: object
+          title: Schema
         description:
           anyOf:
           - type: string
@@ -7334,8 +7348,21 @@ components:
           - type: boolean
           - type: 'null'
       type: object
-      title: OpenAIResponseTextFormat
-      description: Configuration for Responses API text format.
+      required:
+      - name
+      - schema
+      title: OpenAIResponseTextFormatJSONSchema
+      description: JSON schema output format (structured outputs) for the Responses API.
+    OpenAIResponseTextFormatText:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - text
+      type: object
+      title: OpenAIResponseTextFormatText
+      description: Plain text output format for the Responses API.
     OpenAIResponseUsageInputTokensDetails:
       properties:
         cached_tokens:
@@ -8585,6 +8612,21 @@ components:
       - in_progress
       - completed
       type: string
+    OpenAIResponseTextFormat:
+      discriminator:
+        mapping:
+          json_object: '#/components/schemas/OpenAIResponseTextFormatJSONObject'
+          json_schema: '#/components/schemas/OpenAIResponseTextFormatJSONSchema'
+          text: '#/components/schemas/OpenAIResponseTextFormatText'
+        propertyName: type
+      oneOf:
+      - $ref: '#/components/schemas/OpenAIResponseTextFormatText'
+        title: OpenAIResponseTextFormatText
+      - $ref: '#/components/schemas/OpenAIResponseTextFormatJSONObject'
+        title: OpenAIResponseTextFormatJSONObject
+      - $ref: '#/components/schemas/OpenAIResponseTextFormatJSONSchema'
+        title: OpenAIResponseTextFormatJSONSchema
+      title: OpenAIResponseTextFormatText | OpenAIResponseTextFormatJSONObject | OpenAIResponseTextFormatJSONSchema
     OpenAIResponseInputToolChoice:
       anyOf:
       - $ref: '#/components/schemas/OpenAIResponseInputToolChoiceMode'
