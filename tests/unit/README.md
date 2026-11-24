@@ -6,7 +6,7 @@ Unit tests verify individual components and functions in isolation. They are fas
 
 ### Prerequisites
 
-1. **Python Environment**: Ensure you have Python 3.12+ installed
+1. **Python Environment**: Ensure you have Python 3.13+ installed
 2. **uv Package Manager**: Install `uv` if not already installed
 
 You can run the unit tests by running:
@@ -21,11 +21,11 @@ Any additional arguments are passed to pytest. For example, you can specify a te
 ./scripts/unit-tests.sh tests/unit/registry/test_registry.py -vvv
 ```
 
-If you'd like to run for a non-default version of Python (currently 3.12), pass `PYTHON_VERSION` variable as follows:
+If you'd like to run for a non-default version of Python (currently 3.13), pass `PYTHON_VERSION` variable as follows:
 
 ```bash
 source .venv/bin/activate
-PYTHON_VERSION=3.13 ./scripts/unit-tests.sh
+PYTHON_VERSION=3.14 ./scripts/unit-tests.sh
 ```
 
 ### Test Configuration
@@ -33,7 +33,7 @@ PYTHON_VERSION=3.13 ./scripts/unit-tests.sh
 - **Test Discovery**: Tests are automatically discovered in the `tests/unit/` directory
 - **Async Support**: Tests use `--asyncio-mode=auto` for automatic async test handling
 - **Coverage**: Tests generate coverage reports in `htmlcov/` directory
-- **Python Version**: Defaults to Python 3.12, but can be overridden with `PYTHON_VERSION` environment variable
+- **Python Version**: Defaults to Python 3.13, but can be overridden with `PYTHON_VERSION` environment variable
 
 ### Coverage Reports
 

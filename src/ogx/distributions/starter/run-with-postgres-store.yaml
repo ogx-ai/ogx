@@ -9,8 +9,8 @@ apis:
 - messages
 - responses
 - skills
-- tool_runtime
 - vector_io
+- web_search
 providers:
   inference:
   - provider_id: ${env.CEREBRAS_API_KEY:+cerebras}
@@ -214,6 +214,9 @@ providers:
   - provider_id: builtin
     provider_type: inline::builtin
     config:
+      sqlstore:
+        table_name: message_batches
+        backend: sql_default
       kvstore:
         namespace: message_batches
         backend: kv_default
@@ -236,7 +239,7 @@ providers:
       persistence:
         namespace: skills
         backend: kv_default
-  tool_runtime:
+  web_search:
   - provider_id: exa-search
     provider_type: remote::exa-search
     config:
@@ -269,10 +272,6 @@ providers:
     config:
       api_key: ${env.SEARCHAPI_API_KEY:=}
       max_results: 3
-  - provider_id: file-search
-    provider_type: inline::file-search
-  - provider_id: model-context-protocol
-    provider_type: remote::model-context-protocol
   batches:
   - provider_id: reference
     provider_type: inline::reference

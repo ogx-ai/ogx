@@ -18,10 +18,16 @@ from fastapi import HTTPException
 
 from ogx.core.server.fastapi_router_registry import get_router_routes
 from ogx.providers.utils.inference.anthropic_mixin import AnthropicAPIError
-from ogx_api.common.errors import ModelNotFoundError
+from ogx_api.common.errors import ModelNotFoundError, RouteAccessDeniedError
 from ogx_api.messages.api import Messages
 from ogx_api.messages.fastapi_routes import create_router
-from ogx_api.messages.models import AnthropicCountTokensRequest, AnthropicCreateMessageRequest, AnthropicMessage
+from ogx_api.messages.models import (
+    AnthropicCountTokensRequest,
+    AnthropicCreateMessageRequest,
+    AnthropicMessage,
+    CreateMessageBatchRequest,
+    MessageBatchRequestParams,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -42,6 +48,15 @@ def _count_tokens_endpoint():
     impl = AsyncMock(spec=Messages)
     router = create_router(impl)
     endpoint = next(r.endpoint for r in get_router_routes(router) if r.path == "/v1/messages/count_tokens")
+    return impl, endpoint
+
+
+def _create_message_batch_endpoint():
+    impl = AsyncMock(spec=Messages)
+    router = create_router(impl)
+    endpoint = next(
+        r.endpoint for r in get_router_routes(router) if r.path == "/v1/messages/batches" and "POST" in r.methods
+    )
     return impl, endpoint
 
 
@@ -108,5 +123,43 @@ async def test_count_message_tokens_still_falls_back_to_500_for_an_unrecognized_
     impl.count_message_tokens.side_effect = RuntimeError("boom")
 
     response = await count_message_tokens(params=_COUNT_TOKENS_PARAMS)
+
+    assert response.status_code == 500
+
+
+async def test_create_message_batch_preserves_route_access_denied_status():
+    """The batch provider re-checks the route policy at creation (batch processing
+    bypasses RouteAuthorizationMiddleware). A denial must reach the client as the
+    403 a live request to /v1/messages would get, not a generic 500."""
+    impl, create_message_batch = _create_message_batch_endpoint()
+    impl.create_message_batch.side_effect = RouteAccessDeniedError("/v1/messages")
+    request = CreateMessageBatchRequest(
+        requests=[
+            MessageBatchRequestParams(
+                custom_id="req-1",
+                params=AnthropicCreateMessageRequest(model="m", messages=_MESSAGES, max_tokens=16),
+            ),
+        ],
+    )
+
+    response = await create_message_batch(params=request)
+
+    assert response.status_code == 403
+    assert json.loads(response.body)["error"]["type"] == "permission_error"
+
+
+async def test_create_message_batch_still_falls_back_to_500_for_an_unrecognized_exception():
+    impl, create_message_batch = _create_message_batch_endpoint()
+    impl.create_message_batch.side_effect = RuntimeError("boom")
+    request = CreateMessageBatchRequest(
+        requests=[
+            MessageBatchRequestParams(
+                custom_id="req-1",
+                params=AnthropicCreateMessageRequest(model="m", messages=_MESSAGES, max_tokens=16),
+            ),
+        ],
+    )
+
+    response = await create_message_batch(params=request)
 
     assert response.status_code == 500

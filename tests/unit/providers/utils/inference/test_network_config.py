@@ -582,48 +582,8 @@ class TestBuildLimits:
         assert limits.keepalive_expiry is None
 
 
-class TestVLLMBackwardCompatibility:
-    """Tests for vLLM backward compatibility with tls_verify."""
-
-    def test_legacy_tls_verify_true(self):
-        """Test that legacy tls_verify=True is migrated."""
-        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
-
-        with pytest.warns(DeprecationWarning, match="tls_verify.*deprecated"):
-            config = VLLMInferenceAdapterConfig(tls_verify=True)
-
-        assert config.network is not None
-        assert config.network.tls is not None
-        assert config.network.tls.verify is True
-
-    def test_legacy_tls_verify_false(self):
-        """Test that legacy tls_verify=False is migrated."""
-        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
-
-        with pytest.warns(DeprecationWarning, match="tls_verify.*deprecated"):
-            config = VLLMInferenceAdapterConfig(tls_verify=False)
-
-        assert config.network is not None
-        assert config.network.tls is not None
-        assert config.network.tls.verify is False
-
-    def test_legacy_tls_verify_path(self):
-        """Test that legacy tls_verify path is migrated."""
-        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
-
-        with tempfile.NamedTemporaryFile(suffix=".crt", delete=False) as f:
-            f.write(b"fake cert")
-            cert_path = f.name
-
-        try:
-            with pytest.warns(DeprecationWarning, match="tls_verify.*deprecated"):
-                config = VLLMInferenceAdapterConfig(tls_verify=cert_path)
-
-            assert config.network is not None
-            assert config.network.tls is not None
-            assert config.network.tls.verify.resolve() == Path(cert_path).resolve()
-        finally:
-            Path(cert_path).unlink()
+class TestVLLMNetworkConfig:
+    """Tests for vLLM network configuration."""
 
     def test_new_network_config_style(self):
         """Test that new network config style works."""
@@ -639,20 +599,6 @@ class TestVLLMBackwardCompatibility:
         assert config.network.tls.verify is True
         assert config.network.tls.min_version == "TLSv1.2"
         assert config.network.timeout == 30.0
-
-    def test_network_not_overwritten_by_tls_verify(self):
-        """Test that existing network.tls is not overwritten by tls_verify."""
-        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
-
-        with pytest.warns(DeprecationWarning, match="tls_verify.*deprecated"):
-            config = VLLMInferenceAdapterConfig(
-                tls_verify=False,
-                network=NetworkConfig(tls=TLSConfig(verify=True, min_version="TLSv1.3")),
-            )
-
-        # network.tls should be preserved since it was explicitly set
-        assert config.network.tls.verify is True
-        assert config.network.tls.min_version == "TLSv1.3"
 
 
 class TestOpenAIMixinConnectionLimits:

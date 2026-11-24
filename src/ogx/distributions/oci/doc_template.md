@@ -99,7 +99,7 @@ You can run the OCI distribution via Docker or local virtual environment.
 If you've set up your local development environment, you can also build the image using your local virtual environment.
 
 ```bash
-OCI_AUTH=$OCI_AUTH_TYPE OCI_REGION=$OCI_REGION OCI_COMPARTMENT_OCID=$OCI_COMPARTMENT_OCID ogx stack run --port 8321 oci
+OCI_AUTH=$OCI_AUTH_TYPE OCI_REGION=$OCI_REGION OCI_COMPARTMENT_OCID=$OCI_COMPARTMENT_OCID ogx run --port 8321 oci
 ```
 
 ### Configuration Examples

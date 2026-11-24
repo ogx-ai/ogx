@@ -16,7 +16,7 @@
 #   --build-arg DISTRO_NAME=starter \
 #   --tag docker.io/ogxai/distribution-starter:latest .
 
-ARG BASE_IMAGE=python:3.12-slim
+ARG BASE_IMAGE=python:3.14-slim
 # Buildx automatically handles platform selection for the base image when --platform is specified
 FROM ${BASE_IMAGE}
 
@@ -49,10 +49,10 @@ RUN set -eux; \
     if command -v dnf >/dev/null 2>&1; then \
         dnf -y update && \
         dnf install -y iputils git net-tools wget \
-            vim-minimal python3.12 python3.12-pip python3.12-wheel \
-            python3.12-setuptools python3.12-devel gcc gcc-c++ make && \
-        ln -sf /usr/bin/pip3.12 /usr/local/bin/pip && \
-        ln -sf /usr/bin/python3.12 /usr/local/bin/python && \
+            vim-minimal python3.14 python3.14-pip python3.14-setuptools \
+            python3.14-devel gcc gcc-c++ make && \
+        ln -sf /usr/bin/pip3.14 /usr/local/bin/pip && \
+        ln -sf /usr/bin/python3.14 /usr/local/bin/python && \
         dnf clean all; \
     elif command -v apt-get >/dev/null 2>&1; then \
         apt-get update && \
@@ -209,14 +209,14 @@ fi
 CLI_NAME="${CLI_NAME:-ogx}"
 
 if [ -n "$RUN_CONFIG_PATH" ] && [ -f "$RUN_CONFIG_PATH" ]; then
-  exec $CMD_PREFIX "$CLI_NAME" stack run --insecure "$RUN_CONFIG_PATH" "$@"
+  exec $CMD_PREFIX "$CLI_NAME" run --insecure "$RUN_CONFIG_PATH" "$@"
 fi
 
 if [ -n "$DISTRO_NAME" ]; then
-  exec $CMD_PREFIX "$CLI_NAME" stack run --insecure "$DISTRO_NAME" "$@"
+  exec $CMD_PREFIX "$CLI_NAME" run --insecure "$DISTRO_NAME" "$@"
 fi
 
-exec $CMD_PREFIX "$CLI_NAME" stack run --insecure "$@"
+exec $CMD_PREFIX "$CLI_NAME" run --insecure "$@"
 EOF
 RUN chmod +x /usr/local/bin/ogx-entrypoint.sh
 

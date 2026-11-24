@@ -231,11 +231,11 @@ def test_providers_flag_generates_config_with_api_keys():
     import argparse
     from unittest.mock import patch
 
-    from ogx.cli.stack.run import StackRun
+    from ogx.cli.run import Run
 
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
-    stack_run = StackRun(subparsers)
+    run_cmd = Run(subparsers)
 
     # Create args with --providers flag set
     args = argparse.Namespace(
@@ -250,7 +250,7 @@ def test_providers_flag_generates_config_with_api_keys():
 
     # Mock _uvicorn_run to prevent starting a server
     with patch("ogx.cli.stack.run._uvicorn_run"):
-        stack_run._run_stack_run_cmd(args)
+        run_cmd._run_cmd(args)
 
     # Read the generated config file
     from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
@@ -268,128 +268,6 @@ def test_providers_flag_generates_config_with_api_keys():
     assert openai_provider["config"], "Provider config should not be empty"
     assert "api_key" in openai_provider["config"], "API key should be in provider config"
     assert "base_url" in openai_provider["config"], "Base URL should be in provider config"
-
-
-@pytest.fixture
-def config_with_image_name():
-    """Test config using deprecated image_name field."""
-    return yaml.safe_load(
-        f"""
-        version: {OGX_RUN_CONFIG_VERSION}
-        image_name: my-old-distro
-        apis_to_serve: []
-        built_at: {datetime.now().isoformat()}
-        storage:
-          backends:
-            kv_default:
-              type: kv_sqlite
-              db_path: /tmp/test_kv.db
-            sql_default:
-              type: sql_sqlite
-              db_path: /tmp/test_sql.db
-          stores:
-            metadata:
-              backend: kv_default
-              namespace: metadata
-            inference:
-              backend: sql_default
-              table_name: inference
-            conversations:
-              backend: sql_default
-              table_name: conversations
-            responses:
-              backend: sql_default
-              table_name: responses
-            prompts:
-              backend: sql_default
-              table_name: prompts
-        providers:
-          inference:
-            - provider_id: provider1
-              provider_type: remote::ollama
-              config: {{}}
-    """
-    )
-
-
-def test_parse_config_with_deprecated_image_name(config_with_image_name):
-    """Test that deprecated image_name field is properly migrated to distro_name."""
-    import warnings
-
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        result = parse_and_maybe_upgrade_config(config_with_image_name)
-
-        # Check that at least one deprecation warning about image_name was raised
-        deprecation_warnings = [warning for warning in w if issubclass(warning.category, DeprecationWarning)]
-        image_name_warnings = [
-            warning
-            for warning in deprecation_warnings
-            if "image_name" in str(warning.message) and "distro_name" in str(warning.message)
-        ]
-        assert len(image_name_warnings) >= 1, "Expected at least one deprecation warning about image_name"
-
-    # Verify distro_name is set from image_name
-    assert result.distro_name == "my-old-distro"
-    assert result.version == OGX_RUN_CONFIG_VERSION
-
-
-def test_parse_config_with_both_names_prefers_distro_name():
-    """Test that when both image_name and distro_name are provided, distro_name is used."""
-    import warnings
-
-    config = yaml.safe_load(
-        f"""
-        version: {OGX_RUN_CONFIG_VERSION}
-        image_name: old-name
-        distro_name: new-name
-        apis_to_serve: []
-        built_at: {datetime.now().isoformat()}
-        storage:
-          backends:
-            kv_default:
-              type: kv_sqlite
-              db_path: /tmp/test_kv.db
-            sql_default:
-              type: sql_sqlite
-              db_path: /tmp/test_sql.db
-          stores:
-            metadata:
-              backend: kv_default
-              namespace: metadata
-            inference:
-              backend: sql_default
-              table_name: inference
-            conversations:
-              backend: sql_default
-              table_name: conversations
-            responses:
-              backend: sql_default
-              table_name: responses
-            prompts:
-              backend: sql_default
-              table_name: prompts
-        providers:
-          inference:
-            - provider_id: provider1
-              provider_type: remote::ollama
-              config: {{}}
-    """
-    )
-
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        result = parse_and_maybe_upgrade_config(config)
-
-        # Check that deprecation warning was raised about both being provided
-        deprecation_warnings = [warning for warning in w if issubclass(warning.category, DeprecationWarning)]
-        both_provided_warnings = [warning for warning in deprecation_warnings if "Both" in str(warning.message)]
-        assert len(both_provided_warnings) >= 1, (
-            "Expected at least one deprecation warning about both fields being provided"
-        )
-
-    # Verify distro_name is preferred over image_name
-    assert result.distro_name == "new-name"
 
 
 def _minimal_config_yaml(apis_line: str) -> dict:

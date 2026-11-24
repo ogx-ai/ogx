@@ -71,7 +71,7 @@ document types without the heavy ML dependencies required by Docling.
 Start OGX with the MarkItDown file processor:
 
 ```bash
-ogx stack run --providers "file_processors=inline::markitdown" --port 8321
+ogx run --providers "file_processors=inline::markitdown" --port 8321
 ```
 
 Or add it to a custom `run.yaml`:
@@ -119,7 +119,7 @@ preserves semantic boundaries. It supports PDF, DOCX, PPTX, HTML, and images.
 Start OGX with the Docling file processor using the `--providers` flag:
 
 ```bash
-OLLAMA_URL=http://localhost:11434/v1 ogx stack run \\
+OLLAMA_URL=http://localhost:11434/v1 ogx run \\
   --providers "file_processors=inline::docling,files=inline::localfs,vector_io=inline::faiss,inference=inline::sentence-transformers,inference=remote::ollama" \\
   --port 8321
 ```
@@ -209,7 +209,7 @@ sudo apt-get update && sudo apt-get install -y \\
 
 ### Docker (Recommended)
 ```dockerfile
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 RUN apt-get update && apt-get install -y \\
     libmagic-dev \\
@@ -233,7 +233,7 @@ Then install system dependencies as shown above.
 Start OGX with the Unstructured file processor:
 
 ```bash
-ogx stack run \\
+ogx run \\
   --providers "file_processors=inline::unstructured" \\
   --port 8321
 ```
@@ -309,7 +309,7 @@ docker run -p 5001:5001 quay.io/docling-project/docling-serve
 Then start OGX with the remote Docling Serve provider:
 
 ```bash
-DOCLING_SERVE_URL=http://localhost:5001 ogx stack run \\
+DOCLING_SERVE_URL=http://localhost:5001 ogx run \\
   --providers "file_processors=remote::docling-serve,files=inline::localfs,vector_io=inline::faiss,inference=inline::sentence-transformers,inference=remote::ollama" \\
   --port 8321
 ```
@@ -367,7 +367,7 @@ the Unstructured.io SaaS API for cloud-based document processing with advanced t
 Get an API key from [Unstructured.io](https://unstructured.io) (free tier available), then start OGX:
 
 ```bash
-UNSTRUCTURED_API_KEY=your-api-key ogx stack run \\
+UNSTRUCTURED_API_KEY=your-api-key ogx run \\
   --providers "file_processors=remote::unstructured-api,files=inline::localfs,vector_io=inline::faiss,inference=inline::sentence-transformers,inference=remote::ollama" \\
   --port 8321
 ```

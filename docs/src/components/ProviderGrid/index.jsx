@@ -18,11 +18,6 @@ const ICONS = {
       <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
     </svg>
   ),
-  tool_runtime: (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
-    </svg>
-  ),
   files: (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M15 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7z"/>
@@ -50,13 +45,6 @@ const CATEGORIES = [
     count: 15,
     desc: 'FAISS, SQLite-Vec, ChromaDB, Qdrant, Milvus, PGVector, Weaviate',
     href: '/docs/providers/vector_io/',
-  },
-  {
-    id: 'tool_runtime',
-    label: 'Tool Runtime',
-    count: 5,
-    desc: 'File Search, Brave Search, Tavily, MCP',
-    href: '/docs/providers/tool_runtime/',
   },
   {
     id: 'files',
@@ -101,7 +89,6 @@ export function ProviderGrid() {
 const REF_DATA = [
   { id: 'inference', label: 'Inference', count: 23, examples: 'Ollama, vLLM, OpenAI, Bedrock, Anthropic, Gemini, WatsonX, and more', href: '/docs/providers/inference/', linkLabel: 'Inference Providers' },
   { id: 'vector_io', label: 'Vector IO', count: 15, examples: 'FAISS, ChromaDB, Qdrant, Milvus, PGVector, Weaviate, Elasticsearch', href: '/docs/providers/vector_io/', linkLabel: 'Vector IO Providers' },
-  { id: 'tool_runtime', label: 'Tool Runtime', count: 5, examples: 'File Search, Brave Search, Tavily, MCP', href: '/docs/providers/tool_runtime/', linkLabel: 'Tool Runtime Providers' },
   { id: 'files', label: 'Files', count: 3, examples: 'Local filesystem, S3, OpenAI Files', href: '/docs/providers/files/', linkLabel: 'Files Providers' },
   { id: 'external', label: 'External', count: null, examples: 'Build your own provider', href: '/docs/providers/external/', linkLabel: 'External Providers Guide' },
 ];

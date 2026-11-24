@@ -1839,8 +1839,10 @@ class StreamingResponseOrchestrator:
                     self.ctx.chat_tools.append(chat_tool)
             elif input_tool.type in WebSearchToolTypes:
                 tool_name = "web_search"
-                # Need to access tool_groups_api from tool_executor
-                tool = await self.tool_executor.tool_groups_api.get_tool(tool_name)
+                if self.tool_executor.web_search_api is None:
+                    raise ValueError(f"Tool {tool_name} not found")
+                # The default backend owns the model-facing tool definition
+                tool = await self.tool_executor.web_search_api.tool_def(None)
                 if not tool:
                     raise ValueError(f"Tool {tool_name} not found")
                 self.ctx.chat_tools.append(make_openai_tool(tool_name, tool))
@@ -1876,7 +1878,7 @@ class StreamingResponseOrchestrator:
         # Resolve connector_id to server_url if provided
         if self.connectors_api is not None:
             mcp_tool = await resolve_mcp_connector_id(mcp_tool, self.connectors_api)
-        endpoint_pins: dict[str, str] | None = None
+        endpoint_pins: dict[str, list[str]] | None = None
 
         # Emit mcp_list_tools.in_progress
         self.sequence_number += 1

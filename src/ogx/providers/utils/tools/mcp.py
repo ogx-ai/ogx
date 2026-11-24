@@ -23,7 +23,7 @@ from mcp.shared._httpx_utils import MCP_DEFAULT_SSE_READ_TIMEOUT, MCP_DEFAULT_TI
 
 from ogx.core.datatypes import AuthenticationRequiredError
 from ogx.log import get_logger
-from ogx.providers.utils.common.url_validation import resolve_public_ips
+from ogx.providers.utils.common.url_validation import PinnedIPTransport, resolve_public_ips
 from ogx.providers.utils.tools.ttl_dict import TTLDict
 from ogx_api import (
     ImageContentItem,
@@ -38,8 +38,8 @@ from ogx_api import (
 logger = get_logger(__name__, category="tools")
 
 
-def validate_mcp_endpoint(endpoint: str) -> dict[str, str]:
-    """Validate an MCP endpoint and pin it to a validated public IP.
+def validate_mcp_endpoint(endpoint: str) -> dict[str, list[str]]:
+    """Validate an MCP endpoint and pin it to its validated public IPs.
 
     Applies the same private-IP guard used for inference content and file-search
     URLs so caller-controlled MCP ``server_url`` values cannot be used for SSRF:
@@ -47,11 +47,12 @@ def validate_mcp_endpoint(endpoint: str) -> dict[str, str]:
     addresses are accepted.
 
     The host is resolved here, immediately before the transport is built, and
-    the returned ``{hostname: ip}`` map pins the connection to the validated
-    address (the Host header and TLS SNI keep the original name), so a
-    DNS-rebinding swap between this check and the TCP connect cannot redirect
-    the request to a non-public address. Callers must re-invoke this (with a
-    fresh resolution) right before each connection, including tool invocation.
+    the returned ``{hostname: [ip, ...]}`` map pins the connection to the
+    validated addresses (tried in order; the Host header and TLS SNI keep the
+    original name), so a DNS-rebinding swap between this check and the TCP
+    connect cannot redirect the request to a non-public address. Callers must
+    re-invoke this (with a fresh resolution) right before each connection,
+    including tool invocation.
 
     Raises:
         ValueError: If the scheme is not http/https, the host is unresolvable,
@@ -63,48 +64,16 @@ def validate_mcp_endpoint(endpoint: str) -> dict[str, str]:
     hostname = parsed.hostname
     if not hostname:
         raise ValueError(f"Failed to parse hostname from URL: {endpoint}")
-    return {hostname: resolve_public_ips(hostname)[0]}
+    return {hostname: resolve_public_ips(hostname)}
 
 
-class _PinnedIPTransport(httpx2.AsyncHTTPTransport):
-    """Route requests for pinned hosts to a validated IP address.
-
-    The Host header (and, for https, the TLS SNI name) is kept at the original
-    hostname so the target server sees the request as unremarkable.
-
-    Fails closed: any request to a host without a pin is rejected rather than
-    resolved, so a server-supplied URL (e.g. an SSE endpoint event) cannot
-    steer the connection to an address that never passed validation.
-    """
-
-    def __init__(self, pins: dict[str, str], **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self._pins = pins
-
-    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
-        host = request.url.host
-        pinned = self._pins.get(host)
-        if pinned is None:
-            raise ValueError(
-                f"Failed to connect to MCP endpoint: requests to non-pinned hosts are not allowed ({host})"
-            )
-        # Keep the original Host header (includes a non-default port) so the
-        # target server sees the request as unremarkable.
-        host_header = request.headers.get("host", host)
-        request.url = request.url.copy_with(host=pinned)
-        request.headers["host"] = host_header
-        if request.url.scheme == "https":
-            request.extensions["sni_hostname"] = host
-        return await super().handle_async_request(request)
-
-
-def _pinned_sse_client_factory(pins: dict[str, str]):
+def _pinned_sse_client_factory(pins: dict[str, list[str]]):
     """Build the httpx_client_factory passed to sse_client for pinned connections."""
 
     def factory(headers: dict[str, str] | None = None, timeout: httpx2.Timeout | None = None, auth: Any = None):
         if timeout is None:
             timeout = httpx2.Timeout(MCP_DEFAULT_TIMEOUT, read=MCP_DEFAULT_SSE_READ_TIMEOUT)
-        kwargs: dict[str, Any] = {"timeout": timeout, "transport": _PinnedIPTransport(pins)}
+        kwargs: dict[str, Any] = {"timeout": timeout, "transport": PinnedIPTransport(pins)}
         if headers is not None:
             kwargs["headers"] = headers
         if auth is not None:
@@ -201,14 +170,14 @@ class MCPSessionManager:
         self,
         endpoint: str,
         headers: dict[str, str],
-        endpoint_pins: dict[str, str] | None = None,
+        endpoint_pins: dict[str, list[str]] | None = None,
     ) -> ClientSession:
         """Get or create an MCP session for the given endpoint and headers.
 
         Args:
             endpoint: MCP server endpoint URL
             headers: Headers including authorization
-            endpoint_pins: Optional ``{hostname: ip}`` map pinning the connection to
+            endpoint_pins: Optional ``{hostname: [ip, ...]}`` map pinning the connection to
                 pre-validated public addresses (see ``validate_mcp_endpoint``)
 
         Returns:
@@ -239,7 +208,7 @@ class MCPSessionManager:
         self,
         endpoint: str,
         headers: dict[str, str],
-        endpoint_pins: dict[str, str] | None = None,
+        endpoint_pins: dict[str, list[str]] | None = None,
     ) -> tuple[ClientSession, Any, Any]:
         """Create a new MCP session.
 
@@ -269,7 +238,7 @@ class MCPSessionManager:
                     else:
                         client_kwargs: dict[str, Any] = {"headers": headers}
                         if endpoint_pins is not None:
-                            client_kwargs["transport"] = _PinnedIPTransport(endpoint_pins)
+                            client_kwargs["transport"] = PinnedIPTransport(endpoint_pins)
                         http_client = await client_stack.enter_async_context(httpx2.AsyncClient(**client_kwargs))
                         transport = streamable_http_client(endpoint, http_client=http_client)
                     client_streams = await client_stack.enter_async_context(transport)
@@ -416,14 +385,14 @@ class MCPSessionManager:
 
 @asynccontextmanager
 async def client_wrapper(
-    endpoint: str, headers: dict[str, str], endpoint_pins: dict[str, str] | None = None
+    endpoint: str, headers: dict[str, str], endpoint_pins: dict[str, list[str]] | None = None
 ) -> AsyncGenerator[ClientSession, Any]:
     """Create an MCP client session for the given endpoint with protocol auto-detection.
 
     Args:
         endpoint: MCP server endpoint URL
         headers: HTTP headers to include in the connection
-        endpoint_pins: Optional ``{hostname: ip}`` map pinning the connection to
+        endpoint_pins: Optional ``{hostname: [ip, ...]}`` map pinning the connection to
             pre-validated public addresses (see ``validate_mcp_endpoint``)
 
     Returns:
@@ -448,7 +417,7 @@ async def client_wrapper(
                 else:
                     client_kwargs: dict[str, Any] = {"headers": headers}
                     if endpoint_pins is not None:
-                        client_kwargs["transport"] = _PinnedIPTransport(endpoint_pins)
+                        client_kwargs["transport"] = PinnedIPTransport(endpoint_pins)
                     http_client = await client_stack.enter_async_context(httpx2.AsyncClient(**client_kwargs))
                     transport = streamable_http_client(endpoint, http_client=http_client)
 
@@ -534,7 +503,7 @@ async def list_mcp_tools(
     headers: dict[str, str] | None = None,
     authorization: str | None = None,
     session_manager: MCPSessionManager | None = None,
-    endpoint_pins: dict[str, str] | None = None,
+    endpoint_pins: dict[str, list[str]] | None = None,
 ) -> ListToolDefsResponse:
     """List tools available from an MCP server.
 
@@ -546,7 +515,7 @@ async def list_mcp_tools(
             When provided, sessions are cached and reused, avoiding redundant session
             creation when list_mcp_tools and invoke_mcp_tool are called for the same
             server within a request. (Fix for #4452)
-        endpoint_pins: Optional ``{hostname: ip}`` map pinning the connection to
+        endpoint_pins: Optional ``{hostname: [ip, ...]}`` map pinning the connection to
             pre-validated public addresses (see ``validate_mcp_endpoint``)
 
     Returns:
@@ -653,7 +622,7 @@ async def invoke_mcp_tool(
     headers: dict[str, str] | None = None,
     authorization: str | None = None,
     session_manager: MCPSessionManager | None = None,
-    endpoint_pins: dict[str, str] | None = None,
+    endpoint_pins: dict[str, list[str]] | None = None,
 ) -> ToolInvocationResult:
     """Invoke an MCP tool with the given arguments.
 
@@ -666,7 +635,7 @@ async def invoke_mcp_tool(
         session_manager: Optional MCPSessionManager for session reuse within a request.
             When provided, sessions are cached and reused for multiple tool calls to
             the same endpoint, avoiding redundant tools/list calls. (Fix for #4452)
-        endpoint_pins: Optional ``{hostname: ip}`` map pinning the connection to
+        endpoint_pins: Optional ``{hostname: [ip, ...]}`` map pinning the connection to
             pre-validated public addresses (see ``validate_mcp_endpoint``)
 
     Returns:
@@ -704,18 +673,21 @@ async def get_mcp_server_info(
     endpoint: str,
     headers: dict[str, str] | None = None,
     authorization: str | None = None,
+    endpoint_pins: dict[str, list[str]] | None = None,
 ) -> MCPServerInfo:
     """Get server info from an MCP server.
     Args:
         endpoint: MCP server endpoint URL
         headers: Optional base headers to include
         authorization: Optional OAuth access token (just the token, not "Bearer <token>")
+        endpoint_pins: Optional ``{hostname: [ip, ...]}`` map pinning the connection to
+            pre-validated addresses (see ``pin_url`` / ``validate_mcp_endpoint``)
     Returns:
         MCPServerInfo containing name, version, title, and description
     """
     final_headers = prepare_mcp_headers(headers, authorization)
 
-    async with client_wrapper(endpoint, final_headers) as session:
+    async with client_wrapper(endpoint, final_headers, endpoint_pins=endpoint_pins) as session:
         init_result = await session.initialize()
 
         return MCPServerInfo(

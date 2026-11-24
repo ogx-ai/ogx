@@ -25,8 +25,7 @@ from ogx_api.connectors.models import (
 )
 from ogx_api.router_utils import create_path_dependency, create_query_dependency, standard_responses
 from ogx_api.tools import ToolDef
-from ogx_api.tools.models import ListToolDefsResponse, ListToolsRequest
-from ogx_api.version import OGX_API_V1, OGX_API_V1ALPHA
+from ogx_api.version import OGX_API_V1ALPHA
 
 from .api import Admin
 from .models import (
@@ -42,7 +41,6 @@ from .models import (
 # Automatically generate dependency functions from Pydantic models
 get_inspect_provider_request = create_path_dependency(InspectProviderRequest)
 get_list_routes_request = create_query_dependency(ListRoutesRequest)
-get_list_tools_request = create_query_dependency(ListToolsRequest)
 get_connector_request = create_path_dependency(GetConnectorRequest)
 list_connector_tools_request = create_path_dependency(ListConnectorToolsRequest)
 
@@ -181,26 +179,6 @@ def create_router(impl: Admin) -> APIRouter:
     ) -> Connector:
         return await impl.get_connector(request, authorization=authorization)
 
-    v1_router = APIRouter(
-        prefix=f"/{OGX_API_V1}",
-        tags=["Tools"],
-    )
-
-    @v1_router.get(
-        "/admin/tools",
-        response_model=ListToolDefsResponse,
-        summary="List tools with optional tool group filter.",
-        description="List tools with optional tool group filter.",
-        responses={
-            200: {"description": "A ListToolDefsResponse."},
-        },
-    )
-    async def list_tools(
-        request: Annotated[ListToolsRequest, Depends(get_list_tools_request)],
-    ) -> ListToolDefsResponse:
-        return await impl.list_tools(request)
-
     router.include_router(v1alpha_router)
-    router.include_router(v1_router)
 
     return router

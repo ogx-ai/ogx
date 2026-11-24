@@ -7,7 +7,6 @@
 from typing import Protocol, runtime_checkable
 
 from ogx_api.connectors.api import Connectors
-from ogx_api.tools.models import ListToolDefsResponse, ListToolsRequest
 
 from .models import (
     HealthInfo,
@@ -71,15 +70,5 @@ class Admin(Connectors, Protocol):
         Get the version of the service.
 
         :returns: Version information containing the service version number.
-        """
-        ...
-
-    async def list_tools(self, request: ListToolsRequest) -> ListToolDefsResponse:
-        """List tools.
-
-        List tools with optional tool group filter.
-
-        :param request: Request containing optional filter parameters
-        :returns: A ListToolDefsResponse containing available tool definitions.
         """
         ...

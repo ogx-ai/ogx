@@ -7,7 +7,7 @@ data:
     - responses
     - inference
     - files
-    - tool_runtime
+    - web_search
     - vector_io
     providers:
       inference:
@@ -17,7 +17,9 @@ data:
           url: ${env.VLLM_URL:=http://localhost:8000/v1}
           max_tokens: ${env.VLLM_MAX_TOKENS:=4096}
           api_token: ${env.VLLM_API_TOKEN:=fake}
-          tls_verify: ${env.VLLM_TLS_VERIFY:=true}
+          network:
+            tls:
+              verify: ${env.VLLM_TLS_VERIFY:=true}
       - provider_id: sentence-transformers
         provider_type: inline::sentence-transformers
         config: {}
@@ -51,7 +53,7 @@ data:
               backend: sql_default
               max_write_queue_size: 10000
               num_writers: 4
-      tool_runtime:
+      web_search:
       - provider_id: brave-search
         provider_type: remote::brave-search
         config:
@@ -62,12 +64,6 @@ data:
         config:
           api_key: ${env.TAVILY_SEARCH_API_KEY:+}
           max_results: 3
-      - provider_id: file-search
-        provider_type: inline::file-search
-        config: {}
-      - provider_id: model-context-protocol
-        provider_type: remote::model-context-protocol
-        config: {}
     storage:
       backends:
         kv_default:

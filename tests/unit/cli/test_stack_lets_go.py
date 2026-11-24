@@ -4,19 +4,18 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-"""Unit tests for `ogx go` and `ogx stack go` CLI commands."""
+"""Unit tests for the `ogx go` CLI command."""
 
 import argparse
 import warnings
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from ogx.cli.letsgo import LetsGo, LetsGoDeprecated
+from ogx.cli.letsgo import LetsGo
 from ogx.cli.stack.lets_go import (
     _CLAUDE_CODE_ALIASES,
     _CLAUDE_CODE_PROVIDER_PRIORITY,
-    StackLetsGo,
     _autodetect_providers,
     _build_claude_code_aliases,
     _ProbeStatus,
@@ -24,61 +23,9 @@ from ogx.cli.stack.lets_go import (
 
 
 @pytest.fixture
-def lets_go() -> StackLetsGo:
-    subparsers = argparse.ArgumentParser().add_subparsers()
-    return StackLetsGo(subparsers)
-
-
-@pytest.fixture
 def top_level_letsgo() -> LetsGo:
     subparsers = argparse.ArgumentParser().add_subparsers()
     return LetsGo(subparsers)
-
-
-@pytest.fixture
-def top_level_letsgo_deprecated() -> LetsGoDeprecated:
-    subparsers = argparse.ArgumentParser().add_subparsers()
-    return LetsGoDeprecated(subparsers)
-
-
-class TestArguments:
-    def test_defaults(self, lets_go: StackLetsGo):
-        args = lets_go.parser.parse_args([])
-        assert args.port == 8321
-        assert args.enable_ui is False
-        assert args.persist_config is False
-        assert args.providers_override is None
-
-    def test_port_override(self, lets_go: StackLetsGo):
-        args = lets_go.parser.parse_args(["--port", "9000"])
-        assert args.port == 9000
-
-    def test_enable_ui_flag(self, lets_go: StackLetsGo):
-        args = lets_go.parser.parse_args(["--enable-ui"])
-        assert args.enable_ui is True
-
-    def test_persist_config_flag(self, lets_go: StackLetsGo):
-        args = lets_go.parser.parse_args(["--persist-config"])
-        assert args.persist_config is True
-
-    def test_providers_override_flag(self, lets_go: StackLetsGo):
-        args = lets_go.parser.parse_args(["--providers-override", "inference=remote::ollama"])
-        assert args.providers_override == "inference=remote::ollama"
-
-    def test_skip_install_deps_default(self, lets_go: StackLetsGo):
-        args = lets_go.parser.parse_args([])
-        assert args.skip_install_deps is False
-
-    def test_skip_install_deps_flag(self, lets_go: StackLetsGo):
-        args = lets_go.parser.parse_args(["--skip-install-deps"])
-        assert args.skip_install_deps is True
-
-    def test_port_from_env(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("OGX_PORT", "9999")
-        subparsers = argparse.ArgumentParser().add_subparsers()
-        instance = StackLetsGo(subparsers)
-        args = instance.parser.parse_args([])
-        assert args.port == 9999
 
 
 class TestTopLevelLetsGoArguments:
@@ -251,96 +198,7 @@ class TestAutodetect:
             assert embedding is None
 
 
-class TestRunCommandSync:
-    """Tests that interact with the sync CLI entry point via _run_stack_lets_go_cmd.
-
-    These patch `_autodetect_providers` with AsyncMock because it is now async.
-    run_letsgo_cmd internally calls asyncio.run(), so these tests must not use
-    the async test marker (which would have a running event loop already).
-    """
-
-    def test_no_inference_provider_exits(self, lets_go: StackLetsGo):
-        args = lets_go.parser.parse_args([])
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            with pytest.raises(SystemExit):
-                with patch(
-                    "ogx.cli.stack.lets_go._autodetect_providers",
-                    AsyncMock(
-                        return_value=(
-                            "files=inline::localfs,vector_io=inline::faiss,tool_runtime=inline::file-search,responses=inline::builtin",
-                            None,
-                        )
-                    ),
-                ):
-                    lets_go._run_stack_lets_go_cmd(args)
-
-    def test_empty_spec_exits(self, lets_go: StackLetsGo):
-        args = lets_go.parser.parse_args([])
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            with pytest.raises(SystemExit):
-                with patch("ogx.cli.stack.lets_go._autodetect_providers", AsyncMock(return_value=("", None))):
-                    lets_go._run_stack_lets_go_cmd(args)
-
-    def test_run_command_uses_autodetected_providers(self, lets_go: StackLetsGo):
-        args = lets_go.parser.parse_args([])
-        mock_cfg = MagicMock()
-        mock_cfg.model_dump.return_value = {}
-
-        with (
-            patch("ogx.cli.stack.lets_go._uvicorn_run"),
-            patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=([], [], [])),
-            patch("ogx.cli.stack.lets_go.subprocess.run"),
-            patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec", return_value=mock_cfg),
-            patch(
-                "ogx.cli.stack.lets_go._autodetect_providers",
-                AsyncMock(return_value=("inference=remote::ollama", None)),
-            ),
-            patch("builtins.open", MagicMock()),
-            patch("ogx.cli.stack.lets_go.yaml.dump"),
-            warnings.catch_warnings(),
-        ):
-            warnings.simplefilter("ignore", FutureWarning)
-            lets_go._run_stack_lets_go_cmd(args)
-
-        assert mock_cfg.model_dump.called
-
-    def test_providers_override_skips_autodetect(self, lets_go: StackLetsGo):
-        args = lets_go.parser.parse_args(["--providers-override", "inference=remote::ollama"])
-        mock_cfg = MagicMock()
-        mock_cfg.model_dump.return_value = {}
-
-        with (
-            patch("ogx.cli.stack.lets_go._uvicorn_run"),
-            patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=([], [], [])),
-            patch("ogx.cli.stack.lets_go.subprocess.run"),
-            patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec", return_value=mock_cfg),
-            patch("ogx.cli.stack.lets_go._autodetect_providers") as mock_detect,
-            patch("builtins.open", MagicMock()),
-            patch("ogx.cli.stack.lets_go.yaml.dump"),
-            warnings.catch_warnings(),
-        ):
-            warnings.simplefilter("ignore", FutureWarning)
-            lets_go._run_stack_lets_go_cmd(args)
-        mock_detect.assert_not_called()
-
-
 class TestDeprecation:
-    def test_stack_letsgo_emits_deprecation_warning(self, lets_go: StackLetsGo):
-        with (
-            patch("ogx.cli.stack.lets_go.run_letsgo_cmd"),
-            warnings.catch_warnings(record=True) as w,
-        ):
-            warnings.simplefilter("always")
-            args = lets_go.parser.parse_args([])
-            lets_go._run_stack_lets_go_cmd(args)
-
-        future_warnings = [x for x in w if issubclass(x.category, FutureWarning)]
-        assert len(future_warnings) == 1
-        assert "deprecated" in str(future_warnings[0].message)
-        assert "ogx go" in str(future_warnings[0].message)
-
     def test_top_level_letsgo_no_deprecation_warning(self, top_level_letsgo: LetsGo):
         with (
             patch("ogx.cli.letsgo.run_letsgo_cmd"),
@@ -352,20 +210,6 @@ class TestDeprecation:
 
         future_warnings = [x for x in w if issubclass(x.category, FutureWarning)]
         assert len(future_warnings) == 0
-
-    def test_top_level_letsgo_deprecated_emits_deprecation_warning(self, top_level_letsgo_deprecated: LetsGoDeprecated):
-        with (
-            patch("ogx.cli.letsgo.run_letsgo_cmd"),
-            warnings.catch_warnings(record=True) as w,
-        ):
-            warnings.simplefilter("always")
-            args = top_level_letsgo_deprecated.parser.parse_args([])
-            top_level_letsgo_deprecated._run_cmd(args)
-
-        future_warnings = [x for x in w if issubclass(x.category, FutureWarning)]
-        assert len(future_warnings) == 1
-        assert "deprecated" in str(future_warnings[0].message)
-        assert "ogx go" in str(future_warnings[0].message)
 
 
 class TestClaudeCodeAliases:
@@ -465,9 +309,9 @@ class TestClaudeCodeAliases:
         assert "ollama" in _CLAUDE_CODE_PROVIDER_PRIORITY
 
 
-class TestAddFileSearchAndResponses:
+class TestAddResponsesAndWebSearch:
     def test_uses_brave_when_brave_key_is_set(self, monkeypatch: pytest.MonkeyPatch):
-        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.cli.stack.lets_go import _add_responses_and_web_search
         from ogx.core.datatypes import StackConfig
 
         monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "brave-key")
@@ -478,13 +322,12 @@ class TestAddFileSearchAndResponses:
         run_config = StackConfig(
             distro_name="test",
             providers={
-                "tool_runtime": [],
                 "responses": [],
             },
         )
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(run_config)
+            _add_responses_and_web_search(run_config)
 
         web_search_providers = [
             p
@@ -498,11 +341,11 @@ class TestAddFileSearchAndResponses:
         assert "nimble-search" not in web_search_providers
 
         # A real provider was added, so the placeholder must not be
-        provider_types = [p.provider_type for p in run_config.providers["tool_runtime"]]
+        provider_types = [p.provider_type for p in run_config.providers["web_search"]]
         assert "inline::placeholder" not in provider_types
 
     def test_falls_back_to_tavily_when_only_tavily_key_set(self, monkeypatch: pytest.MonkeyPatch):
-        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.cli.stack.lets_go import _add_responses_and_web_search
         from ogx.core.datatypes import StackConfig
 
         monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
@@ -511,11 +354,10 @@ class TestAddFileSearchAndResponses:
         monkeypatch.delenv("NIMBLE_API_KEY", raising=False)
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(
+            _add_responses_and_web_search(
                 StackConfig(
                     distro_name="test",
                     providers={
-                        "tool_runtime": [],
                         "responses": [],
                     },
                 )
@@ -536,7 +378,7 @@ class TestAddFileSearchAndResponses:
         assert provider_ids_in_calls == {"tavily-search"}
 
     def test_selects_first_with_api_key(self, monkeypatch: pytest.MonkeyPatch):
-        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.cli.stack.lets_go import _add_responses_and_web_search
         from ogx.core.datatypes import StackConfig
 
         monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "brave-key")
@@ -545,11 +387,10 @@ class TestAddFileSearchAndResponses:
         monkeypatch.setenv("NIMBLE_API_KEY", "nimble-key")
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(
+            _add_responses_and_web_search(
                 StackConfig(
                     distro_name="test",
                     providers={
-                        "tool_runtime": [],
                         "responses": [],
                     },
                 )
@@ -570,7 +411,7 @@ class TestAddFileSearchAndResponses:
         assert provider_ids_in_calls == {"brave-search", "tavily-search", "bing-search", "nimble-search"}
 
     def test_web_search_placeholder_when_no_key_set(self, monkeypatch: pytest.MonkeyPatch):
-        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.cli.stack.lets_go import _add_responses_and_web_search
         from ogx.core.datatypes import StackConfig
 
         # Clear env vars to ensure no keys are set
@@ -587,24 +428,23 @@ class TestAddFileSearchAndResponses:
         run_config = StackConfig(
             distro_name="test",
             providers={
-                "tool_runtime": [],
                 "responses": [],
             },
         )
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
-            _add_file_search_and_responses(run_config)
+            _add_responses_and_web_search(run_config)
 
         # Should show the built-in placeholder message, not provider names
         has_placeholder = any("built-in placeholder" in str(call) for call in mock_cprint.call_args_list)
         assert has_placeholder
 
         # The placeholder provider should be registered so the web_search tool is hosted
-        provider_types = [p.provider_type for p in run_config.providers["tool_runtime"]]
+        provider_types = [p.provider_type for p in run_config.providers["web_search"]]
         assert "inline::placeholder" in provider_types
 
     def test_duplicate_providers_when_already_configured(self, monkeypatch: pytest.MonkeyPatch):
-        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.cli.stack.lets_go import _add_responses_and_web_search
         from ogx.core.datatypes import Provider, StackConfig
 
         for var in (
@@ -624,13 +464,13 @@ class TestAddFileSearchAndResponses:
         config = StackConfig(
             distro_name="test",
             providers={
-                "tool_runtime": initial_providers.copy(),
+                "web_search": initial_providers.copy(),
                 "responses": [],
             },
         )
 
         with patch("ogx.cli.stack.lets_go.cprint"):
-            _add_file_search_and_responses(config)
+            _add_responses_and_web_search(config)
 
         web_search_types = {
             "remote::brave-search",
@@ -638,17 +478,17 @@ class TestAddFileSearchAndResponses:
             "remote::bing-search",
             "remote::nimble-search",
         }
-        web_search_providers = [p for p in config.providers["tool_runtime"] if p.provider_type in web_search_types]
+        web_search_providers = [p for p in config.providers["web_search"] if p.provider_type in web_search_types]
         assert len(web_search_providers) == 1
 
     def test_existing_provider_keeps_no_api_key_config(self):
-        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.cli.stack.lets_go import _add_responses_and_web_search
         from ogx.core.datatypes import Provider, StackConfig
 
         config = StackConfig(
             distro_name="test",
             providers={
-                "tool_runtime": [
+                "web_search": [
                     Provider(
                         provider_id="brave-search",
                         provider_type="remote::brave-search",
@@ -660,11 +500,9 @@ class TestAddFileSearchAndResponses:
         )
 
         with patch("ogx.cli.stack.lets_go.cprint"):
-            _add_file_search_and_responses(config)
+            _add_responses_and_web_search(config)
 
-        web_search_providers = [
-            p for p in config.providers["tool_runtime"] if p.provider_type == "remote::brave-search"
-        ]
+        web_search_providers = [p for p in config.providers["web_search"] if p.provider_type == "remote::brave-search"]
         assert len(web_search_providers) == 1
         assert web_search_providers[0].config["api_key"] == "existing-key"
         assert web_search_providers[0].config["max_results"] == 5

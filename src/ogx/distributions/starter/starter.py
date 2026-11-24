@@ -33,12 +33,6 @@ from ogx.providers.inline.vector_io.sqlite_vec.config import (
     SQLiteVectorIOConfig,
 )
 from ogx.providers.registry.inference import available_providers
-from ogx.providers.remote.tool_runtime.brave_search.config import BraveSearchToolConfig
-from ogx.providers.remote.tool_runtime.exa_search.config import ExaSearchToolConfig
-from ogx.providers.remote.tool_runtime.nimble_search.config import NimbleSearchToolConfig
-from ogx.providers.remote.tool_runtime.searchapi_search.config import SearchApiSearchToolConfig
-from ogx.providers.remote.tool_runtime.serply_search.config import SerplySearchToolConfig
-from ogx.providers.remote.tool_runtime.tavily_search.config import TavilySearchToolConfig
 from ogx.providers.remote.vector_io.chroma.config import ChromaVectorIOConfig
 from ogx.providers.remote.vector_io.elasticsearch.config import ElasticsearchVectorIOConfig
 from ogx.providers.remote.vector_io.infinispan.config import InfinispanVectorIOConfig
@@ -47,6 +41,12 @@ from ogx.providers.remote.vector_io.pgvector.config import (
 )
 from ogx.providers.remote.vector_io.qdrant.config import QdrantVectorIOConfig
 from ogx.providers.remote.vector_io.weaviate.config import WeaviateVectorIOConfig
+from ogx.providers.remote.web_search.brave_search.config import BraveSearchConfig
+from ogx.providers.remote.web_search.exa_search.config import ExaSearchConfig
+from ogx.providers.remote.web_search.nimble_search.config import NimbleSearchConfig
+from ogx.providers.remote.web_search.searchapi_search.config import SearchApiSearchConfig
+from ogx.providers.remote.web_search.serply_search.config import SerplySearchConfig
+from ogx.providers.remote.web_search.tavily_search.config import TavilySearchConfig
 from ogx_api import RemoteProviderSpec
 
 
@@ -156,15 +156,13 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         "messages": [BuildProvider(provider_type="inline::builtin")],
         "responses": [BuildProvider(provider_type="inline::builtin")],
         "skills": [BuildProvider(provider_type="inline::builtin")],
-        "tool_runtime": [
+        "web_search": [
             BuildProvider(provider_type="remote::exa-search"),
             BuildProvider(provider_type="remote::brave-search"),
             BuildProvider(provider_type="remote::tavily-search"),
             BuildProvider(provider_type="remote::nimble-search"),
             BuildProvider(provider_type="remote::serply-search"),
             BuildProvider(provider_type="remote::searchapi-search"),
-            BuildProvider(provider_type="inline::file-search"),
-            BuildProvider(provider_type="remote::model-context-protocol"),
         ],
         "batches": [
             BuildProvider(provider_type="inline::reference"),
@@ -283,44 +281,36 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 config=AutoFileProcessorConfig.sample_run_config(),
             ),
         ],
-        "tool_runtime": [
+        "web_search": [
             Provider(
                 provider_id="exa-search",
                 provider_type="remote::exa-search",
-                config=ExaSearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+                config=ExaSearchConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="brave-search",
                 provider_type="remote::brave-search",
-                config=BraveSearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+                config=BraveSearchConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="tavily-search",
                 provider_type="remote::tavily-search",
-                config=TavilySearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+                config=TavilySearchConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="nimble-search",
                 provider_type="remote::nimble-search",
-                config=NimbleSearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+                config=NimbleSearchConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="serply-search",
                 provider_type="remote::serply-search",
-                config=SerplySearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+                config=SerplySearchConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="searchapi-search",
                 provider_type="remote::searchapi-search",
-                config=SearchApiSearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
-            ),
-            Provider(
-                provider_id="file-search",
-                provider_type="inline::file-search",
-            ),
-            Provider(
-                provider_id="model-context-protocol",
-                provider_type="remote::model-context-protocol",
+                config=SearchApiSearchConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
         ],
     }

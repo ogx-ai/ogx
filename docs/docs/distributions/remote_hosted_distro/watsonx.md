@@ -10,7 +10,7 @@ The `ogxai/distribution-watsonx` distribution consists of the following provider
 |-----|-------------|
 | responses | `inline::builtin` |
 | inference | `remote::watsonx`, `inline::sentence-transformers` |
-| tool_runtime | `remote::brave-search`, `remote::tavily-search`, `inline::file-search`, `remote::model-context-protocol` |
+| web_search | `remote::brave-search`, `remote::tavily-search` |
 | vector_io | `inline::faiss` |
 
 ## Environment Variables

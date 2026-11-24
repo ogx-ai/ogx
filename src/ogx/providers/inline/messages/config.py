@@ -8,14 +8,22 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from ogx.core.storage.datatypes import KVStoreReference
+from ogx.core.storage.datatypes import KVStoreReference, SqlStoreReference
 
 
 class MessagesConfig(BaseModel):
     """Configuration for the built-in Anthropic Messages API adapter."""
 
+    sqlstore: SqlStoreReference = Field(
+        default_factory=lambda: SqlStoreReference(
+            backend="sql_default",
+            table_name="message_batches",
+        ),
+        description="Configuration for the SQL store backend used to persist message batch metadata.",
+    )
+
     kvstore: KVStoreReference = Field(
-        description="Configuration for the key-value store backend used by message batches.",
+        description="Configuration for the key-value store backend used to persist message batch results.",
     )
 
     max_concurrent_batches: int = Field(
@@ -33,6 +41,10 @@ class MessagesConfig(BaseModel):
     @classmethod
     def sample_run_config(cls, __distro_dir__: str = "") -> dict[str, Any]:
         return {
+            "sqlstore": SqlStoreReference(
+                backend="sql_default",
+                table_name="message_batches",
+            ).model_dump(exclude_none=True),
             "kvstore": KVStoreReference(
                 backend="kv_default",
                 namespace="message_batches",

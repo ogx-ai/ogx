@@ -90,12 +90,6 @@ _SQL_OPS: dict[str, str] = {
     "lte": "<=",
 }
 
-# Specifying search mode is dependent on the VectorIO provider.
-VECTOR_SEARCH = "vector"
-KEYWORD_SEARCH = "keyword"
-HYBRID_SEARCH = "hybrid"
-SEARCH_MODES = {VECTOR_SEARCH, KEYWORD_SEARCH, HYBRID_SEARCH}
-
 VERSION = "v3"
 VECTOR_DBS_PREFIX = f"vector_stores:sqlite_vec:{VERSION}::"
 VECTOR_INDEX_PREFIX = f"vector_index:sqlite_vec:{VERSION}::"

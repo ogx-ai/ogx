@@ -570,11 +570,23 @@ async def test_responses_store_input_items_before_pagination():
         assert result3.data[1].content == "Second input"
         assert result3.data[2].content == "Third input"
 
-        # Test before with limit in ascending order
+        # Test before with limit in ascending order: the page right before the cursor
         result4 = await store.list_response_input_items("test-resp-before", before="before-5", limit=2, order=Order.asc)
         assert len(result4.data) == 2
-        assert result4.data[0].content == "First input"
-        assert result4.data[1].content == "Second input"
+        assert result4.data[0].content == "Third input"
+        assert result4.data[1].content == "Fourth input"
+
+        # Same in descending order: [Fifth, Fourth, Third, Second, First], before Second
+        result5 = await store.list_response_input_items(
+            "test-resp-before", before="before-2", limit=2, order=Order.desc
+        )
+        assert [item.content for item in result5.data] == ["Fourth input", "Third input"]
+
+        # A limit larger than the items before the cursor returns all of them
+        result6 = await store.list_response_input_items(
+            "test-resp-before", before="before-3", limit=10, order=Order.asc
+        )
+        assert [item.content for item in result6.data] == ["First input", "Second input"]
 
         # Test error for non-existent before ID
         with pytest.raises(ResponseInputItemNotFoundError, match="Input item 'non-existent' not found"):

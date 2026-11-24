@@ -9,8 +9,8 @@ routing_tables/
   __init__.py            # Factory functions: get_routing_table_impl(), get_auto_router_impl()
   common.py              # CommonRoutingTableImpl base class
   models.py              # ModelsRoutingTable (models -> inference providers)
-  toolgroups.py          # ToolGroupsRoutingTable
   vector_stores.py       # VectorStoresRoutingTable
+  web_search.py          # WebSearchRoutingTable (web_search_providers -> web_search)
 ```
 
 ## How Routing Works

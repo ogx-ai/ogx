@@ -12,39 +12,7 @@ info:
   version: v1
 servers:
 - url: http://any-hosted-ogx.com
-paths:
-  /v1alpha/file-processors/process:
-    post:
-      responses:
-        '200':
-          description: The processed file chunks.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProcessFileResponse'
-        '400':
-          description: Bad Request
-          $ref: '#/components/responses/BadRequest400'
-        '429':
-          description: Too Many Requests
-          $ref: '#/components/responses/TooManyRequests429'
-        '500':
-          description: Internal Server Error
-          $ref: '#/components/responses/InternalServerError500'
-        default:
-          description: Default Response
-          $ref: '#/components/responses/DefaultError'
-      tags:
-      - File Processors
-      summary: Process a file into chunks ready for vector database storage.
-      description: Deprecated. This endpoint blocks until processing completes, which can hold a connection open for large files. Use POST /file-processors/jobs to submit the file asynchronously and poll GET /file-processors/jobs/{job_id} for the result. Supports direct upload via multipart form or processing files already uploaded to file storage via file_id. Exactly one of file or file_id must be provided.
-      operationId: process_file_v1alpha_file_processors_process_post
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Body_process_file_v1alpha_file_processors_process_post'
-      deprecated: true
+paths: {}
 components:
   schemas:
     Error:
@@ -5298,11 +5266,6 @@ components:
       description: A URL reference to external content.
     ToolDef:
       properties:
-        toolgroup_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: The ID of the tool group this tool belongs to.
         name:
           type: string
           title: Name
@@ -5336,72 +5299,17 @@ components:
       title: ToolDef
       description: Tool definition used in runtime contexts.
     ListToolDefsResponse:
+      description: Response containing a list of tool definitions.
       properties:
         data:
+          description: List of tool definitions.
           items:
             $ref: '#/components/schemas/ToolDef'
-          type: array
           title: Data
-          description: List of tool definitions.
-      type: object
+          type: array
       required:
       - data
       title: ListToolDefsResponse
-      description: Response containing a list of tool definitions.
-    ToolGroup:
-      description: A group of related tools managed together.
-      properties:
-        identifier:
-          description: Unique identifier for this resource in ogx
-          title: Identifier
-          type: string
-        provider_resource_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Unique identifier for this resource in the provider
-          nullable: true
-        provider_id:
-          description: ID of the provider that owns this resource
-          title: Provider Id
-          type: string
-        type:
-          title: Type
-          type: string
-          enum:
-          - tool_group
-        mcp_endpoint:
-          anyOf:
-          - $ref: '#/components/schemas/URL'
-            title: URL
-          - type: 'null'
-          description: Model Context Protocol endpoint URL for remote tool groups.
-          nullable: true
-          title: URL
-        args:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          description: Additional arguments for the tool group.
-          nullable: true
-      required:
-      - identifier
-      - provider_id
-      title: ToolGroup
-      type: object
-    ListToolGroupsResponse:
-      description: Response containing a list of tool groups.
-      properties:
-        data:
-          description: List of tool groups.
-          items:
-            $ref: '#/components/schemas/ToolGroup'
-          title: Data
-          type: array
-      required:
-      - data
-      title: ListToolGroupsResponse
       type: object
     Chunk:
       properties:
@@ -6460,32 +6368,6 @@ components:
         Represents token usage details including input tokens, output tokens, a
         breakdown of output tokens, and the total tokens used. Only populated on
         batches created after September 7, 2025.
-    Body_process_file_v1alpha_file_processors_process_post:
-      properties:
-        file:
-          anyOf:
-          - type: string
-            contentMediaType: application/octet-stream
-          - type: 'null'
-          description: The File object to be uploaded and processed. Mutually exclusive with file_id.
-        file_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: ID of file already uploaded to file storage. Mutually exclusive with file.
-        options:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          description: Optional processing options. Provider-specific parameters (e.g., OCR settings, output format).
-        chunking_strategy:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Optional chunking strategy for splitting content into chunks. Must be valid JSON string.
-      type: object
-      title: Body_process_file_v1alpha_file_processors_process_post
     ChatCompletionMessage:
       properties:
         id:
@@ -8886,17 +8768,6 @@ components:
       - provider_id
       title: ToolGroupInput
       type: object
-    ListToolsRequest:
-      description: Request model for listing tools.
-      properties:
-        toolgroup_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: The ID of the tool group to filter tools by.
-          nullable: true
-      title: ListToolsRequest
-      type: object
     ConnectorInput:
       description: Input for creating a connector
       properties:
@@ -9153,11 +9024,11 @@ components:
       - responses
       - batches
       - vector_io
-      - tool_runtime
       - container_runtime
+      - web_search
       - models
       - vector_stores
-      - tool_groups
+      - web_search_providers
       - files
       - file_processors
       - prompts
@@ -9235,12 +9106,6 @@ components:
           description: Notes whether this provider is an external provider.
           title: Is External
           type: boolean
-        toolgroup_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: For tool_runtime providers, the built-in tool group ID this provider serves (e.g. 'builtin::websearch').
-          nullable: true
         deps__:
           items:
             type: string
@@ -9316,12 +9181,6 @@ components:
           description: Notes whether this provider is an external provider.
           title: Is External
           type: boolean
-        toolgroup_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: For tool_runtime providers, the built-in tool group ID this provider serves (e.g. 'builtin::websearch').
-          nullable: true
         deps__:
           items:
             type: string
@@ -9426,12 +9285,6 @@ components:
           description: Notes whether this provider is an external provider.
           title: Is External
           type: boolean
-        toolgroup_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: For tool_runtime providers, the built-in tool group ID this provider serves (e.g. 'builtin::websearch').
-          nullable: true
         deps__:
           items:
             type: string
@@ -11537,10 +11390,6 @@ tags:
 - description: Providers API for inspecting, listing, and modifying providers and their configurations.
   name: Providers
   x-displayName: Providers
-- description: ''
-  name: ToolGroups
-- description: ''
-  name: ToolRuntime
 - description: Tool listing and management.
   name: Tools
   x-displayName: Tools
@@ -11569,8 +11418,6 @@ x-tagGroups:
   - Prompts
   - Providers
   - Responses
-  - ToolGroups
-  - ToolRuntime
   - Tools
   - Vector Stores
   - VectorIO

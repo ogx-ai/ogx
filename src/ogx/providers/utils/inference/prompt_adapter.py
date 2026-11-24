@@ -11,7 +11,7 @@ from typing import Any
 import httpx2
 
 from ogx.log import get_logger
-from ogx.providers.utils.common.url_validation import validate_url_not_private
+from ogx.providers.utils.common.url_validation import PinnedIPTransport, pin_url
 from ogx_api import (
     ImageContentItem,
     OpenAIChatCompletionContentPartImageParam,
@@ -67,8 +67,14 @@ async def localize_image_content(uri: str) -> tuple[bytes, str] | None:
         Tuple of (raw_bytes, format_string) or None if URI scheme is unsupported
     """
     if uri.startswith("http"):
-        validate_url_not_private(uri)
-        async with httpx2.AsyncClient(timeout=httpx2.Timeout(30.0, connect=10.0)) as client:
+        # Pin the connection to the validated IP so a DNS-rebinding swap
+        # between the check and the connect cannot redirect the fetch to a
+        # private address (GHSA-hxrg-29j5-8xxg, GHSA-9c9j-hmr4-rfvm).
+        pins = pin_url(uri)
+        async with httpx2.AsyncClient(
+            timeout=httpx2.Timeout(30.0, connect=10.0),
+            transport=PinnedIPTransport(pins),
+        ) as client:
             r = await client.get(uri)
             content = r.content
             content_type = r.headers.get("content-type")

@@ -5,7 +5,6 @@
 # the root directory of this source tree.
 
 import re
-import warnings
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
@@ -21,6 +20,7 @@ from ogx.core.storage.datatypes import (
     StorageConfig,
 )
 from ogx.log import LoggingConfig
+from ogx.web_search import WebSearch
 from ogx_api import (
     Api,
     ConnectorInput,
@@ -29,9 +29,6 @@ from ogx_api import (
     ModelInput,
     ProviderSpec,
     Resource,
-    ToolGroup,
-    ToolGroupInput,
-    ToolRuntime,
     VectorIO,
     VectorStore,
     VectorStoreInput,
@@ -83,20 +80,14 @@ class VectorStoreWithOwner(VectorStore, ResourceWithOwner):
     pass
 
 
-class ToolGroupWithOwner(ToolGroup, ResourceWithOwner):
-    """A ToolGroup resource extended with ownership information for access control."""
-
-    pass
-
-
-RoutableObject = Model | VectorStore | ToolGroup
+RoutableObject = Model | VectorStore
 
 RoutableObjectWithProvider = Annotated[
-    ModelWithOwner | VectorStoreWithOwner | ToolGroupWithOwner,
+    ModelWithOwner | VectorStoreWithOwner,
     Field(discriminator="type"),
 ]
 
-RoutedProtocol = Inference | VectorIO | ToolRuntime
+RoutedProtocol = Inference | VectorIO | WebSearch
 
 
 # Example: /inference, /vector_io
@@ -823,20 +814,6 @@ class RegisteredResources(BaseModel):
 
     models: list[ModelInput] = Field(default_factory=list)
     vector_stores: list[VectorStoreInput] = Field(default_factory=list)
-    tool_groups: list[ToolGroupInput] = Field(default_factory=list, deprecated=True)
-
-    @model_validator(mode="after")
-    def _warn_deprecated_tool_groups(self) -> Self:
-        if self.tool_groups:
-            warnings.warn(
-                "'registered_resources.tool_groups' is deprecated and will be removed in a future release. "
-                "Built-in tool groups are now auto-registered based on configured tool_runtime providers. "
-                "Please remove 'tool_groups' from your configuration.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            self.tool_groups = []
-        return self
 
 
 class ServerConfig(BaseModel):
@@ -873,15 +850,6 @@ class StackConfig(BaseModel):
     distro_name: str | None = Field(
         default=None,
         description="""
-Reference to the distribution this package refers to. For unregistered (adhoc) packages,
-this could be just a hash
-""",
-    )
-    image_name: str | None = Field(
-        default=None,
-        deprecated=True,
-        description="""
-DEPRECATED: Use 'distro_name' instead. This field is maintained for backward compatibility.
 Reference to the distribution this package refers to. For unregistered (adhoc) packages,
 this could be just a hash
 """,
@@ -954,31 +922,9 @@ can be instantiated multiple times (with different configs) if necessary.
         return v
 
     @model_validator(mode="after")
-    def validate_distro_name_migration(self) -> "StackConfig":
-        """Handle migration from image_name to distro_name."""
-        import warnings
-
-        if self.distro_name is None and self.image_name is None:
-            raise ValueError("Either 'distro_name' or 'image_name' must be provided")
-
-        if self.image_name is not None and self.distro_name is None:
-            # Migrate from image_name to distro_name
-            warnings.warn(
-                "The 'image_name' field is deprecated. Please use 'distro_name' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            self.distro_name = self.image_name
-        elif self.image_name is not None and self.distro_name is not None:
-            # Both provided - warn and prefer distro_name
-            warnings.warn(
-                "Both 'image_name' and 'distro_name' were provided. "
-                "The 'image_name' field is deprecated and will be ignored. "
-                "Please use only 'distro_name' in your configuration.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
+    def validate_distro_name(self) -> "StackConfig":
+        if self.distro_name is None:
+            raise ValueError("'distro_name' is required")
         return self
 
     @model_validator(mode="after")
