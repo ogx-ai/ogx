@@ -17,7 +17,9 @@ data:
           url: ${env.VLLM_URL:=http://localhost:8000/v1}
           max_tokens: ${env.VLLM_MAX_TOKENS:=4096}
           api_token: ${env.VLLM_API_TOKEN:=fake}
-          tls_verify: ${env.VLLM_TLS_VERIFY:=true}
+          network:
+            tls:
+              verify: ${env.VLLM_TLS_VERIFY:=true}
       - provider_id: sentence-transformers
         provider_type: inline::sentence-transformers
         config: {}

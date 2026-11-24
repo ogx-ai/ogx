@@ -98,7 +98,7 @@ class TestVectorStoreRegistration:
 
         # config with vector stores
         run_config = StackConfig(
-            image_name="test",
+            distro_name="test",
             providers={},
             storage=StorageConfig(
                 backends={},
@@ -155,7 +155,7 @@ class TestVectorStoreRegistration:
     async def test_empty_config(self):
         """Test that empty vector_stores config doesn't cause errors."""
         run_config = StackConfig(
-            image_name="test",
+            distro_name="test",
             providers={},
             storage=StorageConfig(
                 backends={},
@@ -227,7 +227,7 @@ class TestVectorStoreRegistration:
                 ]
 
         run_config = StackConfig(
-            image_name="test",
+            distro_name="test",
             providers={},
             storage=StorageConfig(
                 backends={},
@@ -337,7 +337,7 @@ class TestOpenAIMetadataCreation:
 
         # config-based registration
         run_config = StackConfig(
-            image_name="test",
+            distro_name="test",
             providers={},
             storage=StorageConfig(
                 backends={},
