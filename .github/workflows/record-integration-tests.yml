@@ -537,13 +537,11 @@ jobs:
           run_dir=$(mktemp -d)
           cat <<EOF > "$run_dir/config.yaml"
           version: '2'
-          image_name: kube
           distro_name: kube
           apis:
             - files
             - inference
             - vector_io
-            - tool_runtime
             - responses
           providers:
             files:
@@ -568,10 +566,6 @@ jobs:
                   persistence:
                     namespace: vector_io::faiss
                     backend: kv_default
-            tool_runtime:
-              - provider_id: file-search
-                provider_type: inline::file-search
-                config: {}
             responses:
               - provider_id: builtin
                 provider_type: inline::builtin

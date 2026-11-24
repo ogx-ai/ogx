@@ -40,23 +40,10 @@ def get_distribution_template() -> DistributionTemplate:
     # `inference` at load time (see StackConfig.normalize_systemone_to_inference).
     template.providers["systemone"] = []
 
-    # The web search backends are first-class providers of the web_search API now, not
-    # legacy tool_runtime tool groups. The base config keeps only the placeholder so the
-    # general integration suites never depend on a live search key; the web_search
-    # integration suite runs the web-search.yaml config, where each backend is enabled
-    # individually via an env-gated provider_id.
-    _legacy_search_provider_types = {
-        "remote::brave-search",
-        "remote::bing-search",
-        "remote::exa-search",
-        "remote::nimble-search",
-        "remote::serply-search",
-        "remote::searchapi-search",
-        "remote::tavily-search",
-    }
-    template.providers["tool_runtime"] = [
-        p for p in template.providers["tool_runtime"] if p.provider_type not in _legacy_search_provider_types
-    ]
+    # The base config keeps only the placeholder web_search provider so the general
+    # integration suites never depend on a live search key; the web_search integration
+    # suite runs the web-search.yaml config, where each backend is enabled individually
+    # via an env-gated provider_id.
     template.providers["web_search"] = [BuildProvider(provider_type="inline::placeholder")]
 
     # Pre-register a test MCP connector used by test_response_connector_resolution_mcp_tool.
@@ -235,16 +222,12 @@ def get_distribution_template() -> DistributionTemplate:
     template.run_configs["web-search.yaml"] = web_search_run_settings
 
     for run_config in template.run_configs.values():
-        # The starter's provider overrides carry the web search backends under the
-        # legacy tool_runtime spelling (overrides win over the BuildProvider list
-        # above when rendering); drop them so only the placeholder remains in the
-        # web_search section of every config except web-search.yaml.
-        if "tool_runtime" in run_config.provider_overrides:
-            run_config.provider_overrides["tool_runtime"] = [
-                p
-                for p in run_config.provider_overrides["tool_runtime"]
-                if p.provider_type not in _legacy_search_provider_types
-            ]
+        # The starter's provider overrides carry the web search backends in the
+        # web_search section (overrides win over the BuildProvider list above when
+        # rendering); drop them from every config except web-search.yaml, where the
+        # section is replaced by the env-gated providers set above.
+        if run_config is not web_search_run_settings and "web_search" in run_config.provider_overrides:
+            del run_config.provider_overrides["web_search"]
 
         if run_config.default_connectors is None:
             run_config.default_connectors = []

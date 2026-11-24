@@ -11,8 +11,8 @@ The `ogxai/distribution-oci` distribution consists of the following provider con
 | files | `inline::localfs` |
 | inference | `remote::oci` |
 | responses | `inline::builtin` |
-| tool_runtime | `remote::brave-search`, `remote::tavily-search`, `inline::file-search`, `remote::model-context-protocol` |
 | vector_io | `inline::faiss`, `remote::chromadb`, `remote::pgvector` |
+| web_search | `remote::brave-search`, `remote::tavily-search` |
 
 ## Environment Variables
 

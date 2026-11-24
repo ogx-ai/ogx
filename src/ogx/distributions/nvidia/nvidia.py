@@ -25,7 +25,6 @@ def get_distribution_template(name: str = "nvidia") -> DistributionTemplate:
         "inference": [BuildProvider(provider_type="remote::nvidia")],
         "vector_io": [BuildProvider(provider_type="inline::faiss")],
         "responses": [BuildProvider(provider_type="inline::builtin")],
-        "tool_runtime": [BuildProvider(provider_type="inline::file-search")],
         "files": [BuildProvider(provider_type="inline::localfs")],
     }
 

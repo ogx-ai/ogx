@@ -156,18 +156,13 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         "messages": [BuildProvider(provider_type="inline::builtin")],
         "responses": [BuildProvider(provider_type="inline::builtin")],
         "skills": [BuildProvider(provider_type="inline::builtin")],
-        # Web search backends keep their legacy tool_runtime spelling; the
-        # StackConfig normalizer moves them to a web_search section at load time
-        # (see StackConfig.normalize_tool_runtime_web_search_to_web_search).
-        "tool_runtime": [
+        "web_search": [
             BuildProvider(provider_type="remote::exa-search"),
             BuildProvider(provider_type="remote::brave-search"),
             BuildProvider(provider_type="remote::tavily-search"),
             BuildProvider(provider_type="remote::nimble-search"),
             BuildProvider(provider_type="remote::serply-search"),
             BuildProvider(provider_type="remote::searchapi-search"),
-            BuildProvider(provider_type="inline::file-search"),
-            BuildProvider(provider_type="remote::model-context-protocol"),
         ],
         "batches": [
             BuildProvider(provider_type="inline::reference"),
@@ -286,10 +281,7 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 config=AutoFileProcessorConfig.sample_run_config(),
             ),
         ],
-        # Legacy tool_runtime spelling for the web search backends (translated to
-        # web_search at config load); the config classes are the web_search ones,
-        # whose sample run config is identical to the legacy tool_runtime classes'.
-        "tool_runtime": [
+        "web_search": [
             Provider(
                 provider_id="exa-search",
                 provider_type="remote::exa-search",
@@ -319,14 +311,6 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 provider_id="searchapi-search",
                 provider_type="remote::searchapi-search",
                 config=SearchApiSearchConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
-            ),
-            Provider(
-                provider_id="file-search",
-                provider_type="inline::file-search",
-            ),
-            Provider(
-                provider_id="model-context-protocol",
-                provider_type="remote::model-context-protocol",
             ),
         ],
     }

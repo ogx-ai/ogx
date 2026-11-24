@@ -478,7 +478,6 @@ class TestAddResponsesAndWebSearch:
         run_config = StackConfig(
             distro_name="test",
             providers={
-                "tool_runtime": [],
                 "responses": [],
             },
         )
@@ -515,7 +514,6 @@ class TestAddResponsesAndWebSearch:
                 StackConfig(
                     distro_name="test",
                     providers={
-                        "tool_runtime": [],
                         "responses": [],
                     },
                 )
@@ -549,7 +547,6 @@ class TestAddResponsesAndWebSearch:
                 StackConfig(
                     distro_name="test",
                     providers={
-                        "tool_runtime": [],
                         "responses": [],
                     },
                 )
@@ -587,7 +584,6 @@ class TestAddResponsesAndWebSearch:
         run_config = StackConfig(
             distro_name="test",
             providers={
-                "tool_runtime": [],
                 "responses": [],
             },
         )
@@ -624,7 +620,7 @@ class TestAddResponsesAndWebSearch:
         config = StackConfig(
             distro_name="test",
             providers={
-                "tool_runtime": initial_providers.copy(),
+                "web_search": initial_providers.copy(),
                 "responses": [],
             },
         )
@@ -648,7 +644,7 @@ class TestAddResponsesAndWebSearch:
         config = StackConfig(
             distro_name="test",
             providers={
-                "tool_runtime": [
+                "web_search": [
                     Provider(
                         provider_id="brave-search",
                         provider_type="remote::brave-search",
