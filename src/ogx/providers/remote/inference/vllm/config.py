@@ -44,7 +44,7 @@ class VLLMInferenceAdapterConfig(RemoteInferenceProviderConfig):
             "Used by llm-d EPP Flow Control for per-tenant fair scheduling."
         ),
     )
-    tls_verify: bool | str | None = Field(
+    tls_verify: bool | Path | None = Field(
         default=None,
         deprecated=True,
         description="DEPRECATED: Use 'network.tls.verify' instead. Whether to verify TLS certificates. "
@@ -60,16 +60,10 @@ class VLLMInferenceAdapterConfig(RemoteInferenceProviderConfig):
                 DeprecationWarning,
                 stacklevel=2,
             )
-            # Convert string path to Path if needed
-            if isinstance(self.tls_verify, str):
-                verify_value: bool | Path = Path(self.tls_verify)
-            else:
-                verify_value = self.tls_verify
-
             if self.network is None:
-                self.network = NetworkConfig(tls=TLSConfig(verify=verify_value))
+                self.network = NetworkConfig(tls=TLSConfig(verify=self.tls_verify))
             elif self.network.tls is None:
-                self.network.tls = TLSConfig(verify=verify_value)
+                self.network.tls = TLSConfig(verify=self.tls_verify)
         return self
 
     @classmethod
