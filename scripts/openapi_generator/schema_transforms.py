@@ -380,7 +380,6 @@ def _restore_const_enum_defaults(openapi_schema: dict[str, Any]) -> None:
         "ListOpenAIChatCompletionResponse": {"object": "list"},
         "OpenAICompactedResponse": {"object": "response.compaction"},
         "OpenAIResponseObject": {"object": "response"},
-        "OpenAIResponseObjectWithInput": {"object": "response"},
     }
 
     for schema_name, props_to_fix in _defaults_to_restore.items():

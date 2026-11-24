@@ -28,7 +28,6 @@ from ogx_api import (
     OpenAIResponseInputMessageContentImage,
     OpenAIResponseMessage,
     OpenAIResponseObject,
-    OpenAIResponseObjectWithInput,
     OpenAIResponseOutputMessageContent,
     OpenAIResponseOutputMessageContentOutputText,
     OpenAIResponseOutputMessageFileSearchToolCall,
@@ -109,18 +108,26 @@ def _apply_include_filter(
     return filtered_items
 
 
-class _OpenAIResponseObjectWithInputAndMessages(OpenAIResponseObjectWithInput):
-    """Internal class for storing responses with chat completion messages.
+class _OpenAIResponseObjectWithInputAndMessages(OpenAIResponseObject):
+    """Internal stored form of a response.
 
-    This extends the public OpenAIResponseObjectWithInput with messages field
-    for internal storage. The messages field is not exposed in the public API.
+    Extends the public OpenAIResponseObject with the fields only in-process consumers need:
+    the input that led to the response (previous_response_id continuation, compaction, the
+    input_items endpoint), the chat completion messages, and how input was stored. None of
+    them are part of OpenAI's response object, so they never leave the server: every response
+    returned by the API goes through to_response_object().
 
     The messages field is optional for backward compatibility with responses
     stored before this feature was added.
     """
 
+    input: Sequence[OpenAIResponseInput]
     messages: list[OpenAIMessageParam] | None = None
     input_storage_mode: str | None = None
+
+    def to_response_object(self) -> OpenAIResponseObject:
+        """The public, OpenAI-shaped response object, without the internal fields."""
+        return OpenAIResponseObject(**self.model_dump(exclude={"input", "messages", "input_storage_mode"}))
 
 
 def _load_stored_response(response_data: dict[str, Any]) -> _OpenAIResponseObjectWithInputAndMessages:
@@ -402,26 +409,9 @@ class ResponsesStore:
             limit=limit,
         )
 
-        response_cache: dict[str, _OpenAIResponseObjectWithInputAndMessages | None] = {}
-        ordered_responses: list[_OpenAIResponseObjectWithInputAndMessages] = []
-        for row in paginated_result.data:
-            response = _load_stored_response(row["response_object"])
-            response_cache[response.id] = response
-            ordered_responses.append(response)
-
-        full_input_cache: dict[str, Sequence[OpenAIResponseInput]] = {}
-        data: list[OpenAIResponseObjectWithInput] = []
-        active_response_ids: set[str] = set()
-        for response in ordered_responses:
-            if self._is_incremental_response(response) and response.previous_response_id:
-                response.input = await self._reconstruct_full_input_with_cache(
-                    current_response=response,
-                    response_cache=response_cache,
-                    full_input_cache=full_input_cache,
-                    active_response_ids=active_response_ids,
-                )
-
-            data.append(OpenAIResponseObjectWithInput(**response.model_dump()))
+        # Listed responses carry no input (OpenAI's response object has none), so incremental
+        # rows need no input reconstruction here; input_items serves the input instead.
+        data = [_load_stored_response(row["response_object"]).to_response_object() for row in paginated_result.data]
 
         return ListOpenAIResponseObject(
             data=data,
