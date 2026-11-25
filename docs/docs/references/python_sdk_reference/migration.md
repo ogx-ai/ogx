@@ -121,7 +121,7 @@ types are the same -- only the class names changed. Here are the patterns:
 | `ListFilesResponse` | `ListOpenAIFileResponse` |
 | `ListPromptsResponse` | `ListPromptsResponse` |
 | `ListVectorStoresResponse` | `VectorStoreListResponse` |
-| `ResponseListResponse` | `OpenAIResponseObjectWithInput` |
+| `ResponseListResponse` | `OpenAIResponseObject` (items of `ListOpenAIResponseObject`) |
 | `PromptListResponse` | `ListPromptsResponse` |
 | `ProviderListResponse` | `ListProvidersResponse` |
 | `RouteListResponse` | `ListRoutesResponse` |

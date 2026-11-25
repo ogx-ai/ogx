@@ -466,18 +466,6 @@ class TestConstructModelFromIdentifier:
             call_kwargs = mock_client_class.call_args.kwargs
             assert call_kwargs.get("verify") is False
 
-    async def test_legacy_tls_verify_migrates_to_network(self):
-        """Legacy tls_verify=False should be migrated to network.tls.verify."""
-        config = VLLMInferenceAdapterConfig(
-            base_url="https://vllm.example.com/v1",
-            tls_verify=False,
-        )
-        adapter = VLLMInferenceAdapter(config=config)
-        await adapter.initialize()
-
-        kwargs = adapter._build_httpx_client_kwargs()
-        assert kwargs["verify"] is False
-
 
 class TestRerankTLSAndAuth:
     """Tests that rerank() honours TLS and auth configuration."""

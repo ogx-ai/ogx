@@ -73,7 +73,7 @@ from ogx_api import (
     OpenAIResponsePrompt,
     OpenAIResponseReasoning,
     OpenAIResponseText,
-    OpenAIResponseTextFormat,
+    OpenAIResponseTextFormatText,
     OpenAIResponseUsage,
     OpenAIResponseUsageInputTokensDetails,
     OpenAIResponseUsageOutputTokensDetails,
@@ -1083,7 +1083,7 @@ class OpenAIResponsesImpl:
             prompt=request.prompt,
             temperature=request.temperature,
             top_p=request.top_p,
-            text=request.text if request.text else OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+            text=request.text if request.text else OpenAIResponseText(format=OpenAIResponseTextFormatText()),
             tools=[],  # Will be populated when processing completes
             tool_choice=request.tool_choice,
             instructions=request.instructions,
@@ -1285,11 +1285,7 @@ class OpenAIResponsesImpl:
     ) -> AsyncIterator[OpenAIResponseObjectStream]:
         extra_body = request.model_extra.get("extra_body") if request.model_extra else None
 
-        text = (
-            request.text
-            if request.text is not None
-            else OpenAIResponseText(format=OpenAIResponseTextFormat(type="text"))
-        )
+        text = request.text if request.text is not None else OpenAIResponseText(format=OpenAIResponseTextFormatText())
 
         # These should never be None when called from create_openai_response (which sets defaults)
         # but we assert here to help mypy understand the types

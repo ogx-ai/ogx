@@ -132,11 +132,6 @@ const config: Config = {
               sidebarId: 'experimentalApiSidebar',
               label: 'Experimental',
             },
-            {
-              type: 'docSidebar',
-              sidebarId: 'deprecatedApiSidebar',
-              label: 'Deprecated',
-            },
           ],
         },
         {
@@ -339,15 +334,6 @@ const config: Config = {
             specPath: "static/experimental-ogx-spec.yaml",
             outputDir: "docs/api-experimental",
             downloadUrl: "https://raw.githubusercontent.com/ogx-ai/ogx/main/docs/static/experimental-ogx-spec.yaml",
-            sidebarOptions: {
-              groupPathsBy: "tag",
-              categoryLinkSource: "tag",
-            },
-          } satisfies OpenApiPlugin.Options,
-          deprecated: {
-            specPath: "static/deprecated-ogx-spec.yaml",
-            outputDir: "docs/api-deprecated",
-            downloadUrl: "https://raw.githubusercontent.com/ogx-ai/ogx/main/docs/static/deprecated-ogx-spec.yaml",
             sidebarOptions: {
               groupPathsBy: "tag",
               categoryLinkSource: "tag",
