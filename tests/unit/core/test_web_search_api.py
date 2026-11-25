@@ -220,121 +220,11 @@ async def test_web_search_missing_per_request_key_is_quiet(caplog):
             assert "Error parsing provider data" in caplog.text
 
 
-def test_legacy_tool_runtime_web_search_providers_translate_to_web_search():
-    """Web search providers listed under tool_runtime in an old config move to web_search at read time."""
-    from ogx.core.datatypes import Provider, StackConfig
-
-    with pytest.warns(DeprecationWarning, match="tool_runtime"):
-        config = StackConfig(
-            distro_name="test",
-            apis=["tool_runtime", "responses"],
-            providers={
-                "tool_runtime": [
-                    Provider(provider_id="brave", provider_type="remote::brave-search"),
-                    Provider(provider_id="mcp", provider_type="remote::model-context-protocol"),
-                    Provider(provider_id="searchapi", provider_type="remote::searchapi-search"),
-                    Provider(provider_id="placeholder", provider_type="inline::placeholder"),
-                ],
-            },
-        )
-
-    assert [(p.provider_id, p.provider_type) for p in config.providers["web_search"]] == [
-        ("brave", "remote::brave-search"),
-        ("searchapi", "remote::searchapi-search"),
-        ("placeholder", "inline::placeholder"),
-    ]
-    # No tool_runtime providers remain: the MCP entry is dropped by the
-    # removed-tool_runtime normalizer
-    assert "tool_runtime" not in config.providers
-    # The translated providers must be reachable over the HTTP surface
-    assert "web_search" in config.apis
-    # The retired APIs are stripped from the served list
-    assert "tool_runtime" not in config.apis
-
-
-def test_legacy_config_without_apis_list_is_untouched_by_translation():
-    """An apis: null (serve everything) config keeps its open API list; only the providers move."""
-    from ogx.core.datatypes import Provider, StackConfig
-
-    with pytest.warns(DeprecationWarning):
-        config = StackConfig(
-            distro_name="test",
-            providers={
-                "tool_runtime": [Provider(provider_id="tavily", provider_type="remote::tavily-search")],
-            },
-        )
-
-    assert config.apis is None
-    assert [p.provider_type for p in config.providers["web_search"]] == ["remote::tavily-search"]
-
-
-def test_removed_file_search_provider_is_dropped_from_tool_runtime():
-    """A config still listing the removed file-search provider loads, with the entry dropped."""
-    from ogx.core.datatypes import Provider, StackConfig
-
-    with pytest.warns(DeprecationWarning, match="inline::file-search"):
-        config = StackConfig(
-            distro_name="test",
-            providers={
-                "tool_runtime": [
-                    Provider(provider_id="file-search", provider_type="inline::file-search"),
-                    Provider(provider_id="mcp", provider_type="remote::model-context-protocol"),
-                ],
-            },
-        )
-
-    # The removed providers are dropped
-    assert "tool_runtime" not in config.providers
-    # Nothing is moved to another API section
-    assert "web_search" not in config.providers
-
-
-def test_removed_mcp_provider_is_dropped_from_tool_runtime():
-    """A config still listing the removed MCP provider loads, with the entry dropped."""
-    from ogx.core.datatypes import Provider, StackConfig
-
-    with pytest.warns(DeprecationWarning, match="tool_runtime"):
-        config = StackConfig(
-            distro_name="test",
-            apis=["tool_runtime", "responses"],
-            providers={
-                "tool_runtime": [
-                    Provider(provider_id="mcp", provider_type="remote::model-context-protocol"),
-                ],
-            },
-        )
-
-    assert "tool_runtime" not in config.providers
-    # The retired APIs are stripped from the served list
-    assert config.apis == ["responses"]
-    # Nothing is moved to another API section
-    assert "web_search" not in config.providers
-
-
-def test_config_without_tool_runtime_providers_is_untouched():
-    from ogx.core.datatypes import Provider, StackConfig
-
-    config = StackConfig(
-        distro_name="test",
-        providers={
-            "inference": [Provider(provider_id="reference", provider_type="inline::reference")],
-        },
-    )
-
-    assert "tool_runtime" not in config.providers
-
-
-def test_generated_starter_config_keeps_legacy_shape_and_translates_on_load():
-    """The bundled distro config keeps the legacy tool_runtime spelling, exercising the translation.
-
-    The distro templates deliberately do not spell a web_search section: loading
-    the generated starter config must surface the DeprecationWarning and produce
-    a translated web_search section with web_search added to the served APIs.
-    """
+def test_generated_starter_config_has_web_search_section():
+    """The bundled starter config spells the web search backends in a web_search section."""
     from ogx.core.stack import get_stack_run_config_from_distro
 
-    with pytest.warns(DeprecationWarning, match="tool_runtime"):
-        config = get_stack_run_config_from_distro("starter")
+    config = get_stack_run_config_from_distro("starter")
 
     # Config order is the resolution priority order
     assert [p.provider_type for p in config.providers["web_search"]] == [
@@ -345,17 +235,14 @@ def test_generated_starter_config_keeps_legacy_shape_and_translates_on_load():
         "remote::serply-search",
         "remote::searchapi-search",
     ]
-    # No tool_runtime providers remain: the MCP entry is dropped by the
-    # removed-tool_runtime normalizer
-    assert "tool_runtime" not in config.providers
     assert "web_search" in config.apis
     assert "tool_runtime" not in config.apis
 
 
-async def test_legacy_tool_runtime_config_resolves_web_search_router():
-    """A config that still lists web search under tool_runtime resolves to the web_search router.
+async def test_config_resolves_web_search_router():
+    """A config listing the web search placeholder resolves to the web_search router.
 
-    The translated provider is what the router dispatches to: with only the legacy
+    The configured provider is what the router dispatches to: with only the
     placeholder configured, a default search lands on the placeholder backend.
     """
     from unittest.mock import MagicMock
@@ -368,14 +255,13 @@ async def test_legacy_tool_runtime_config_resolves_web_search_router():
     provider_registry = {Api.web_search: {spec.provider_type: spec for spec in ws_providers()}}
     dist_registry = MagicMock()
 
-    with pytest.warns(DeprecationWarning):
-        run_config = StackConfig(
-            distro_name="test",
-            apis=["web_search"],
-            providers={
-                "tool_runtime": [Provider(provider_id="placeholder", provider_type="inline::placeholder")],
-            },
-        )
+    run_config = StackConfig(
+        distro_name="test",
+        apis=["web_search"],
+        providers={
+            "web_search": [Provider(provider_id="placeholder", provider_type="inline::placeholder")],
+        },
+    )
 
     impls = await resolve_impls(run_config, provider_registry, dist_registry, policy={})
 

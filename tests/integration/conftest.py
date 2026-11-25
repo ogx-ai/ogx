@@ -161,6 +161,16 @@ def pytest_addoption(parser):
     )
     parser.addoption("--env", action="append", help="Set environment variables, e.g. --env KEY=value")
     parser.addoption(
+        "--live-openai",
+        action="store_true",
+        help=(
+            "Run compatible-API tests (e.g. item_id_semantics) directly against api.openai.com "
+            "instead of the local server. Requires OPENAI_API_KEY; the model comes from the usual "
+            "--text-model / --setup machinery (e.g. --setup gpt). Can also be enabled with the env var "
+            "OGX_LIVE_OPENAI=1."
+        ),
+    )
+    parser.addoption(
         "--text-model",
         help="comma-separated list of text models. Fixture name: text_model_id",
     )

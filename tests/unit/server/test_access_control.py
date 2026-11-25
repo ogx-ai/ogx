@@ -14,7 +14,7 @@ from ogx.core.access_control.access_control import AccessDeniedError, is_action_
 from ogx.core.datatypes import AccessRule, ModelWithOwner, User
 from ogx.core.routers.inference import InferenceRouter
 from ogx.core.routing_tables.models import ModelsRoutingTable
-from ogx_api import Api, Model, ModelNotFoundError, ModelType
+from ogx_api import Api, Model, ModelNotFoundError, ModelType, RegisterModelRequest, UnregisterModelRequest
 
 
 class AsyncMock(MagicMock):
@@ -285,9 +285,15 @@ async def test_access_policy(mock_get_authenticated_user, test_setup_with_access
             "projects": ["foo", "bar"],
         },
     )
-    await routing_table.register_model("model-1", provider_model_id="model-1", provider_id="test_provider")
-    await routing_table.register_model("model-2", provider_model_id="model-2", provider_id="test_provider")
-    await routing_table.register_model("model-3", provider_model_id="model-3", provider_id="test_provider")
+    await routing_table.register_model(
+        RegisterModelRequest(model_id="model-1", provider_model_id="model-1", provider_id="test_provider")
+    )
+    await routing_table.register_model(
+        RegisterModelRequest(model_id="model-2", provider_model_id="model-2", provider_id="test_provider")
+    )
+    await routing_table.register_model(
+        RegisterModelRequest(model_id="model-3", provider_model_id="model-3", provider_id="test_provider")
+    )
     model = await routing_table.get_model("test_provider/model-1")
     assert model.identifier == "test_provider/model-1"
     model = await routing_table.get_model("test_provider/model-2")
@@ -309,9 +315,9 @@ async def test_access_policy(mock_get_authenticated_user, test_setup_with_access
     with pytest.raises(ModelNotFoundError):
         await routing_table.get_model("test_provider/model-3")
     with pytest.raises(AccessDeniedError):
-        await routing_table.register_model("model-4", provider_id="test_provider")
+        await routing_table.register_model(RegisterModelRequest(model_id="model-4", provider_id="test_provider"))
     with pytest.raises(AccessDeniedError):
-        await routing_table.unregister_model("test_provider/model-1")
+        await routing_table.unregister_model(UnregisterModelRequest(model_id="test_provider/model-1"))
 
     mock_get_authenticated_user.return_value = User(
         "user-3",
@@ -327,9 +333,9 @@ async def test_access_policy(mock_get_authenticated_user, test_setup_with_access
     with pytest.raises(ModelNotFoundError):
         await routing_table.get_model("test_provider/model-3")
     with pytest.raises(AccessDeniedError):
-        await routing_table.register_model("model-5", provider_id="test_provider")
+        await routing_table.register_model(RegisterModelRequest(model_id="model-5", provider_id="test_provider"))
     with pytest.raises(AccessDeniedError):
-        await routing_table.unregister_model("test_provider/model-2")
+        await routing_table.unregister_model(UnregisterModelRequest(model_id="test_provider/model-2"))
 
     mock_get_authenticated_user.return_value = User(
         "user-1",
@@ -338,7 +344,7 @@ async def test_access_policy(mock_get_authenticated_user, test_setup_with_access
             "projects": ["foo", "bar"],
         },
     )
-    await routing_table.unregister_model("test_provider/model-3")
+    await routing_table.unregister_model(UnregisterModelRequest(model_id="test_provider/model-3"))
     with pytest.raises(ModelNotFoundError):
         await routing_table.get_model("test_provider/model-3")
 

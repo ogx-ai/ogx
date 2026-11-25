@@ -106,13 +106,11 @@ jobs:
           run_dir=$(mktemp -d)
           cat <<EOF > "$run_dir/config.yaml"
           version: '2'
-          image_name: kube
           distro_name: kube
           apis:
             - files
             - inference
             - vector_io
-            - tool_runtime
             - responses
           providers:
             files:
@@ -137,10 +135,6 @@ jobs:
                   persistence:
                     namespace: vector_io::faiss
                     backend: kv_default
-            tool_runtime:
-              - provider_id: file-search
-                provider_type: inline::file-search
-                config: {}
             responses:
               - provider_id: builtin
                 provider_type: inline::builtin
@@ -304,7 +298,7 @@ jobs:
           # avoid line breaks in the server log, especially because we grep it below.
           export OGX_LOG_WIDTH=200
           # OPENAI_API_KEY is set via env at step level
-          nohup uv run ogx stack run "$run_dir/config.yaml" --insecure > server.log 2>&1 &
+          nohup uv run ogx run "$run_dir/config.yaml" --insecure > server.log 2>&1 &
 
       - name: Wait for OGX server to be ready
         run: |

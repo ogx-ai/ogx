@@ -354,7 +354,7 @@ class ModelsRoutingTable(CommonRoutingTableImpl, Models):
 
     async def register_model(
         self,
-        request: RegisterModelRequest | str | None = None,
+        request: RegisterModelRequest | None = None,
         *,
         model_id: str | None = None,
         provider_model_id: str | None = None,
@@ -363,7 +363,7 @@ class ModelsRoutingTable(CommonRoutingTableImpl, Models):
         model_type: ModelType | None = None,
         model_validation: bool | None = None,
     ) -> Model:
-        # Support both the public Models API (RegisterModelRequest) and legacy parameter-based interface
+        # Support both the public Models API (RegisterModelRequest) and the parameter-based interface
         if isinstance(request, RegisterModelRequest):
             model_id = request.model_id
             provider_model_id = request.provider_model_id
@@ -371,9 +371,6 @@ class ModelsRoutingTable(CommonRoutingTableImpl, Models):
             metadata = request.metadata or {}
             model_type = request.model_type
             model_validation = request.model_validation
-        elif isinstance(request, str):
-            # Legacy positional argument: register_model("model-id", ...)
-            model_id = request
 
         if model_id is None:
             raise ValueError("Either request or model_id must be provided")
@@ -432,16 +429,13 @@ class ModelsRoutingTable(CommonRoutingTableImpl, Models):
 
     async def unregister_model(
         self,
-        request: UnregisterModelRequest | str | None = None,
+        request: UnregisterModelRequest | None = None,
         *,
         model_id: str | None = None,
     ) -> None:
-        # Support both the public Models API (UnregisterModelRequest) and legacy parameter-based interface
+        # Support both the public Models API (UnregisterModelRequest) and the parameter-based interface
         if isinstance(request, UnregisterModelRequest):
             model_id = request.model_id
-        elif isinstance(request, str):
-            # Legacy positional argument: unregister_model("model-id")
-            model_id = request
 
         if model_id is None:
             raise ValueError("Either request or model_id must be provided")

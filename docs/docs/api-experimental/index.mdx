@@ -7,61 +7,52 @@ sidebar_position: 1
 
 # Experimental APIs
 
-This section contains APIs that are still maturing and may change between releases. They are functional and available for use but have not yet reached stable (`v1`) status.
+OGX exposes its experimental APIs under the `v1alpha` prefix. They are
+functional and available for use, but they may change in breaking ways
+between releases.
 
 :::warning
-Experimental APIs may introduce breaking changes in minor releases. Pin your client version if stability is important for your use case.
+Experimental APIs may introduce breaking changes in minor releases. Pin your
+client version if stability is important for your use case.
 :::
-
-## v1beta APIs
-
-These APIs are nearing stability but may still see minor changes.
-
-### Datasets API
-Manage datasets for evaluation workflows.
-
-**Endpoint prefix:** `v1beta`
-**Use case:** Dataset creation, listing, and deletion for eval pipelines.
-
-### DatasetIO API
-Read and write dataset contents.
-
-**Endpoint prefix:** `v1beta`
-**Use case:** Row-level access to dataset data for scoring and evaluation.
-
-### Connectors API
-Manage external connectors such as MCP servers.
-
-**Endpoint prefix:** `v1beta`
-**Use case:** Register and manage connections to external tool servers.
 
 ## v1alpha APIs
 
-These APIs are in early development and more likely to change.
+### Admin API
+Server administration: health and version checks, provider listing, route
+inspection, and management of external connectors (such as MCP servers) and
+their tools.
 
-### Eval API
-Run evaluation jobs against benchmarks.
+**Endpoint prefix:** `v1alpha/admin`
 
-**Endpoint prefix:** `v1alpha`
-**Use case:** Execute evaluation pipelines and retrieve results.
+### Interactions API
+Google Interactions-compatible endpoint for streaming interactive sessions.
 
-### Benchmarks API
-Register and manage benchmark suites.
+**Endpoint prefix:** `v1alpha/interactions`
 
-**Endpoint prefix:** `v1alpha`
-**Use case:** Define benchmark configurations for model evaluation.
+### Skills API
+Register, list, version, update, and delete skills uploaded to the server.
+
+**Endpoint prefix:** `v1alpha/skills`
+
+### Containers API
+Manage container workloads, including uploading and retrieving files inside
+a container.
+
+**Endpoint prefix:** `v1alpha/containers`
 
 ### File Processors API
-Parse and process uploaded files.
+Submit asynchronous jobs that parse and chunk documents for vector storage,
+and poll or cancel those jobs. The synchronous
+`v1alpha/file-processors/process` endpoint is deprecated in favor of the
+jobs endpoints.
 
-**Endpoint prefix:** `v1alpha`
-**Use case:** Extract structured content from PDFs, DOCX, and other document formats.
+**Endpoint prefix:** `v1alpha/file-processors`
 
-### Admin API
-Server administration and management.
+### Inference Rerank
+Rerank documents for search relevance.
 
-**Endpoint prefix:** `v1alpha`
-**Use case:** Server version information and administrative operations.
+**Endpoint:** `v1alpha/inference/rerank`
 
 ## Feedback
 

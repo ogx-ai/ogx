@@ -160,7 +160,6 @@ LEGACY_SCHEMA_ORDER = [
     "OpenAIResponseInputToolFileSearch",
     "OpenAIResponseInputToolFunction",
     "OpenAIResponseInputToolWebSearch",
-    "OpenAIResponseObjectWithInput",
     "OpenAIResponseOutput",
     "OpenAIResponsePrompt",
     "OpenAIResponseText",

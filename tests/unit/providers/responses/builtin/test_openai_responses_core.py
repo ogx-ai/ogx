@@ -39,7 +39,9 @@ from ogx_api.openai_responses import (
     OpenAIResponseOutputMessageMCPCall,
     OpenAIResponseOutputMessageWebSearchToolCall,
     OpenAIResponseText,
-    OpenAIResponseTextFormat,
+    OpenAIResponseTextFormatJSONObject,
+    OpenAIResponseTextFormatJSONSchema,
+    OpenAIResponseTextFormatText,
 )
 from ogx_api.responses.models import CreateResponseRequest
 from tests.unit.providers.responses.builtin.test_openai_responses_helpers import fake_stream
@@ -231,7 +233,7 @@ async def test_prepend_previous_response_basic(openai_responses_impl, mock_respo
         model="fake_model",
         output=[response_output_message],
         status="completed",
-        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        text=OpenAIResponseText(format=OpenAIResponseTextFormatText()),
         input=[input_item_message],
         messages=[OpenAIUserMessageParam(content="fake_previous_input")],
         store=True,
@@ -275,7 +277,7 @@ async def test_prepend_previous_response_web_search(openai_responses_impl, mock_
         model="fake_model",
         output=[output_web_search, output_message],
         status="completed",
-        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        text=OpenAIResponseText(format=OpenAIResponseTextFormatText()),
         input=[input_item_message],
         messages=[OpenAIUserMessageParam(content="test input")],
         store=True,
@@ -324,7 +326,7 @@ async def test_prepend_previous_response_mcp_tool_call(openai_responses_impl, mo
         model="fake_model",
         output=[output_tool_call, output_message],
         status="completed",
-        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        text=OpenAIResponseText(format=OpenAIResponseTextFormatText()),
         input=[input_item_message],
         messages=[OpenAIUserMessageParam(content="test input")],
         store=True,
@@ -440,7 +442,7 @@ async def test_create_openai_response_with_instructions_and_previous_response(
         model="fake_model",
         output=[response_output_message],
         status="completed",
-        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        text=OpenAIResponseText(format=OpenAIResponseTextFormatText()),
         input=[input_item_message],
         messages=[
             OpenAIUserMessageParam(content="Name some towns in Ireland"),
@@ -504,7 +506,7 @@ async def test_create_openai_response_with_previous_response_instructions(
         model="fake_model",
         output=[response_output_message],
         status="completed",
-        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        text=OpenAIResponseText(format=OpenAIResponseTextFormatText()),
         input=[input_item_message],
         messages=[
             OpenAIUserMessageParam(content="Name some towns in Ireland"),
@@ -592,7 +594,7 @@ async def test_get_openai_response_skips_input_reconstruction(openai_responses_i
         created_at=1234567890,
         model="meta-llama/Llama-3.1-8B-Instruct",
         status="completed",
-        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        text=OpenAIResponseText(format=OpenAIResponseTextFormatText()),
         input=[OpenAIResponseMessage(id="msg_1", role="user", content="Hi")],
         output=[],
         store=True,
@@ -634,7 +636,7 @@ async def test_responses_store_list_input_items_logic():
         object="response",
         status="completed",
         output=[],
-        text=OpenAIResponseText(format=(OpenAIResponseTextFormat(type="text"))),
+        text=OpenAIResponseText(format=(OpenAIResponseTextFormatText())),
         input=input_items,
         messages=[OpenAIUserMessageParam(content="First message")],
         store=True,
@@ -704,7 +706,7 @@ async def test_store_response_uses_incremental_input_with_previous_response(
         created_at=1234567890,
         model="meta-llama/Llama-3.1-8B-Instruct",
         status="completed",
-        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        text=OpenAIResponseText(format=OpenAIResponseTextFormatText()),
         input=[
             OpenAIResponseMessage(
                 id="msg-prev-user", role="user", content=[OpenAIResponseInputMessageContentText(text="What is 2+2?")]
@@ -764,7 +766,7 @@ async def test_store_response_disables_incremental_input_when_auto_compaction_ap
         created_at=1234567890,
         model="meta-llama/Llama-3.1-8B-Instruct",
         status="completed",
-        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        text=OpenAIResponseText(format=OpenAIResponseTextFormatText()),
         input=[
             OpenAIResponseMessage(
                 id="msg-prev-user",
@@ -824,12 +826,12 @@ async def test_store_response_disables_incremental_input_when_auto_compaction_ap
 @pytest.mark.parametrize(
     "text_format, response_format",
     [
-        (OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")), None),
+        (OpenAIResponseText(format=OpenAIResponseTextFormatText()), None),
         (
-            OpenAIResponseText(format=OpenAIResponseTextFormat(name="Test", schema={"foo": "bar"}, type="json_schema")),
+            OpenAIResponseText(format=OpenAIResponseTextFormatJSONSchema(name="Test", schema={"foo": "bar"})),
             OpenAIResponseFormatJSONSchema(json_schema=OpenAIJSONSchema(name="Test", schema_={"foo": "bar"})),
         ),
-        (OpenAIResponseText(format=OpenAIResponseTextFormat(type="json_object")), OpenAIResponseFormatJSONObject()),
+        (OpenAIResponseText(format=OpenAIResponseTextFormatJSONObject()), OpenAIResponseFormatJSONObject()),
         # ensure text param with no format specified defaults to None
         (OpenAIResponseText(format=None), None),
         # ensure text param of None defaults to None

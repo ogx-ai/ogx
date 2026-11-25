@@ -19,7 +19,7 @@ from ogx.providers.inline.responses.builtin.responses.utils import (
     get_message_type_by_role,
     is_function_tool_call,
 )
-from ogx_api import InvalidParameterError, RetrieveFileContentRequest, RetrieveFileRequest
+from ogx_api import RetrieveFileContentRequest, RetrieveFileRequest
 from ogx_api.inference import (
     OpenAIAssistantMessageParam,
     OpenAIChatCompletionContentPartImageParam,
@@ -53,7 +53,7 @@ from ogx_api.openai_responses import (
     OpenAIResponseOutputMessageReasoningContent,
     OpenAIResponseOutputMessageReasoningItem,
     OpenAIResponseText,
-    OpenAIResponseTextFormat,
+    OpenAIResponseTextFormatText,
 )
 
 
@@ -381,7 +381,7 @@ class TestConvertResponseInputToChatMessages:
 
 class TestConvertResponseTextToChatResponseFormat:
     async def test_convert_text_format(self):
-        text = OpenAIResponseText(format=OpenAIResponseTextFormat(type="text"))
+        text = OpenAIResponseText(format=OpenAIResponseTextFormatText())
         result = await convert_response_text_to_chat_response_format(text)
 
         assert isinstance(result, OpenAIResponseFormatText)
@@ -436,22 +436,6 @@ class TestConvertResponseTextToChatResponseFormat:
         dumped = result.json_schema.model_dump()
         assert dumped["schema"] == schema_def
         assert "schema_" not in dumped
-
-    @pytest.mark.parametrize(
-        "text_format, param",
-        [
-            ({"type": "json_schema", "schema": {"type": "object"}}, "text.format.name"),
-            ({"type": "json_schema", "name": "", "schema": {"type": "object"}}, "text.format.name"),
-            ({"type": "json_schema", "name": "test_schema"}, "text.format.schema"),
-            ({"type": "json_schema", "name": "test_schema", "schema": None}, "text.format.schema"),
-            ({"name": "test_schema", "schema": {"type": "object"}}, "text.format.type"),
-        ],
-    )
-    async def test_incomplete_text_format_is_a_bad_request(self, text_format, param):
-        text = OpenAIResponseText(format=text_format)
-
-        with pytest.raises(InvalidParameterError, match=param):
-            await convert_response_text_to_chat_response_format(text)
 
     async def test_default_text_format(self):
         text = OpenAIResponseText()
