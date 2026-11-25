@@ -48,8 +48,6 @@ Features:
 - Filtered and ranked search (`filters`, `ranking_options`)
 - Multi-store fan-out with per-store failure degradation
 
-Configurations that still list a `tool_runtime` provider (for example the removed `inline::file-search` or `remote::model-context-protocol` providers) keep loading: the entries are dropped at read time with a deprecation warning. Remove them from your configuration; no tool provider is needed for file search, and MCP tools are served by the Responses API directly, optionally via MCP connectors.
-
 ### Memory Alpha
 
 Responses memory is an alpha feature built on vector stores and file search retrieval, but it is not exposed to the model as a visible tool call. OGX retrieves memory summaries from an internal memory vector store, injects them as hidden context, and does not emit `file_search_call` items, annotations, or citations for those memories.

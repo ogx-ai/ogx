@@ -364,8 +364,9 @@ async def test_update_response_object_preserves_incremental_storage_mode():
         assert after_update.input[2].content == "Question 2"
 
 
-async def test_list_responses_reconstructs_incremental_input():
-    """list_responses should return full reconstructed input for incremental rows."""
+async def test_list_responses_matches_openai_shape_for_incremental_rows():
+    """list_responses returns OpenAI-shaped objects without input (#7080); the full
+    reconstructed input stays available in-process through get_response_object."""
     from ogx_api import OpenAIResponseMessage, OpenAIResponseOutputMessageContentOutputText
 
     with TemporaryDirectory() as tmp_dir:
@@ -416,7 +417,12 @@ async def test_list_responses_reconstructs_incremental_input():
         listed = await store.list_responses(limit=10, order=Order.desc)
         listed_resp2 = next(item for item in listed.data if item.id == "resp-list-2")
 
-        assert len(listed_resp2.input) == 3
-        assert listed_resp2.input[0].content == "Question 1"
-        assert listed_resp2.input[1].content[0].text == "Answer 1"
-        assert listed_resp2.input[2].content == "Question 2"
+        assert type(listed_resp2) is OpenAIResponseObject
+        assert "input" not in listed_resp2.model_dump()
+        assert "messages" not in listed_resp2.model_dump()
+
+        stored_resp2 = await store.get_response_object("resp-list-2")
+        assert len(stored_resp2.input) == 3
+        assert stored_resp2.input[0].content == "Question 1"
+        assert stored_resp2.input[1].content[0].text == "Answer 1"
+        assert stored_resp2.input[2].content == "Question 2"

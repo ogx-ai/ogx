@@ -11,7 +11,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
@@ -353,13 +352,6 @@ class ConnectCodex(Subcommand):
             help="Default model ID. If omitted, the first available model is used.",
         )
         self.parser.add_argument(
-            "--exec",
-            dest="exec_prompt",
-            type=str,
-            default=None,
-            help=argparse.SUPPRESS,
-        )
-        self.parser.add_argument(
             "codex_args",
             nargs=argparse.REMAINDER,
             help="Additional arguments forwarded to the codex command (place after --).",
@@ -391,15 +383,6 @@ class ConnectCodex(Subcommand):
                 codex_home_path, base_url, models, default_model.model_id, api_key=args.connect_api_key
             )
             codex_args = _strip_leading_separator(list(args.codex_args))
-            if args.exec_prompt is not None:
-                # Deprecated: kept for compatibility with the pre-forwarding form.
-                warnings.warn(
-                    "'--exec' is deprecated and will be removed in a future release. "
-                    "Forward the prompt after -- instead: ogx connect codex -- exec <prompt>.",
-                    FutureWarning,
-                    stacklevel=1,
-                )
-                codex_args = ["exec", *codex_args, args.exec_prompt]
             command = self._build_codex_command(codex_args)
             env = {**os.environ, "CODEX_HOME": str(codex_home_path)}
             if args.connect_api_key:

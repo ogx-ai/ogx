@@ -60,7 +60,7 @@ from ogx_api.openai_responses import (
     OpenAIResponseObject,
     OpenAIResponseObjectStream,
     OpenAIResponseText,
-    OpenAIResponseTextFormat,
+    OpenAIResponseTextFormatText,
 )
 from ogx_api.responses.models import (
     CancelResponseRequest,
@@ -103,7 +103,7 @@ class TenancyTestResponsesImpl:
             output=[],
             status="completed",
             store=True,
-            text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+            text=OpenAIResponseText(format=OpenAIResponseTextFormatText()),
         )
         await self.store.store_response_object(response, [], [])
         return response

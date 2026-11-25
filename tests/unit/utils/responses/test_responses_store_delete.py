@@ -694,8 +694,8 @@ async def test_delete_response_denied_does_not_materialize_children():
             assert parent_after_denied_delete.id == "resp-denied-parent"
 
 
-async def test_list_responses_reuses_cached_ancestry_and_avoids_repeated_fetches():
-    """list_responses should avoid repeated DB ancestry fetches for rows already in page."""
+async def test_list_responses_does_no_ancestry_fetches():
+    """list_responses returns no input, so incremental rows need no ancestry fetches at all."""
     from ogx_api import OpenAIResponseMessage, OpenAIResponseOutputMessageContentOutputText
 
     with TemporaryDirectory() as tmp_dir:
@@ -774,7 +774,7 @@ async def test_list_responses_reuses_cached_ancestry_and_avoids_repeated_fetches
         listed = await store.list_responses(limit=10, order=Order.desc)
         listed_resp3 = next(item for item in listed.data if item.id == "resp-cache-3")
 
-        assert len(listed_resp3.input) == 5
+        assert "input" not in listed_resp3.model_dump()
         assert store.sql_store.fetch_one.await_count == 0
 
 

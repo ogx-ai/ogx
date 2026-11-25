@@ -63,7 +63,7 @@ def start_ogx_server(config_name: str, *, log_stderr: bool | None = None) -> sub
     if os.path.exists("server.log"):
         os.remove("server.log")
 
-    cmd = f"ogx stack run {config_name}"
+    cmd = f"ogx run {config_name}"
     devnull = open(os.devnull, "w")
     process = subprocess.Popen(
         shlex.split(cmd),

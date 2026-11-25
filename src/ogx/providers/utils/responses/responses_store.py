@@ -8,6 +8,7 @@ import hashlib
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 
@@ -27,7 +28,6 @@ from ogx_api import (
     OpenAIResponseInputMessageContentImage,
     OpenAIResponseMessage,
     OpenAIResponseObject,
-    OpenAIResponseObjectWithInput,
     OpenAIResponseOutputMessageContent,
     OpenAIResponseOutputMessageContentOutputText,
     OpenAIResponseOutputMessageFileSearchToolCall,
@@ -38,6 +38,7 @@ from ogx_api import (
     ResponseNotFoundError,
 )
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
+from ogx_api.openai_responses import LENIENT_STORED_TEXT_FORMAT_CONTEXT_KEY
 
 logger = get_logger(name=__name__, category="openai_responses")
 
@@ -107,18 +108,44 @@ def _apply_include_filter(
     return filtered_items
 
 
-class _OpenAIResponseObjectWithInputAndMessages(OpenAIResponseObjectWithInput):
-    """Internal class for storing responses with chat completion messages.
+class _OpenAIResponseObjectWithInputAndMessages(OpenAIResponseObject):
+    """Internal stored form of a response.
 
-    This extends the public OpenAIResponseObjectWithInput with messages field
-    for internal storage. The messages field is not exposed in the public API.
+    Extends the public OpenAIResponseObject with the fields only in-process consumers need:
+    the input that led to the response (previous_response_id continuation, compaction, the
+    input_items endpoint), the chat completion messages, and how input was stored. None of
+    them are part of OpenAI's response object, so they never leave the server: every response
+    returned by the API goes through to_response_object().
 
     The messages field is optional for backward compatibility with responses
     stored before this feature was added.
     """
 
+    input: Sequence[OpenAIResponseInput]
     messages: list[OpenAIMessageParam] | None = None
     input_storage_mode: str | None = None
+
+    def to_response_object(self) -> OpenAIResponseObject:
+        """The public, OpenAI-shaped response object, without the internal fields."""
+        return OpenAIResponseObject(**self.model_dump(exclude={"input", "messages", "input_storage_mode"}))
+
+
+def _load_stored_response(response_data: dict[str, Any]) -> _OpenAIResponseObjectWithInputAndMessages:
+    """Parse a persisted response row, tolerating a text.format stored before it was
+    validated at request time (read back as None, i.e. plain text) so that row stays
+    readable instead of failing every get, list, continuation and delete.
+    """
+    response = _OpenAIResponseObjectWithInputAndMessages.model_validate(
+        response_data, context={LENIENT_STORED_TEXT_FORMAT_CONTEXT_KEY: True}
+    )
+    stored_text = response_data.get("text")
+    if isinstance(stored_text, dict) and stored_text.get("format") is not None and response.text.format is None:
+        logger.warning(
+            "Read stored response with an invalid legacy text.format as plain text",
+            response_id=response.id,
+            stored_format=stored_text.get("format"),
+        )
+    return response
 
 
 @dataclass(frozen=True)
@@ -382,26 +409,9 @@ class ResponsesStore:
             limit=limit,
         )
 
-        response_cache: dict[str, _OpenAIResponseObjectWithInputAndMessages | None] = {}
-        ordered_responses: list[_OpenAIResponseObjectWithInputAndMessages] = []
-        for row in paginated_result.data:
-            response = _OpenAIResponseObjectWithInputAndMessages(**row["response_object"])
-            response_cache[response.id] = response
-            ordered_responses.append(response)
-
-        full_input_cache: dict[str, Sequence[OpenAIResponseInput]] = {}
-        data: list[OpenAIResponseObjectWithInput] = []
-        active_response_ids: set[str] = set()
-        for response in ordered_responses:
-            if self._is_incremental_response(response) and response.previous_response_id:
-                response.input = await self._reconstruct_full_input_with_cache(
-                    current_response=response,
-                    response_cache=response_cache,
-                    full_input_cache=full_input_cache,
-                    active_response_ids=active_response_ids,
-                )
-
-            data.append(OpenAIResponseObjectWithInput(**response.model_dump()))
+        # Listed responses carry no input (OpenAI's response object has none), so incremental
+        # rows need no input reconstruction here; input_items serves the input instead.
+        data = [_load_stored_response(row["response_object"]).to_response_object() for row in paginated_result.data]
 
         return ListOpenAIResponseObject(
             data=data,
@@ -432,7 +442,7 @@ class ResponsesStore:
             raise ResponseNotFoundError(response_id) from None
 
         response_data = row["response_object"]
-        response = _OpenAIResponseObjectWithInputAndMessages(**response_data)
+        response = _load_stored_response(response_data)
 
         if reconstruct_input and self._is_incremental_response(response) and response.previous_response_id:
             response.input = await self._reconstruct_full_input(response)
@@ -459,7 +469,7 @@ class ResponsesStore:
             response_cache[response_id] = None
             return None
 
-        response = _OpenAIResponseObjectWithInputAndMessages(**row["response_object"])
+        response = _load_stored_response(row["response_object"])
         response_cache[response_id] = response
         return response
 
@@ -586,7 +596,7 @@ class ResponsesStore:
             if response_data.get("input_storage_mode") != "incremental":
                 continue
 
-            child_response = _OpenAIResponseObjectWithInputAndMessages(**response_data)
+            child_response = _load_stored_response(response_data)
             rewritten_input: list[OpenAIResponseInput] = list(parent_response.input)
             rewritten_input.extend(parent_response.output)
             rewritten_input.extend(child_response.input)
@@ -628,7 +638,7 @@ class ResponsesStore:
         if not row:
             raise ResponseNotFoundError(response_id)
 
-        parent_response = _OpenAIResponseObjectWithInputAndMessages(**row["response_object"])
+        parent_response = _load_stored_response(row["response_object"])
 
         # Ensure delete access before running any internal materialization writes.
         await self.sql_store.check_access_for_rows(

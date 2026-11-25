@@ -35,7 +35,6 @@ from .models import (
     ListProcessFileJobsResponse,
     ProcessFileJob,
     ProcessFileRequest,
-    ProcessFileResponse,
 )
 
 
@@ -87,7 +86,7 @@ async def _build_request_and_file(
     chunking_strategy: str | None,
     max_upload_size_bytes: int,
 ) -> tuple[ProcessFileRequest, UploadFile | None]:
-    """Shared multipart handling for the blocking and job-based submit endpoints."""
+    """Shared multipart handling for the job-based submit endpoint."""
     if (file is None) == (file_id is None):
         raise HTTPException(status_code=400, detail="Exactly one of file or file_id must be provided.")
 
@@ -147,48 +146,6 @@ def create_router(impl: FileProcessors, max_upload_size_bytes: int = DEFAULT_MAX
         tags=["File Processors"],
         responses=standard_responses,
     )
-
-    @router.post(
-        "/file-processors/process",
-        response_model=ProcessFileResponse,
-        summary="Process a file into chunks ready for vector database storage.",
-        description=(
-            "Deprecated. This endpoint blocks until processing completes, which can hold a connection open "
-            "for large files. Use POST /file-processors/jobs to submit the file asynchronously and poll "
-            "GET /file-processors/jobs/{job_id} for the result. "
-            "Supports direct upload via multipart form or processing files already uploaded to file storage "
-            "via file_id. Exactly one of file or file_id must be provided."
-        ),
-        deprecated=True,
-        responses={
-            200: {"description": "The processed file chunks."},
-        },
-    )
-    async def process_file(
-        file: Annotated[
-            UploadFile | None,
-            File(description="The File object to be uploaded and processed. Mutually exclusive with file_id."),
-        ] = None,
-        file_id: Annotated[
-            str | None, Form(description="ID of file already uploaded to file storage. Mutually exclusive with file.")
-        ] = None,
-        options: Annotated[
-            OptionsForm | None,
-            Form(
-                description="Optional processing options. Provider-specific parameters (e.g., OCR settings, output format)."
-            ),
-        ] = None,
-        chunking_strategy: Annotated[
-            str | None,
-            Form(
-                description="Optional chunking strategy for splitting content into chunks. Must be valid JSON string."
-            ),
-        ] = None,
-    ) -> ProcessFileResponse:
-        request, safe_file = await _build_request_and_file(
-            file, file_id, options, chunking_strategy, max_upload_size_bytes
-        )
-        return await impl.process_file(request, safe_file)
 
     @router.post(
         "/file-processors/jobs",

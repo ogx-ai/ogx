@@ -504,5 +504,8 @@ classmethod-decorators = ["classmethod", "pydantic.field_validator"]
 [tool.pytest.ini_options]
 addopts = ["--durations=10"]
 asyncio_mode = "auto"
-markers = ["allow_network: Allow network access for specific unit tests"]
+markers = [
+    "allow_network: Allow network access for specific unit tests",
+    "divergence(code, reason): pins the OpenAI reference behavior; converted to a non-strict xfail on the local integration target until the OGX parity fix lands",
+]
 filterwarnings = "ignore::DeprecationWarning"

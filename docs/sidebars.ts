@@ -243,7 +243,6 @@ const sidebars: SidebarsConfig = {
           collapsed: false,
           link: { type: 'doc', id: 'providers/vector_io/index' },
           items: [
-            'providers/vector_io/inline_builtin',
             'providers/vector_io/inline_chromadb',
             'providers/vector_io/inline_faiss',
             'providers/vector_io/inline_milvus',
@@ -322,8 +321,6 @@ const sidebars: SidebarsConfig = {
   // API Reference sidebars - use plugin-generated sidebars
   stableApiSidebar: require('./docs/api/sidebar.ts').default,
   experimentalApiSidebar: require('./docs/api-experimental/sidebar.ts').default,
-  deprecatedApiSidebar: require('./docs/api-deprecated/sidebar.ts').default,
-
 };
 
 export default sidebars;
