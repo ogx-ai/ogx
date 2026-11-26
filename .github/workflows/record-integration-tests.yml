@@ -417,6 +417,44 @@ jobs:
             echo "AWS_DEFAULT_REGION=us-west-2"
           } >> "${GITHUB_ENV}"
 
+      # The TypeScript client serializes request bodies differently from the Python client,
+      # so its requests hash to their own recordings. Lanes that have TypeScript tests mapped
+      # in tests/integration/client-typescript/suites.json also run that suite (through
+      # scripts/integration-tests.sh, against the same server), so record-if-missing fills
+      # in the TypeScript-side recordings too instead of leaving them to a local run.
+      - name: Check for TypeScript client tests
+        if: steps.should_run.outputs.run == 'true'
+        id: ts_tests
+        env:
+          TEST_SETUP: ${{ matrix.provider.setup }}
+          TEST_SUITE: ${{ inputs.suite || matrix.provider.suite }}
+          STACK_CONFIG: ${{ matrix.provider.stack_config || 'server:ci-tests' }}
+        run: |
+          set -euo pipefail
+          run=false
+          if [[ "$STACK_CONFIG" == server:* ]] && jq -e --arg suite "$TEST_SUITE" --arg setup "$TEST_SETUP" \
+              'any(.[]; .suite == $suite and ((.setup // "") == "" or .setup == $setup))' \
+              tests/integration/client-typescript/suites.json >/dev/null; then
+            run=true
+          fi
+          echo "TypeScript client tests for suite=$TEST_SUITE setup=$TEST_SETUP: $run"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js for TypeScript client tests
+        if: steps.should_run.outputs.run == 'true' && steps.ts_tests.outputs.run == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.22'
+          cache: npm
+          cache-dependency-path: tests/integration/client-typescript/package-lock.json
+
+      - name: Setup TypeScript client
+        if: steps.should_run.outputs.run == 'true' && steps.ts_tests.outputs.run == 'true'
+        id: setup-ts-client
+        uses: ogx-ai/ogx/.github/actions/setup-typescript-client@75ed067efcadcb30bf61df4684c5151aa2640cae
+        with:
+          client-version: latest
+
       - name: Run and record tests
         if: steps.should_run.outputs.run == 'true'
         uses: ogx-ai/ogx/.github/actions/run-and-record-tests@d4ffee2179c7035d3e1377fc0468e83936feb11a
@@ -450,6 +488,8 @@ jobs:
           AWS_BEDROCK_BEARER_TOKEN: ${{ matrix.provider.setup == 'bedrock' && secrets.AWS_BEARER_TOKEN_BEDROCK || '' }}
           AWS_BEARER_TOKEN_BEDROCK: ${{ matrix.provider.setup == 'bedrock' && secrets.AWS_BEARER_TOKEN_BEDROCK || '' }}
           AWS_DEFAULT_REGION: ${{ matrix.provider.setup == 'bedrock' && 'us-west-2' || '' }}
+          # Set only for lanes with TypeScript client tests; empty skips the TS suite.
+          TS_CLIENT_PATH: ${{ steps.setup-ts-client.outputs.ts-client-path || '' }}
         with:
           # Lanes may pin a run config via `stack_config` in their matrix entry
           # (e.g. the web-search-* lanes use the web-search.yaml run config); the

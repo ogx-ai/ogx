@@ -306,3 +306,45 @@ fi
     assert result.returncode == 1
     assert "Unknown client-version" in result.stderr
     assert not pytest_log.exists()
+
+
+@pytest.mark.parametrize(
+    ("ts_client_path", "stack_config", "expected_error"),
+    [
+        (None, "server:ci-tests", "--typescript-only requires TS_CLIENT_PATH"),
+        ("latest", "ci-tests", "--typescript-only requires a server stack config"),
+    ],
+)
+def test_integration_runner_typescript_only_fails_instead_of_running_nothing(
+    ts_client_path: str | None, stack_config: str, expected_error: str
+) -> None:
+    """--typescript-only skips the Python tests; without TS_CLIENT_PATH or a server stack
+    config the TypeScript tests are skipped too, so the run must fail rather than pass
+    having executed zero tests."""
+    root = Path(__file__).resolve().parents[2]
+    environment = {key: value for key, value in os.environ.items() if key != "TS_CLIENT_PATH"}
+    if ts_client_path is not None:
+        environment["TS_CLIENT_PATH"] = ts_client_path
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(root / "scripts/integration-tests.sh"),
+            "--stack-config",
+            stack_config,
+            "--suite",
+            "base",
+            "--setup",
+            "ollama",
+            "--typescript-only",
+        ],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert expected_error in result.stdout
