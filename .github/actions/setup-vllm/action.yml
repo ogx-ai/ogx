@@ -16,7 +16,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install vLLM 0.32.0 (CPU x86_64) and download model weights
+    - name: Install vLLM 0.34.0 (CPU x86_64) and download model weights
       shell: bash
       run: |
         set -euo pipefail
@@ -39,14 +39,14 @@ runs:
             || { echo "Failed to verify sha256 for $1 (expected $2)" >&2; exit 1; }
         }
 
-        # 1. vLLM CPU wheel, pinned to the official 0.32.0 GitHub release asset.
+        # 1. vLLM CPU wheel, pinned to the official 0.34.0 GitHub release asset.
         #    Verify the hash BEFORE installing so we never install unauthenticated bytes.
         #    Transitive dependencies are resolved by uv; only vLLM itself is hash-pinned.
-        WHEEL_NAME="vllm-0.32.0+cpu-cp38-abi3-manylinux_2_39_x86_64.whl"
+        WHEEL_NAME="vllm-0.34.0+cpu-cp38-abi3-manylinux_2_39_x86_64.whl"
         WHEEL="$WORKDIR/$WHEEL_NAME"
-        WHEEL_SHA=e87a047cc5ab47eb14565dfcd060393876b33e913479982a56fca6fca73ed97a
+        WHEEL_SHA=47fc0adfbbb00168d5a755b08a4b5fbde7e180c91c0a065221e7a253b8bbb5ff
         [ -f "$WHEEL" ] || curl -fsSL --retry 3 -o "$WHEEL" \
-          "https://github.com/vllm-project/vllm/releases/download/v0.32.0/$WHEEL_NAME"
+          "https://github.com/vllm-project/vllm/releases/download/v0.34.0/$WHEEL_NAME"
         verify "$WHEEL" "$WHEEL_SHA"
 
         # Isolated venv: vLLM pins its own torch, which must not leak into the project env.
