@@ -879,7 +879,9 @@ def _patched_aiohttp_post(original_post, session_self, url: str, **kwargs):
 # provider SDK are patched at the SDK level instead, so only raw-httpx2 call sites belong
 # here: the Anthropic Messages and Google Interactions passthroughs, and the
 # Jina-compatible /rerank endpoint the vLLM adapter posts to directly (vllm.py rerank()).
-_INTERCEPTED_HTTPX_PATHS = ("/v1/messages", "/interactions", "/rerank")
+# /v1/moderations: the responses provider's guardrails call (run_guardrails), so guardrail
+# tests replay without a live moderation endpoint.
+_INTERCEPTED_HTTPX_PATHS = ("/v1/messages", "/interactions", "/rerank", "/v1/moderations")
 
 
 def _should_intercept_httpx(url: str) -> bool:
@@ -1102,7 +1104,8 @@ async def _patched_httpx_async_post(original_post, self, url, **kwargs):
     """Patched version of httpx2.AsyncClient.post for recording/replay of raw-httpx2 endpoints.
 
     Intercepts the endpoints listed in _INTERCEPTED_HTTPX_PATHS -- the native Messages and
-    Interactions passthroughs, and the vLLM rerank endpoint -- so those paths can be
+    Interactions passthroughs, the vLLM rerank endpoint, and guardrail moderation calls -- so
+    those paths can be
     recorded and replayed without a live backend.
     """
     global _current_mode, _current_storage

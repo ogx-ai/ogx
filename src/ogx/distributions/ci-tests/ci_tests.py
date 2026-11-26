@@ -252,6 +252,13 @@ def get_distribution_template() -> DistributionTemplate:
         # Add the env-gated DeepSeek inference provider
         run_config.provider_overrides["inference"].append(deepseek_provider)
 
+        # Responses guardrails need an OpenAI-compatible /v1/moderations endpoint. Only setups
+        # that provide one set OGX_TEST_MODERATION_ENDPOINT (the ollama setup, through
+        # scripts/moderation_shim.py); empty leaves guardrails unconfigured, which the
+        # guardrail integration tests skip on.
+        for responses_provider in run_config.provider_overrides.get("responses", []):
+            responses_provider.config["moderation_endpoint"] = "${env.OGX_TEST_MODERATION_ENDPOINT:=}"
+
         # Register the TypeSafe (SystemOne judgment) provider under the `systemone` section
         run_config.provider_overrides["systemone"] = [typesafe_provider]
 

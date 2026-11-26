@@ -894,6 +894,7 @@ class TestHttpxInterception:
             ("http://vllm.test:8000/v1/rerank", True),
             ("http://ollama.test:11434/v1/messages", True),
             ("http://gemini.test/v1beta/interactions", True),
+            ("http://127.0.0.1:11435/v1/moderations", True),
             ("http://vllm.test:8000/v1/chat/completions", False),
             ("http://vllm.test:8000/v1/embeddings", False),
         ],

@@ -292,6 +292,30 @@ if [[ "$TEST_SETUP" == mock* && "$COLLECT_ONLY" == false ]]; then
     trap cleanup_mock EXIT
 fi
 
+# Guardrails: setups that set OGX_TEST_MODERATION_ENDPOINT (the ollama setup) point the
+# responses provider's moderation_endpoint at a local Llama Guard moderation shim. Recording
+# needs it live; replay serves the recorded moderation responses, so it is only started when
+# not replaying. --exit-with-pid stops it when this script exits.
+if [[ -n "${OGX_TEST_MODERATION_ENDPOINT:-}" && "$INFERENCE_MODE" != "replay" && "$COLLECT_ONLY" == false ]]; then
+    MODERATION_PORT=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.urlparse(sys.argv[1]).port)' "$OGX_TEST_MODERATION_ENDPOINT")
+    if ! curl -s -o /dev/null --max-time 2 "http://127.0.0.1:${MODERATION_PORT}/" 2>/dev/null; then
+        nohup python3 "$THIS_DIR/moderation_shim.py" --port "$MODERATION_PORT" \
+            --ollama-url "${OLLAMA_URL:-http://localhost:11434/v1}" --exit-with-pid $$ \
+            >"moderation-shim.log" 2>&1 &
+    fi
+    for i in $(seq 1 30); do
+        if curl -s -o /dev/null --max-time 2 "http://127.0.0.1:${MODERATION_PORT}/" 2>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
+    if ! curl -s -o /dev/null --max-time 2 "http://127.0.0.1:${MODERATION_PORT}/" 2>/dev/null; then
+        echo "Failed to start the moderation shim on port ${MODERATION_PORT} (see moderation-shim.log)"
+        exit 1
+    fi
+    echo "Moderation shim listening on port ${MODERATION_PORT}"
+fi
+
 # Export suite and setup names for TypeScript tests
 export OGX_TEST_SUITE="$TEST_SUITE"
 export OGX_TEST_SETUP="$TEST_SETUP"

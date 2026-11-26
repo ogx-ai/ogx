@@ -1,0 +1,57 @@
+{
+  "test_id": "tests/integration/agents/test_openai_responses.py::test_output_guardrails_safe_content[openai_client-txt=ollama/qwen3.5:0.8b-True]",
+  "request": {
+    "test_id": "tests/integration/agents/test_openai_responses.py::test_output_guardrails_safe_content[openai_client-txt=ollama/qwen3.5:0.8b-True]",
+    "url": "http://127.0.0.1:11435/v1/moderations",
+    "method": "POST",
+    "payload": {
+      "input": "Hello! My name is **Qwen3.5** (a large-scale language model developed by Tongyi Lab). How can I assist you today? \ud83d\ude0a"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "modr-1f4e63ac42ad4e2fbdeb23926b839312",
+      "model": "llama-guard3:1b",
+      "results": [
+        {
+          "flagged": false,
+          "categories": {
+            "violent_crimes": false,
+            "non_violent_crimes": false,
+            "sex_related_crimes": false,
+            "child_sexual_exploitation": false,
+            "defamation": false,
+            "specialized_advice": false,
+            "privacy": false,
+            "intellectual_property": false,
+            "indiscriminate_weapons": false,
+            "hate": false,
+            "suicide_and_self_harm": false,
+            "sexual_content": false,
+            "elections": false,
+            "code_interpreter_abuse": false
+          },
+          "category_scores": {
+            "violent_crimes": 0.0,
+            "non_violent_crimes": 0.0,
+            "sex_related_crimes": 0.0,
+            "child_sexual_exploitation": 0.0,
+            "defamation": 0.0,
+            "specialized_advice": 0.0,
+            "privacy": 0.0,
+            "intellectual_property": 0.0,
+            "indiscriminate_weapons": 0.0,
+            "hate": 0.0,
+            "suicide_and_self_harm": 0.0,
+            "sexual_content": 0.0,
+            "elections": 0.0,
+            "code_interpreter_abuse": 0.0
+          }
+        }
+      ]
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}
