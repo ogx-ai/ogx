@@ -139,6 +139,15 @@ on:
         required: false
         type: boolean
         default: false
+      npm_publish:
+        description: 'npm leg control: auto (publish if possible), skip (never publish npm), only (publish npm only).'
+        required: false
+        type: choice
+        options:
+          - 'auto'
+          - 'skip'
+          - 'only'
+        default: 'auto'
 
 env:
   LC_ALL: en_US.UTF-8
@@ -677,6 +686,20 @@ jobs:
           if [ "${{ github.event_name }}" == "release" ]; then PACKAGES="ogx-only"; fi
           PACKAGE="${{ matrix.package }}"
           TYPE="${{ matrix.type }}"
+
+          # The npm leg (external) is controlled independently of the package selection,
+          # so a missing npm token never blocks the PyPI legs and vice versa.
+          NPM_PUBLISH="${{ inputs.npm_publish || 'auto' }}"
+          if [ "$NPM_PUBLISH" == "skip" ] && [ "$TYPE" == "external" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping publish for $PACKAGE (npm_publish=skip)"
+            exit 0
+          fi
+          if [ "$NPM_PUBLISH" == "only" ] && [ "$TYPE" != "external" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping publish for $PACKAGE (npm_publish=only)"
+            exit 0
+          fi
 
           if [ "$PACKAGES" == "all" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
