@@ -16,7 +16,28 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install vLLM 0.32.0 (CPU x86_64) and download model weights
+    - name: Emit runner diagnostics
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Runner topology never changes during a job. The diagnostics used to live in
+        # the failure-only log dump, so healthy jobs revealed nothing about which chip
+        # or allocation size they got (which is exactly what startup flakes depend on).
+        # Capture it up front so both success and failure logs carry it, and so the
+        # memory snapshot is a clean baseline before the server starts.
+        echo "::group::Runner diagnostics (CPU/NUMA/memory)"
+        nproc
+        lscpu 2>/dev/null | grep -E "Model name|^CPU\(s\):|Thread\(s\)|Core\(s\)|Socket\(s\)|NUMA node" || true
+        lscpu -e=CPU,NODE,SOCKET 2>/dev/null | head -12 || true
+        for f in /sys/devices/system/node/node*/meminfo; do
+          [ -r "$f" ] || continue
+          echo "$f:"
+          grep -E "MemTotal|MemFree|MemAvailable" "$f"
+        done
+        free -h
+        echo "::endgroup::"
+
+    - name: Install vLLM 0.34.0 (CPU x86_64) and download model weights
       shell: bash
       run: |
         set -euo pipefail
@@ -39,14 +60,14 @@ runs:
             || { echo "Failed to verify sha256 for $1 (expected $2)" >&2; exit 1; }
         }
 
-        # 1. vLLM CPU wheel, pinned to the official 0.32.0 GitHub release asset.
+        # 1. vLLM CPU wheel, pinned to the official 0.34.0 GitHub release asset.
         #    Verify the hash BEFORE installing so we never install unauthenticated bytes.
         #    Transitive dependencies are resolved by uv; only vLLM itself is hash-pinned.
-        WHEEL_NAME="vllm-0.32.0+cpu-cp38-abi3-manylinux_2_39_x86_64.whl"
+        WHEEL_NAME="vllm-0.34.0+cpu-cp38-abi3-manylinux_2_39_x86_64.whl"
         WHEEL="$WORKDIR/$WHEEL_NAME"
-        WHEEL_SHA=e87a047cc5ab47eb14565dfcd060393876b33e913479982a56fca6fca73ed97a
+        WHEEL_SHA=47fc0adfbbb00168d5a755b08a4b5fbde7e180c91c0a065221e7a253b8bbb5ff
         [ -f "$WHEEL" ] || curl -fsSL --retry 3 -o "$WHEEL" \
-          "https://github.com/vllm-project/vllm/releases/download/v0.32.0/$WHEEL_NAME"
+          "https://github.com/vllm-project/vllm/releases/download/v0.34.0/$WHEEL_NAME"
         verify "$WHEEL" "$WHEEL_SHA"
 
         # Isolated venv: vLLM pins its own torch, which must not leak into the project env.
@@ -148,22 +169,10 @@ runs:
         echo "vLLM launched (detached, pid $VLLM_PID)"
 
         dump_log() {
+          # Runner diagnostics are emitted unconditionally in a step up front; only the
+          # server log is failure-specific here.
           echo "::group::vLLM server log"
           cat "$WORKDIR/vllm.log" >&2
-          echo "::endgroup::"
-          # Startup OOM kills (vLLM membinds the worker to the first bound core's
-          # NUMA node) can only be root-caused with the runner's topology, so
-          # capture it next to the server log.
-          echo "::group::Runner diagnostics (CPU/NUMA/memory)"
-          nproc
-          lscpu 2>/dev/null | grep -E "Model name|^CPU\(s\):|Thread\(s\)|Core\(s\)|Socket\(s\)|NUMA node" || true
-          lscpu -e=CPU,NODE,SOCKET 2>/dev/null | head -12 || true
-          for f in /sys/devices/system/node/node*/meminfo; do
-            [ -r "$f" ] || continue
-            echo "$f:"
-            grep -E "MemTotal|MemFree|MemAvailable" "$f"
-          done
-          free -h
           echo "::endgroup::"
         }
 
@@ -210,6 +219,15 @@ runs:
         # test_openai_completion_guided_choice skips on vllm because of this; drop the
         # flag (and the skip) once the fix is in the pinned release.
         #
+        # --enforce-eager: the compiled (torch.compile/inductor) path AOT-compiles
+        # kernels with g++ at engine init, which a 4-vCPU runner allocation cannot
+        # finish inside the 15-minute startup budget (the engine stalls with "No
+        # available shared memory broadcast block" spam and /health never comes up;
+        # oneDNN's failed primitive creation pushes vLLM onto the slow compiled
+        # fallback, so it is not avoided on the chips where it happens). The systemone
+        # lane already runs eager for the same reason (see above); the perf cost is
+        # irrelevant for a 0.6B test server.
+        #
         HF_HUB_OFFLINE=1 setsid nohup "$WORKDIR/venv/bin/vllm" serve "$WORKDIR/models/Qwen3-0.6B" \
           --host 127.0.0.1 \
           --port "$PORT" \
@@ -219,29 +237,17 @@ runs:
           --reasoning-parser deepseek_r1 \
           --max-model-len 8192 \
           --gpu-memory-utilization 0.5 \
+          --enforce-eager \
           < /dev/null > "$WORKDIR/vllm.log" 2>&1 &
         VLLM_PID=$!
         echo "vLLM launched (detached, pid $VLLM_PID)"
 
         # The root cause of a startup failure (e.g. a worker crash) sits well above the
-        # final stack trace, so dump the whole log rather than just its tail.
+        # final stack trace, so dump the whole log rather than just its tail. Runner
+        # diagnostics are emitted unconditionally in a step up front.
         dump_log() {
           echo "::group::vLLM server log"
           cat "$WORKDIR/vllm.log" >&2
-          echo "::endgroup::"
-          # Startup OOM kills (vLLM membinds the worker to the first bound core's
-          # NUMA node) can only be root-caused with the runner's topology, so
-          # capture it next to the server log.
-          echo "::group::Runner diagnostics (CPU/NUMA/memory)"
-          nproc
-          lscpu 2>/dev/null | grep -E "Model name|^CPU\(s\):|Thread\(s\)|Core\(s\)|Socket\(s\)|NUMA node" || true
-          lscpu -e=CPU,NODE,SOCKET 2>/dev/null | head -12 || true
-          for f in /sys/devices/system/node/node*/meminfo; do
-            [ -r "$f" ] || continue
-            echo "$f:"
-            grep -E "MemTotal|MemFree|MemAvailable" "$f"
-          done
-          free -h
           echo "::endgroup::"
         }
 

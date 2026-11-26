@@ -57,8 +57,9 @@ async def test_judge_forwards_to_systemone_util():
     assert args[1] == LOCAL_ENGINE_API_KEY
     assert kwargs["network"] is None
     # vLLM's own id/object/created/diagnostics fields sit alongside `answers`, not
-    # nested inside each answer, so they need top-level stripping.
-    assert kwargs["top_level_extension_fields"] == frozenset({"id", "object", "created", "diagnostics"})
+    # nested inside each answer, so they need top-level stripping. `joint` is vLLM's
+    # >= 0.33 diffusion-model joint-read diagnostics field (null for text judges).
+    assert kwargs["top_level_extension_fields"] == frozenset({"id", "object", "created", "diagnostics", "joint"})
     # vLLM's noul answers carry probabilities/confidence too, but choice/score answers
     # need those same field names as required SystemOne fields, so only noul answers
     # may have them stripped.

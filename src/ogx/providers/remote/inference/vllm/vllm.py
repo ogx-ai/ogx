@@ -252,7 +252,10 @@ class VLLMInferenceAdapter(AnthropicMixin, OpenAIMixin):
             api_key,
             request,
             network=self.config.network,
-            top_level_extension_fields=frozenset({"id", "object", "created", "diagnostics"}),
+            # vLLM >= 0.33 adds a `joint` field (diffusion-model joint-read diagnostics,
+            # null for text judges) to its /v1/systemone response; drop it like the other
+            # vLLM-only top-level fields so the strict wire model sees the SystemOne shape.
+            top_level_extension_fields=frozenset({"id", "object", "created", "diagnostics", "joint"}),
             extension_fields_by_type={"noul": frozenset({"probabilities", "confidence"})},
         )
 
