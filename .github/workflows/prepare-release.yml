@@ -58,8 +58,8 @@ jobs:
             exit 1
           fi
 
-          if [ "$BRANCH" != "release-${VERSION%.*}.x" ]; then
-            echo "::error::Failed to prepare ${VERSION}: expected branch release-${VERSION%.*}.x"
+          if [ "$BRANCH" != "release-${VERSION%.*}.x" ] && [ "$BRANCH" != "main" ]; then
+            echo "::error::Failed to prepare ${VERSION}: expected branch release-${VERSION%.*}.x (or main)"
             exit 1
           fi
 
