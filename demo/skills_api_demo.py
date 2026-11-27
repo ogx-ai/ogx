@@ -10,7 +10,7 @@ Skills API Demo — exercises all 11 Skills API endpoints.
 
 Prerequisites:
     Start an OGX server with skills enabled:
-        uv run ogx letsgo
+        uv run ogx go
 
 Usage:
     uv run python demo/skills_api_demo.py [--base-url http://localhost:8321]
