@@ -18,7 +18,7 @@ def test_stack_list_deps_basic():
     args = argparse.Namespace(
         config=None,
         env_name="test-env",
-        providers="inference=remote::ollama",
+        providers="inference=remote::together",
         format="deps-only",
     )
 
@@ -30,9 +30,9 @@ def test_stack_list_deps_basic():
         assert "uv pip install" not in output
         assert "Dependencies for" not in output
 
-        # Check that expected dependencies are present
-        assert "ollama" in output
-        assert "aiohttp" in output
+        # Check that expected dependencies are present: the provider's own dep
+        # (together) plus a server dependency (fastapi).
+        assert "together" in output
         assert "fastapi" in output
 
 
