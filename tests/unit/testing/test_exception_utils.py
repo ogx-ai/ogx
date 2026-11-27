@@ -8,7 +8,6 @@
 
 import httpx2
 import pytest
-from ollama import ResponseError
 from openai import (
     AuthenticationError,
     BadRequestError,
@@ -62,13 +61,6 @@ class TestSerializeException:
         assert data["provider"] == "openai"
         assert data["status_code"] == 404
         assert data["body"] == body
-
-    def test_provider_sdk_uses_error_attr_over_str(self):
-        """Ollama's str(exc) appends '(status code: N)'; we serialize .error instead."""
-        exc = ResponseError(error="model not found", status_code=404)
-        data = serialize_exception(exc)
-        assert data["message"] == "model not found"
-        assert "(status code:" not in data["message"]
 
     def test_builtin_exception_serializes_by_type_name(self):
         exc = ValueError("invalid input")
@@ -208,9 +200,6 @@ class TestIsProviderSdkException:
         request = httpx2.Request("GET", "https://api.openai.com/v1/models")
         response = httpx2.Response(404, request=request)
         assert is_provider_sdk_exception(NotFoundError(message="x", response=response, body=None))
-
-    def test_ollama_exception_detected(self):
-        assert is_provider_sdk_exception(ResponseError(error="x", status_code=404))
 
     def test_ogx_not_detected_as_provider_sdk(self):
         """OGXError has status_code but is handled separately (ogx category)."""

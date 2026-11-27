@@ -1438,14 +1438,6 @@ def _extract_provider_metadata(client: Any, client_type: str, base_url: str = ""
             except Exception:
                 pass
 
-    elif client_type == "ollama":
-        try:
-            import ollama
-
-            metadata["ollama_sdk_version"] = getattr(ollama, "__version__", "unknown")
-        except (ImportError, AttributeError):
-            pass
-
     _cached_provider_metadata[cache_key] = metadata
     return metadata
 
