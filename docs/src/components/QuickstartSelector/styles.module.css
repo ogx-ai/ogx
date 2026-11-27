@@ -1,0 +1,134 @@
+.selector {
+  margin: 1.5rem 0 2rem;
+}
+
+/* ========== OPTION ROWS ========== */
+.dimensions {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.6rem 1.25rem;
+  align-items: center;
+  margin-bottom: 1.75rem;
+}
+
+.dimension {
+  display: contents;
+}
+
+.dimensionLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ifm-font-color-secondary);
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.option {
+  appearance: none;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 100px;
+  background: transparent;
+  color: var(--ifm-font-color-base);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background-color 0.15s;
+}
+
+[data-theme='dark'] .option {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.option:hover {
+  border-color: var(--ifm-color-primary-lighter);
+  color: var(--ifm-color-primary);
+}
+
+.option:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+}
+
+.optionActive,
+.optionActive:hover {
+  background: var(--ifm-color-primary);
+  border-color: var(--ifm-color-primary);
+  color: #fff;
+}
+
+[data-theme='dark'] .optionActive,
+[data-theme='dark'] .optionActive:hover {
+  color: #0b1416;
+}
+
+/* Choosing this option would make the current selection unsupported. */
+.optionBlocked:not(.optionActive) {
+  border-style: dashed;
+  color: var(--ifm-font-color-secondary);
+}
+
+/* ========== STEPS ========== */
+.steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  counter-reset: quickstart-step;
+}
+
+.step {
+  position: relative;
+  padding-left: 2rem;
+  margin-bottom: 1.75rem;
+  counter-increment: quickstart-step;
+}
+
+.step::before {
+  content: counter(quickstart-step) '.';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--ifm-color-primary);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.stepTitle {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.stepText p {
+  margin-bottom: 0.75rem;
+}
+
+@media (max-width: 576px) {
+  .dimensions {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .dimension:not(:first-child) .dimensionLabel {
+    margin-top: 0.5rem;
+  }
+
+  .step {
+    padding-left: 0;
+  }
+
+  .step::before {
+    position: static;
+    display: inline;
+    margin-right: 0.4rem;
+  }
+
+  .stepTitle {
+    display: inline;
+  }
+}
