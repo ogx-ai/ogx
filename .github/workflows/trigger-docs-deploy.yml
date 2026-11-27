@@ -14,6 +14,11 @@ on:
         description: 'Release tag to deploy versioned docs for (e.g., v0.7.1). Leave empty to deploy latest.'
         required: false
         type: string
+      ogx_ref:
+        description: 'Optional branch of ogx to build the versioned docs from (e.g., release-2.0.x) instead of the tag, so a released version of the docs can be updated without a new release.'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: trigger-docs-deploy
@@ -48,9 +53,14 @@ jobs:
           else
             TAG="${{ github.event.release.tag_name }}"
           fi
+          REF_ARGS=""
+          if [ -n "${{ github.event.inputs.ogx_ref }}" ]; then
+            REF_ARGS="-f client_payload[ref]=${{ github.event.inputs.ogx_ref }}"
+          fi
           gh api repos/ogx-ai/ogx-ai.github.io/dispatches \
             -f event_type=docs-version-deploy \
             -f "client_payload[version]=${TAG}" \
-            -f 'client_payload[sha]=${{ github.sha }}'
+            -f 'client_payload[sha]=${{ github.sha }}' \
+            $REF_ARGS
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
