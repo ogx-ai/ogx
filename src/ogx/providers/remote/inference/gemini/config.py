@@ -6,7 +6,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field, SecretStr, model_validator
+from pydantic import BaseModel, Field, HttpUrl, SecretStr, model_validator
 
 from ogx.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
 from ogx_api import json_schema_type
@@ -41,6 +41,10 @@ class GeminiConfig(RemoteInferenceProviderConfig):
         default=None,
         description="Google Cloud project ID for quota attribution when using OAuth/ADC credentials.",
     )
+    base_url: HttpUrl | None = Field(
+        default=HttpUrl("https://generativelanguage.googleapis.com/v1beta/openai/"),
+        description="Base URL for the Google Gemini OpenAI-compatible API.",
+    )
 
     @model_validator(mode="after")
     def _validate_auth(self) -> "GeminiConfig":
@@ -63,10 +67,12 @@ class GeminiConfig(RemoteInferenceProviderConfig):
         api_key: str = "${env.GEMINI_API_KEY:=}",
         access_token: str = "${env.GEMINI_ACCESS_TOKEN:=}",  # noqa: S107
         project: str = "${env.GEMINI_AI_PROJECT:=}",
+        base_url: str = "${env.GEMINI_BASE_URL:=https://generativelanguage.googleapis.com/v1beta/openai/}",
         **kwargs,
     ) -> dict[str, Any]:
         return {
             "api_key": api_key,
             "access_token": access_token,
             "project": project,
+            "base_url": base_url,
         }
