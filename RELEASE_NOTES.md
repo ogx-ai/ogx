@@ -32,7 +32,7 @@ Release 2.0 is a major release focused on the SystemOne judgment model API, a ro
 | `remote::wolfram-alpha` tool provider removed | Hard | [#6804](https://github.com/ogx-ai/ogx/pull/6804) |
 | String forms of `Models.register_model`/`unregister_model` removed | Hard | [#7082](https://github.com/ogx-ai/ogx/pull/7082) |
 | Stack/distribution configs using the `tool_runtime` section no longer load; use `web_search` | Hard | [#7079](https://github.com/ogx-ai/ogx/pull/7079) |
-| Deprecated CLI shims removed: `ogx go`, `stack run`, `stack go`, `letsgo`, `codex --exec` | Hard | [#7076](https://github.com/ogx-ai/ogx/pull/7076) |
+| Deprecated CLI shims removed: `ogx letsgo`, `ogx stack run`, `ogx stack go`, `ogx connect codex --exec` | Hard | [#7076](https://github.com/ogx-ai/ogx/pull/7076) |
 | Deprecated config keys removed; `~/.llama` → `~/.ogx` auto-migration gone | Hard | [#7077](https://github.com/ogx-ai/ogx/pull/7077) |
 | `ogx connect`: per-agent `--url`/`--host/--port` flags removed; single shared `--url` | Hard | [#6929](https://github.com/ogx-ai/ogx/pull/6929) |
 | Anthropic message batch metadata persisted in `AuthorizedSqlStore`; SQL backend required at startup | Behavior | [#7047](https://github.com/ogx-ai/ogx/pull/7047) |

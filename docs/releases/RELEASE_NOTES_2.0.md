@@ -55,7 +55,7 @@ The headline themes for 2.0:
 | `remote::wolfram-alpha` tool provider removed | — | [#6804](https://github.com/ogx-ai/ogx/pull/6804) |
 | String forms of `Models.register_model`/`unregister_model` removed | Pass a `RegisterModelRequest`/`UnregisterModelRequest` (or keyword args) | [#7082](https://github.com/ogx-ai/ogx/pull/7082) |
 | Stack/distribution configs using the `tool_runtime` API section no longer load | Move search backends to the `web_search` section | [#7079](https://github.com/ogx-ai/ogx/pull/7079) |
-| Deprecated CLI shims removed: `ogx go`, `stack run`, `stack go`, `letsgo`, `codex --exec` | Use the remaining `ogx stack` subcommands / `ogx connect` | [#7076](https://github.com/ogx-ai/ogx/pull/7076) |
+| Deprecated CLI shims removed: `ogx letsgo`, `ogx stack run`, `ogx stack go`, `ogx connect codex --exec` | Use `ogx go`, `ogx run`, or `--` forwarding for codex exec | [#7076](https://github.com/ogx-ai/ogx/pull/7076) |
 | Deprecated config keys removed: `image_name`, `registered_resources.tool_groups`, vLLM top-level `tls_verify`; `~/.llama` → `~/.ogx` auto-migration gone | Update config files; move any remaining `~/.llama` state manually | [#7077](https://github.com/ogx-ai/ogx/pull/7077) |
 | `ogx connect` resolves the server URL once: per-agent `--url`/`--host/--port` flags removed | Use `ogx connect --url ... <agent>` | [#6929](https://github.com/ogx-ai/ogx/pull/6929) |
 | Anthropic message batch metadata persisted in `AuthorizedSqlStore` | A SQL store backend must be resolvable at startup for hand-written KV-only messages configs | [#7047](https://github.com/ogx-ai/ogx/pull/7047) |
@@ -115,9 +115,9 @@ Deprecated since v0.7. **Migration:** Use `file_search`.
 
 #### Deprecated CLI shims removed ([#7076](https://github.com/ogx-ai/ogx/pull/7076))
 
-**Impact:** Scripts using `ogx go`, `stack run`, `stack go`, `letsgo`, or `codex --exec`.
+**Impact:** Scripts using `ogx letsgo`, `ogx stack run`, `ogx stack go`, or `ogx connect codex --exec`.
 
-**Migration:** Use the remaining `ogx stack` subcommands / `ogx connect`.
+**Migration:** Use `ogx go` (auto-detect providers and start the stack), `ogx run` for explicit stack configs, or `--` forwarding for codex exec.
 
 #### Deprecated config keys removed ([#7077](https://github.com/ogx-ai/ogx/pull/7077))
 
