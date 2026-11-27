@@ -25,6 +25,7 @@ scripts/
   docker.sh                    # Docker build helper
   install.sh                   # Installation helper
   integration-tests.sh         # Run integration test suite
+  quickstart_smoke.py          # Run every Quickstart combination (docs steps.json) against a fresh install
   unit-tests.sh                # Run unit test suite
   run-ui-linter.sh             # Run UI linter
   uv-run-with-index.sh         # Run uv with custom package index
@@ -62,6 +63,29 @@ Pass `--client-version latest` to generate the Python client from
 `client-sdks/openapi` and install it over the PyPI pin before running
 (the CI `client-version=latest` equivalent), or `--client-version published`
 to verify the `uv.lock`-resolved PyPI client is installed.
+
+### Run the docs Quickstart
+
+The Quickstart page renders its steps from
+`docs/docs/getting_started/quickstart/steps.json`, and `quickstart_smoke.py` runs the
+same steps for every supported combination of backend, server mode, and use case. To
+change the Quickstart, edit `steps.json` and the Python files next to it, then run:
+
+```bash
+# Every combination, and which ones the page marks unsupported
+uv run --no-project python scripts/quickstart_smoke.py --list
+
+# The Ollama combinations, from wheels built from this checkout
+uv build --wheel --out-dir dist && uv build --wheel --out-dir dist src/ogx_api
+uv run --no-project python scripts/quickstart_smoke.py --wheels dist --backend ollama
+```
+
+Without `--wheels`, the server comes from the latest PyPI release. The OpenAI,
+Anthropic, and "All of them" combinations need `OPENAI_API_KEY` and/or
+`ANTHROPIC_API_KEY` and are skipped without them. Coding-agent combinations need
+the agent CLIs on `PATH`, and Ollama needs `OLLAMA_CONTEXT_LENGTH=16384` or more.
+Set `QUICKSTART_OLLAMA_CMD` when Ollama runs in a container (CI uses
+`docker exec ollama ollama`).
 
 ### Manage test recordings
 

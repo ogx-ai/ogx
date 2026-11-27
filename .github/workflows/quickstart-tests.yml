@@ -1,0 +1,107 @@
+name: Quickstart Smoke Test
+
+run-name: Run the docs quickstart against a fresh ogx install
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'pyproject.toml'
+      - 'src/ogx_api/pyproject.toml'
+      - 'src/ogx/cli/**'
+      - 'src/ogx/providers/remote/inference/ollama/**'
+      - 'src/ogx/distributions/starter/**'
+      - 'containers/**'
+      - 'docs/docs/getting_started/quickstart*'
+      - 'docs/docs/getting_started/quickstart/**'
+      - 'scripts/quickstart_smoke.py'
+      - '.github/actions/setup-ollama/**'
+      - '.github/workflows/quickstart-tests.yml'
+  schedule:
+    # Nightly: the latest PyPI release and published starter image against the
+    # quickstart on main, to catch docs that describe behavior users cannot get yet.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Where to install ogx from'
+        type: choice
+        options:
+          - wheels
+          - pypi
+        default: wheels
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quickstart:
+    # Only the Ollama backend runs here: it needs no API keys, so it also runs on pull
+    # requests from forks.
+    name: Quickstart (ollama, ${{ matrix.server }}, ${{ github.event_name == 'schedule' && 'pypi' || inputs.source || 'wheels' }})
+    if: github.event_name != 'schedule' || github.repository == 'ogx-ai/ogx'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [secure, insecure, docker]
+    env:
+      OGX_SOURCE: ${{ github.event_name == 'schedule' && 'pypi' || inputs.source || 'wheels' }}
+      QUICKSTART_OLLAMA_CMD: docker exec ollama ollama
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+
+      - name: Build ogx and ogx-api wheels from this checkout
+        if: env.OGX_SOURCE == 'wheels'
+        run: |
+          uv build --wheel --out-dir dist
+          uv build --wheel --out-dir dist src/ogx_api
+          ls -la dist
+
+      - name: Build the starter image from this checkout
+        if: matrix.server == 'docker' && env.OGX_SOURCE == 'wheels'
+        run: |
+          # The Quickstart runs ogxai/distribution-starter. Tag this checkout's build with
+          # that name so pull requests test their own code; nightly runs the published image.
+          docker buildx build --platform linux/amd64 --load -f containers/Containerfile \
+            --build-arg INSTALL_MODE=editable --build-arg DISTRO_NAME=starter \
+            --tag ogxai/distribution-starter:latest .
+
+      - name: Start Ollama
+        uses: ./.github/actions/setup-ollama
+        with:
+          setup: quickstart
+
+      - name: Install the coding agents
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash -s -- latest
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          npm install -g @openai/codex @opencode/cli
+
+      - name: Run the quickstart
+        env:
+          SERVER: ${{ matrix.server }}
+        run: |
+          args=(--backend ollama --server "$SERVER")
+          if [ "$OGX_SOURCE" = "wheels" ]; then
+            args+=(--wheels dist)
+          fi
+          uv run --no-project python scripts/quickstart_smoke.py "${args[@]}"
