@@ -132,17 +132,17 @@ class ModelRegistryHelper(ModelsProtocolPrivate):
 
     async def register_model(self, model: Model) -> Model:
         # Check if model is supported in static configuration
-        supported_model_id = self.get_provider_model_id(model.provider_resource_id)
+        supported_model_id = self.get_provider_model_id(model.provider_model_id)
 
         # If not found in static config, check if it's available dynamically from provider
         if not supported_model_id:
-            if await self.check_model_availability(model.provider_resource_id):
-                supported_model_id = model.provider_resource_id
+            if await self.check_model_availability(model.provider_model_id):
+                supported_model_id = model.provider_model_id
             else:
                 # note: we cannot provide a complete list of supported models without
                 #       getting a complete list from the provider, so we return "..."
                 all_supported_models = [*self.alias_to_provider_id_map.keys(), "..."]
-                raise UnsupportedModelError(model.provider_resource_id, all_supported_models)
+                raise UnsupportedModelError(model.provider_model_id, all_supported_models)
 
         provider_resource_id = self.get_provider_model_id(model.model_id)
         if model.model_type == ModelType.embedding:
