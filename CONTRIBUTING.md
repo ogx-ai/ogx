@@ -41,6 +41,8 @@ And then use this dotenv file when running client SDK tests via the following:
 uv run --env-file .env -- pytest -v tests/integration/conversations/test_openai_conversations.py --setup=gpt
 ```
 
+`OGX_CONFIG` takes the same values as `--stack-config` and is used when that option is not passed. With `server:ci-tests`, pytest starts a server on `OGX_PORT` (or reuses one already listening there) and stops it when the session ends.
+
 For additional information about testing, please refer to the [tests documentation](tests/README.md) for both unit and integration test.
 
 ### Pre-commit Hooks

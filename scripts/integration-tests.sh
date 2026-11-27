@@ -181,8 +181,27 @@ if [[ -n "$TEST_FILE" && -z "$TEST_SETUP" ]]; then
     exit 1
 fi
 
+# Classify --stack-config with the same parser the pytest fixture and test gating use
+# (tests/integration/stack_config.py), so a value means the same thing on both sides.
+# Sets STACK_CONFIG_KIND (library|dynamic|server|docker|url), STACK_CONFIG_TARGET,
+# STACK_CONFIG_PORT, STACK_CONFIG_IS_SERVER and the STACK_CONFIG_DEPS_ARGS array.
+# -I keeps tests/integration/ off sys.path: its inspect/ test directory would otherwise
+# shadow the stdlib inspect module.
+THIS_DIR=$(dirname "$0")
+STACK_CONFIG_KIND=""
+STACK_CONFIG_TARGET=""
+STACK_CONFIG_PORT=""
+STACK_CONFIG_IS_SERVER=false
+STACK_CONFIG_DEPS_ARGS=()
+if [[ -n "$STACK_CONFIG" ]]; then
+    if ! STACK_CONFIG_SHELL=$(python -I "$THIS_DIR/../tests/integration/stack_config.py" shell "$STACK_CONFIG"); then
+        exit 1
+    fi
+    eval "$STACK_CONFIG_SHELL"
+fi
+
 echo "=== OGX Integration Test Runner ==="
-echo "Stack Config: $STACK_CONFIG"
+echo "Stack Config: $STACK_CONFIG${STACK_CONFIG_KIND:+ ($STACK_CONFIG_KIND)}"
 echo "Setup: $TEST_SETUP"
 echo "Text model: ${TEXT_MODEL:- (from setup)}"
 echo "Vision model: ${VISION_MODEL:- (from setup)}"
@@ -201,8 +220,6 @@ uv pip list | grep ogx
 # OGX_CLIENT_TIMEOUT is overridable per lane: the ollama base lane raises it in
 # the record workflow, since its thinking model takes minutes per completion.
 export OGX_CLIENT_TIMEOUT="${OGX_CLIENT_TIMEOUT:-300}"
-
-THIS_DIR=$(dirname "$0")
 
 if [[ -n "$TEST_SETUP" ]]; then
     EXTRA_PARAMS="--setup=$TEST_SETUP"
@@ -234,7 +251,7 @@ if [[ "$COLLECT_ONLY" == false ]]; then
     # - For library client and server mode: localhost (both on same host)
     # - For docker mode on Linux: localhost (container uses host network, shares network namespace)
     # - For docker mode on macOS/Windows: host.docker.internal (container uses bridge network)
-    if [[ "$STACK_CONFIG" == docker:* ]]; then
+    if [[ "$STACK_CONFIG_KIND" == "docker" ]]; then
         if [[ "$(uname)" != "Darwin" ]] && [[ "$(uname)" != *"MINGW"* ]]; then
             # On Linux with host network mode, container shares host network namespace
             export OGX_TEST_MCP_HOST="localhost"
@@ -440,11 +457,10 @@ fi
 # dependencies are installed automatically; otherwise the function fails with
 # the exact command to run.
 check_provider_dependencies() {
-    local config_name="$1"
-
+    local config_desc="$*"
     local deps_output
-    if ! deps_output=$(ogx stack list-deps "$config_name" 2>/dev/null); then
-        echo "Warning: Could not determine dependencies for '$config_name', skipping dependency check"
+    if ! deps_output=$(ogx stack list-deps "$@" 2>/dev/null); then
+        echo "Warning: Could not determine dependencies for '$config_desc', skipping dependency check"
         return 0
     fi
 
@@ -476,45 +492,37 @@ check_provider_dependencies() {
     done
 
     if [[ ${#missing[@]} -eq 0 ]]; then
-        echo "✅ All provider dependencies for '$config_name' are installed"
+        echo "✅ All provider dependencies for '$config_desc' are installed"
         return 0
     fi
 
     if [[ "$INSTALL_DEPS" == true ]]; then
         echo "Installing missing provider dependencies: ${missing[*]}"
-        if ! ogx stack list-deps "$config_name" | xargs -L1 uv pip install; then
-            echo "Failed to install provider dependencies for '$config_name'" >&2
+        if ! ogx stack list-deps "$@" | xargs -L1 uv pip install; then
+            echo "Failed to install provider dependencies for '$config_desc'" >&2
             return 1
         fi
         return 0
     fi
 
-    echo "❌ Missing required provider dependencies for '$config_name':"
+    echo "❌ Missing required provider dependencies for '$config_desc':"
     for token in "${missing[@]}"; do
         echo "   - $token"
     done
     echo ""
     echo "Install them with (the same step CI runs):"
-    echo "    ogx stack list-deps $config_name | xargs -L1 uv pip install"
+    echo "    ogx stack list-deps $(printf '%q ' "$@")| xargs -L1 uv pip install"
     echo ""
     echo "Or re-run this script with --install-deps to install them automatically."
     return 1
 }
 
 # Preflight: ensure provider dependencies are installed for the stack config.
-# Skipped for docker configs (dependencies are baked into the image), remote
-# http configs, and collect-only runs.
-if [[ "$COLLECT_ONLY" == false && -n "$STACK_CONFIG" ]]; then
-    case "$STACK_CONFIG" in
-    docker:* | http://*)
-        ;;
-    server:*)
-        check_provider_dependencies "${STACK_CONFIG#server:}" || exit 1
-        ;;
-    *)
-        check_provider_dependencies "$STACK_CONFIG" || exit 1
-        ;;
-    esac
+# STACK_CONFIG_DEPS_ARGS is empty for docker configs (dependencies are baked into
+# the image) and remote http(s) configs; dynamic specs resolve via --providers.
+# Skipped for collect-only runs.
+if [[ "$COLLECT_ONLY" == false && ${#STACK_CONFIG_DEPS_ARGS[@]} -gt 0 ]]; then
+    check_provider_dependencies "${STACK_CONFIG_DEPS_ARGS[@]}" || exit 1
 fi
 
 # Helper function to find next available port
@@ -599,12 +607,16 @@ run_client_ts_tests() {
 }
 
 # Start OGX Server if needed
-if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
-    # Find an available port for the server
-    OGX_PORT=$(find_available_port 8321)
-    if [[ $? -ne 0 ]]; then
-        echo "Error: $OGX_PORT"
-        exit 1
+if [[ "$STACK_CONFIG_KIND" == "server" && "$COLLECT_ONLY" == false ]]; then
+    if [[ -n "$STACK_CONFIG_PORT" ]]; then
+        # server:<config>:<port> -- the pytest fixture connects to that port, so use it.
+        OGX_PORT="$STACK_CONFIG_PORT"
+    else
+        OGX_PORT=$(find_available_port 8321)
+        if [[ $? -ne 0 ]]; then
+            echo "Error: $OGX_PORT"
+            exit 1
+        fi
     fi
     export OGX_PORT
     export TEST_API_BASE_URL="http://localhost:$OGX_PORT"
@@ -625,25 +637,14 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
     echo "=== Starting OGX Server ==="
     export OGX_LOG_WIDTH=120
 
-    # Configure telemetry collector for server mode
-    # Use a fixed port for the OTEL collector so the server can connect to it
-    COLLECTOR_PORT=4317
-    export OGX_TEST_COLLECTOR_PORT="${COLLECTOR_PORT}"
-    # Disabled: https://github.com/ogx-ai/ogx/issues/4089
-    #export OTEL_EXPORTER_OTLP_ENDPOINT="http://127.0.0.1:${COLLECTOR_PORT}"
-    export OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
-    export OTEL_BSP_SCHEDULE_DELAY="200"
-    export OTEL_BSP_EXPORT_TIMEOUT="2000"
-    export OTEL_METRIC_EXPORT_INTERVAL="200"
+    # Server-mode environment (telemetry collector, metrics scrape server), shared with the
+    # pytest fixture's own server startup via SERVER_MODE_ENV_DEFAULTS in
+    # tests/integration/stack_config.py. Exported so both the server process and the pytest
+    # process observe it.
+    # OTEL_EXPORTER_OTLP_ENDPOINT stays disabled: https://github.com/ogx-ai/ogx/issues/4089
+    eval "$(python -I "$THIS_DIR/../tests/integration/stack_config.py" server-env)"
 
-    # Start the standalone metrics scrape server (default port 9464) so the metrics
-    # endpoint integration tests (tests/integration/inspect/test_metrics_endpoint.py) can
-    # scrape it. Exported so both the server process and the pytest process observe the flag.
-    export OGX_METRICS_ENDPOINT_ENABLED="1"
-
-    # remove "server:" from STACK_CONFIG
-    stack_config=$(echo "$STACK_CONFIG" | sed 's/^server://')
-    nohup ogx run $stack_config --insecure >server-main.log 2>&1 &
+    nohup ogx run "$STACK_CONFIG_TARGET" --insecure --port "$OGX_PORT" >server-main.log 2>&1 &
 
     echo "Waiting for OGX Server to start on port $OGX_PORT..."
     for i in {1..60}; do
@@ -674,7 +675,7 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
 fi
 
 # Start Docker Container if needed
-if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
+if [[ "$STACK_CONFIG_KIND" == "docker" && "$COLLECT_ONLY" == false ]]; then
     stop_container() {
         echo "Stopping Docker container..."
         container_name="ogx-test-$DISTRO"
@@ -691,7 +692,7 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
     }
 
     # Extract distribution name from docker:distro format
-    DISTRO=$(echo "$STACK_CONFIG" | sed 's/^docker://')
+    DISTRO="$STACK_CONFIG_TARGET"
     # Find an available port for the docker container
     OGX_PORT=$(find_available_port 8321)
     if [[ $? -ne 0 ]]; then
@@ -925,9 +926,9 @@ else
     echo "❌ Tests failed"
     echo ""
     # Output server or container logs based on stack config
-    if [[ "$STACK_CONFIG" == *"server:"* && -f "server-main.log" ]]; then
+    if [[ "$STACK_CONFIG_KIND" == "server" && -f "server-main.log" ]]; then
         echo "--- Server side failures can be located inside server-main.log (available from artifacts on CI) ---"
-    elif [[ "$STACK_CONFIG" == *"docker:"* ]]; then
+    elif [[ "$STACK_CONFIG_KIND" == "docker" ]]; then
         docker_log_file="docker-${DISTRO}-${INFERENCE_MODE}.log"
         if [[ -f "$docker_log_file" ]]; then
             echo "--- Server side failures can be located inside $docker_log_file (available from artifacts on CI) ---"
@@ -939,7 +940,7 @@ fi
 
 # Run TypeScript client tests if TS_CLIENT_PATH is set (only meaningful against a real server)
 if [[ $exit_code -eq 0 && -n "${TS_CLIENT_PATH:-}" ]] \
-    && ([[ "$STACK_CONFIG" == server:* ]] || [[ "$STACK_CONFIG" == docker:* ]] || [[ "$STACK_CONFIG" == http://* ]]); then
+    && [[ "$STACK_CONFIG_IS_SERVER" == true ]]; then
     run_client_ts_tests
 fi
 

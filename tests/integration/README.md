@@ -33,12 +33,16 @@ pytest --help
 
 Here are the most important options:
 
-- `--stack-config`: specify the stack config to use. You have four ways to point to a stack:
-  - **`server:<config>`** - automatically start a server with the given config (e.g., `server:starter`). This provides one-step testing by auto-starting the server if the port is available, or reusing an existing server if already running.
+- `--stack-config`: specify the stack config to use. If it is not passed, the `OGX_CONFIG` environment variable is used instead, with the same meaning. These are the ways to point to a stack:
+  - **`server:<config>`** - automatically start a server with the given config (e.g., `server:starter`) on `OGX_PORT` (default 8321) and stop it at the end of the session. If that port is already in use, the running server is reused. A server that cannot start fails the session within seconds, pointing at `server.log`.
   - **`server:<config>:<port>`** - same as above but with a custom port (e.g., `server:starter:8322`)
+  - **`server:<distro>::<run_file.yaml>`** - same as `server:<config>`, using a specific run file of a distribution
+  - **`docker:<distro>`** - build and run the distribution's container. Only supported through `scripts/integration-tests.sh`; bare `pytest` rejects it with an error.
   - a URL which points to a OGX distribution server
   - a distribution name (e.g., `starter`) or a path to a `config.yaml` file
   - a comma-separated list of api=provider pairs, e.g. `inference=ollama,responses=builtin`. This is most useful for testing a single API surface.
+
+  `pytest` and `scripts/integration-tests.sh` classify these values with the same parser, `tests/integration/stack_config.py`.
 - `--env`: set environment variables, e.g. --env KEY=value. this is a utility option to set environment variables required by various providers.
 
 Model parameters can be influenced by the following options:

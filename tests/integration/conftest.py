@@ -19,7 +19,7 @@ from ogx.core.stack import run_config_from_dynamic_config_spec
 from ogx.log import get_logger
 from ogx.testing.api_recorder import patch_httpx_for_test_id
 
-from .stack_config import LIBRARY_CLIENT_ONLY_TEST_PATHS, SERVER_ONLY_TEST_PATHS, is_server_stack_config
+from .stack_config import LIBRARY_CLIENT_ONLY_TEST_PATHS, SERVER_ONLY_TEST_PATHS, StackConfigKind, get_stack_config
 from .suites import SETUP_DEFINITIONS, SUITE_DEFINITIONS
 
 logger = get_logger(__name__, category="tests")
@@ -137,9 +137,9 @@ def pytest_configure(config):
 
     # Apply global fallback for embedding_model when using stack configs with embedding models
     if getattr(config.option, "embedding_model", None) is None:
-        stack_config = config.getoption("--stack-config", default=None)
-        if stack_config and "=" in stack_config:
-            run_config = run_config_from_dynamic_config_spec(stack_config)
+        stack_config = get_stack_config(config)
+        if stack_config is not None and stack_config.kind == StackConfigKind.DYNAMIC:
+            run_config = run_config_from_dynamic_config_spec(stack_config.target)
             inference_providers = run_config.providers.get("inference", [])
             if any("sentence-transformers" in p.provider_type for p in inference_providers):
                 config.option.embedding_model = "sentence-transformers/nomic-ai/nomic-embed-text-v1.5"
@@ -150,12 +150,13 @@ def pytest_addoption(parser):
         "--stack-config",
         help=textwrap.dedent(
             """
-            a 'pointer' to the stack. this can be either be:
+            a 'pointer' to the stack (falls back to the OGX_CONFIG env var). this can be either be:
             (a) a template name like `starter`, or
             (b) a path to a config.yaml file, or
             (c) a dynamic config spec, e.g. `inference=fireworks,responses=builtin,agents=builtin`, or
-            (d) a server config like `server:ci-tests`, or
-            (e) a docker config like `docker:ci-tests` (builds and runs container)
+            (d) a server config like `server:ci-tests` or `server:ci-tests:8322`, or
+            (e) a docker config like `docker:ci-tests` (scripts/integration-tests.sh only), or
+            (f) the URL of a running server
             """
         ),
     )
@@ -248,10 +249,10 @@ def pytest_generate_tests(metafunc):
     """
     # Handle vector_io_provider_id dynamically
     if "vector_io_provider_id" in metafunc.fixturenames:
-        config_str = metafunc.config.getoption("--stack-config", default=None) or os.environ.get("OGX_CONFIG")
+        stack_config = get_stack_config(metafunc.config)
         providers = None
-        if config_str and "=" in config_str:
-            run_config = run_config_from_dynamic_config_spec(config_str)
+        if stack_config is not None and stack_config.kind == StackConfigKind.DYNAMIC:
+            run_config = run_config_from_dynamic_config_spec(stack_config.target)
             providers = [p.provider_id for p in run_config.providers.get("vector_io", [])]
         if providers is None:
             inference_mode = os.environ.get("OGX_TEST_INFERENCE_MODE")
@@ -366,7 +367,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     """Filter collected tests to only those matching suite roots with ::test_function or
     ::TestClass specifiers, and skip the handful of tests that are only valid in one
     stack-config mode."""
-    is_server = is_server_stack_config(config.getoption("--stack-config", default=None))
+    stack_config = get_stack_config(config)
+    is_server = stack_config is not None and stack_config.is_server
     for item in items:
         rel_parts = _item_rel_parts(item, config.rootpath)
         if rel_parts in SERVER_ONLY_TEST_PATHS and not is_server:

@@ -7,13 +7,11 @@
 import inspect
 import json
 import os
-import shlex
 import signal
 import socket
 import subprocess
 import tempfile
 import time
-from urllib.parse import urlparse
 
 # Initialize logging early before any loggers get created
 from ogx.log import setup_logging
@@ -30,9 +28,12 @@ from ogx.core.datatypes import QualifiedModel, RerankerModel, VectorStoresConfig
 from ogx.core.library_client import OGXAsLibraryClient
 from ogx.core.stack import run_config_from_dynamic_config_spec
 from ogx.core.utils.config_resolution import resolve_config_or_distro
-from ogx.env import get_env_or_fail
-
-DEFAULT_PORT = 8321
+from tests.integration.stack_config import (
+    RUNNER_SCRIPT,
+    StackConfigKind,
+    apply_server_mode_env_defaults,
+    get_stack_config,
+)
 
 
 def _client_timeout() -> float:
@@ -54,8 +55,12 @@ def is_port_available(port: int, host: str = "localhost") -> bool:
         return False
 
 
-def start_ogx_server(config_name: str, *, log_stderr: bool | None = None) -> subprocess.Popen:
-    """Start a ogx server with the given config."""
+def start_ogx_server(config_name: str, port: int, *, log_stderr: bool | None = None) -> subprocess.Popen:
+    """Start an ogx server with the given config on the given port.
+
+    --insecure matches scripts/integration-tests.sh: test servers run without TLS certificates,
+    and without it the server exits immediately on its TLS-required check.
+    """
     if log_stderr is None:
         log_stderr = os.environ.get("OGX_TEST_LOG_STDERR", "1") == "1"
 
@@ -63,10 +68,10 @@ def start_ogx_server(config_name: str, *, log_stderr: bool | None = None) -> sub
     if os.path.exists("server.log"):
         os.remove("server.log")
 
-    cmd = f"ogx run {config_name}"
+    cmd = ["ogx", "run", config_name, "--insecure", "--port", str(port)]
     devnull = open(os.devnull, "w")
     process = subprocess.Popen(
-        shlex.split(cmd),
+        cmd,
         stdout=devnull,  # redirect stdout to devnull to prevent deadlock
         stderr=subprocess.PIPE if log_stderr else subprocess.DEVNULL,
         text=True,
@@ -278,29 +283,21 @@ def extract_model(model: str | None, default: str) -> str:
 
 
 def instantiate_ogx_client(session):
-    config = session.config.getoption("--stack-config")
-    if not config:
-        config = get_env_or_fail("OGX_CONFIG")
+    stack_config = get_stack_config(session.config)
+    if stack_config is None:
+        raise ValueError("Failed to create the test client: specify either --stack-config or OGX_CONFIG")
 
-    if not config:
-        raise ValueError("You must specify either --stack-config or OGX_CONFIG")
+    if stack_config.kind == StackConfigKind.DOCKER:
+        raise pytest.UsageError(
+            f"Failed to use stack config '{stack_config.raw}': docker: configs are only supported through "
+            f"{RUNNER_SCRIPT}, which builds and starts the container. Under bare pytest, use server:<distro> "
+            "or point --stack-config at the running container's http://localhost:<port> URL."
+        )
 
-    # Handle server:<config_name> format or server:<config_name>:<port>
-    # Also handles server:<distro>::<run_file.yaml> format
-    if config.startswith("server:"):
-        # Strip the "server:" prefix first
-        config_part = config[7:]  # len("server:") == 7
-
-        # Check for :: (distro::runfile format)
-        if "::" in config_part:
-            config_name = config_part
-            port = int(os.environ.get("OGX_PORT", DEFAULT_PORT))
-        else:
-            # Single colon format: either <name> or <name>:<port>
-            parts = config_part.split(":")
-            config_name = parts[0]
-            port = int(parts[1]) if len(parts) > 1 else int(os.environ.get("OGX_PORT", DEFAULT_PORT))
-
+    config = stack_config.target
+    if stack_config.kind == StackConfigKind.SERVER:
+        config_name = stack_config.target
+        port = stack_config.server_port()
         base_url = f"http://localhost:{port}"
 
         force_restart = os.environ.get("OGX_TEST_FORCE_SERVER_RESTART") == "1"
@@ -311,17 +308,20 @@ def instantiate_ogx_client(session):
         # Check if port is available
         if is_port_available(port):
             print(f"Starting ogx server with config '{config_name}' on port {port}...")
+            apply_server_mode_env_defaults()
+            server_process = start_ogx_server(config_name, port)
 
-            # Start server
-            server_process = start_ogx_server(config_name)
-
-            # Wait for server to be ready
+            # wait_for_server_ready returns as soon as the child exits, so a config that can't
+            # start fails in seconds rather than after the full timeout.
             if not wait_for_server_ready(base_url, timeout=120, process=server_process):
-                print("Server failed to start within timeout")
-                server_process.terminate()
+                exited = server_process.poll() is not None
+                if not exited:
+                    server_process.terminate()
+                reason = f"exited with code {server_process.returncode}" if exited else "did not become healthy in 120s"
                 raise RuntimeError(
-                    f"Server failed to start within timeout. Check that config '{config_name}' exists and is valid. "
-                    f"See server.log for details."
+                    f"Failed to start the ogx server for '{stack_config.raw}': `ogx run {config_name}` {reason}. "
+                    f"Check that config '{config_name}' exists and its provider dependencies are installed "
+                    f"(see server.log), or run the suite through {RUNNER_SCRIPT} with --install-deps."
                 )
 
             print(f"Server is ready at {base_url}")
@@ -337,19 +337,13 @@ def instantiate_ogx_client(session):
             timeout=_client_timeout(),
         )
 
-    # check if this looks like a URL using proper URL parsing
-    try:
-        parsed_url = urlparse(config)
-        if parsed_url.scheme and parsed_url.netloc:
-            return OgxClient(
-                base_url=config,
-                default_headers=get_provider_data_headers(),
-            )
-    except Exception:
-        # If URL parsing fails, treat as non-URL config
-        pass
+    if stack_config.kind == StackConfigKind.URL:
+        return OgxClient(
+            base_url=config,
+            default_headers=get_provider_data_headers(),
+        )
 
-    if "=" in config:
+    if stack_config.kind == StackConfigKind.DYNAMIC:
         run_config = run_config_from_dynamic_config_spec(config)
 
         # --stack-config bypasses template so need this to set default embedding and reranker models
