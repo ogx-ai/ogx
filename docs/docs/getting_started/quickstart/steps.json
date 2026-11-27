@@ -222,14 +222,14 @@
       "text": "SystemOne decision models answer yes/no, multiple-choice, and rubric questions with calibrated probabilities instead of free text.",
       "language": "python",
       "file": "systemone.py",
-      "test": { "expect": "\"is_complaint\"" }
+      "test": { "expect": "\"is_complaint\"", "deps": ["requests"] }
     },
     {
       "id": "systemone-run",
       "phase": "client",
       "when": { "use_case": ["systemone"] },
       "language": "bash",
-      "code": ["pip install openai", "python systemone.py"],
+      "code": ["pip install requests", "python systemone.py"],
       "test": { "skip": "The smoke test runs systemone.py itself, in a throwaway environment." }
     },
     {

@@ -7,22 +7,16 @@
 import json
 import os
 
-from openai import DefaultHttpxClient, OpenAI
+import requests
+import urllib3
 
-client = OpenAI(
-    base_url=os.environ["OGX_BASE_URL"],
-    # Servers started with --no-auth accept any key
-    api_key=os.environ.get("OGX_API_KEY", "unused"),
-    # ogx go serves a self-signed certificate, so skip verification for local use
-    http_client=DefaultHttpxClient(verify=False),
-)
+# ogx go serves a self-signed certificate, so skip verification for local use
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# SystemOne answers calibrated questions about a piece of text.
-# The OpenAI SDK has no SystemOne method, so post to the endpoint directly.
-judgment = client.post(
-    "/systemone",
-    cast_to=object,
-    body={
+response = requests.post(
+    f"{os.environ['OGX_BASE_URL']}/systemone",
+    headers={"Authorization": f"Bearer {os.environ.get('OGX_API_KEY', 'unused')}"},
+    json={
         "model": "ollama/tev1:0.8b",
         "state": "I was charged twice for my order last week and nobody answers my emails.",
         "questions": {
@@ -35,12 +29,14 @@ judgment = client.post(
                 "type": "choice",
                 "instructions": "What is the message about?",
                 "criteria": {
-                    "billing": "Payments, charges, refunds, or invoices",
+                    "billing": "Payments, charges, or refunds, or invoices",
                     "shipping": "Delivery, tracking, or lost packages",
                     "account": "Logging in, passwords, or profile settings",
                 },
             },
         },
     },
+    verify=False,
 )
-print(json.dumps(judgment["answers"], indent=2))
+response.raise_for_status()
+print(json.dumps(response.json()["answers"], indent=2))

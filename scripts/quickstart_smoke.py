@@ -328,7 +328,18 @@ class Runner:
             shutil.copy(REPO_ROOT / fixture, work_dir / name)
         print(f"--- {step['id']}: python {step['file']}")
         completed = _run_with_timeout(
-            ["uv", "run", "--quiet", "--no-project", "--with", "openai", "python", step["file"]], work_dir, env
+            [
+                "uv",
+                "run",
+                "--quiet",
+                "--no-project",
+                "--with",
+                ",".join(step.get("test", {}).get("deps", ["openai"])),
+                "python",
+                step["file"],
+            ],
+            work_dir,
+            env,
         )
         return completed.returncode, completed.stdout + completed.stderr
 
