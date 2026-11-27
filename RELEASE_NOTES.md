@@ -4,6 +4,40 @@ This file provides a summary of each release. For detailed release notes with mi
 
 <!-- New releases go here, at the top. See docs/releases/ for detailed notes. -->
 
+## [2.0.0](docs/releases/RELEASE_NOTES_2.0.md) - 2026-11-26
+
+Release 2.0 is a major release focused on the SystemOne judgment model API, a routed web search API with the new SearchApi backend, the retirement of the `tool_runtime`/`tool_groups` APIs, namespaced function tools, and a new SGLang inference provider. Python support moves to 3.13–3.14 (3.12 dropped), and engine pins advance across the board (llama.cpp b12360, Ollama 0.40.16, vLLM 0.32.0, SGLang 0.5.23).
+
+### Highlights
+
+- **SystemOne judgment model API** with the TypeSafe provider, and judgment support on Ollama, llama.cpp, SGLang, and vLLM ([#6748](https://github.com/ogx-ai/ogx/pull/6748), [#6769](https://github.com/ogx-ai/ogx/pull/6769), [#6772](https://github.com/ogx-ai/ogx/pull/6772), [#6782](https://github.com/ogx-ai/ogx/pull/6782), [#6866](https://github.com/ogx-ai/ogx/pull/6866))
+- **New SGLang inference provider** with Tev1 support and integration CI enabled ([#6776](https://github.com/ogx-ai/ogx/pull/6776), [#6822](https://github.com/ogx-ai/ogx/pull/6822))
+- **Web search is now a routed API** — moved from the `tool_runtime` tools to the `web_search` endpoint, with a new SearchApi backend and a built-in placeholder ([#7014](https://github.com/ogx-ai/ogx/pull/7014), [#6927](https://github.com/ogx-ai/ogx/pull/6927), [#6878](https://github.com/ogx-ai/ogx/pull/6878), [#6957](https://github.com/ogx-ai/ogx/pull/6957))
+- **`tool_runtime`/`tool_groups` APIs retired** — web and file search run inside the Responses API; MCP tools served directly by the Responses API ([#7039](https://github.com/ogx-ai/ogx/pull/7039), [#7033](https://github.com/ogx-ai/ogx/pull/7033))
+- **Namespaced function tools** with identity-exact mapping through the chat-completions layer ([#6941](https://github.com/ogx-ai/ogx/pull/6941))
+- **`ogx connect` CLI overhaul** — shared `--url`, `-k/--insecure`, API-key pass-through, `https://localhost` default ([#6928](https://github.com/ogx-ai/ogx/pull/6928), [#6929](https://github.com/ogx-ai/ogx/pull/6929), [#7076](https://github.com/ogx-ai/ogx/pull/7076))
+- **Python 3.13–3.14** (3.12 dropped) ([#6973](https://github.com/ogx-ai/ogx/pull/6973))
+- Engine pins advanced: **llama.cpp b12360 (v1.0.0)** ([#7010](https://github.com/ogx-ai/ogx/pull/7010)), **Ollama 0.40.16** ([#7011](https://github.com/ogx-ai/ogx/pull/7011)), **vLLM 0.32.0** ([#6840](https://github.com/ogx-ai/ogx/pull/6840)), **SGLang 0.5.23** ([#6986](https://github.com/ogx-ai/ogx/pull/6986))
+- Responses robustness: proper 400s for oversized prompts and incomplete `text.format`, malformed tool-call arguments fed back to the model, no more silently dropped turns ([#6907](https://github.com/ogx-ai/ogx/pull/6907))
+
+### Breaking Changes
+
+| Change | Type | PR |
+|--------|------|-----|
+| Python 3.12 no longer supported (3.13–3.14 are) | Hard | [#6973](https://github.com/ogx-ai/ogx/pull/6973) |
+| `tool_runtime` and `tool_groups` APIs removed (incl. `remote::model-context-protocol`) | Hard | [#7039](https://github.com/ogx-ai/ogx/pull/7039) |
+| `remote::passthrough` inference provider removed | Hard | [#7034](https://github.com/ogx-ai/ogx/pull/7034) |
+| `/v1alpha/file-processors/process` route removed; use the jobs API | Hard | [#7078](https://github.com/ogx-ai/ogx/pull/7078) |
+| `knowledge_search` compat alias removed (deprecated since v0.7) | Hard | [#6803](https://github.com/ogx-ai/ogx/pull/6803) |
+| `remote::wolfram-alpha` tool provider removed | Hard | [#6804](https://github.com/ogx-ai/ogx/pull/6804) |
+| String forms of `Models.register_model`/`unregister_model` removed | Hard | [#7082](https://github.com/ogx-ai/ogx/pull/7082) |
+| Stack/distribution configs using the `tool_runtime` section no longer load; use `web_search` | Hard | [#7079](https://github.com/ogx-ai/ogx/pull/7079) |
+| Deprecated CLI shims removed: `ogx go`, `stack run`, `stack go`, `letsgo`, `codex --exec` | Hard | [#7076](https://github.com/ogx-ai/ogx/pull/7076) |
+| Deprecated config keys removed; `~/.llama` → `~/.ogx` auto-migration gone | Hard | [#7077](https://github.com/ogx-ai/ogx/pull/7077) |
+| `ogx connect`: per-agent `--url`/`--host/--port` flags removed; single shared `--url` | Hard | [#6929](https://github.com/ogx-ai/ogx/pull/6929) |
+| Anthropic message batch metadata persisted in `AuthorizedSqlStore`; SQL backend required at startup | Behavior | [#7047](https://github.com/ogx-ai/ogx/pull/7047) |
+| `response_format.json_schema.name` required; incomplete `text.format` → 400 at parse time | Behavior | [#6907](https://github.com/ogx-ai/ogx/pull/6907) |
+
 ## [0.7.0](docs/releases/RELEASE_NOTES_0.7.md) - 2026-04-01
 
 Release 0.7 is a major release focused on completing the transition to OpenAI API conformance, introducing comprehensive observability metrics, and significant API cleanup. This release removes the fine-tuning API, completes the FastAPI router migration, removes legacy providers (TGI, HuggingFace), renames core concepts for clarity, and adds structured logging via structlog.

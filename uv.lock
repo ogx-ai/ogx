@@ -3455,8 +3455,10 @@ wheels = [
 name = "ogx"
 source = { editable = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "aiosqlite" },
     { name = "asyncpg" },
+    { name = "chardet" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "httpx2" },
@@ -3465,6 +3467,7 @@ dependencies = [
     { name = "mcp" },
     { name = "models-dev" },
     { name = "ogx-api" },
+    { name = "ollama" },
     { name = "openai" },
     { name = "opentelemetry-distro" },
     { name = "opentelemetry-exporter-otlp-proto-grpc" },
@@ -3473,6 +3476,7 @@ dependencies = [
     { name = "opentelemetry-sdk" },
     { name = "pydantic" },
     { name = "pyjwt", extra = ["crypto"] },
+    { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "rich" },
@@ -3480,6 +3484,7 @@ dependencies = [
     { name = "structlog" },
     { name = "termcolor" },
     { name = "tiktoken" },
+    { name = "typesafe-sdk" },
     { name = "uvicorn" },
     { name = "websockets" },
     { name = "zstandard" },
@@ -3643,12 +3648,14 @@ docs = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp" },
     { name = "aiohttp", marker = "extra == 'starter'" },
     { name = "aiosqlite", specifier = ">=0.21.0" },
     { name = "anthropic", marker = "extra == 'starter'", specifier = ">=2.10.0" },
     { name = "asyncpg" },
     { name = "autoevals", marker = "extra == 'starter'", specifier = ">=0.4.1" },
     { name = "boto3", marker = "extra == 'starter'", specifier = ">=1.44.6" },
+    { name = "chardet", specifier = ">=7.7.0" },
     { name = "chardet", marker = "extra == 'starter'", specifier = ">=7.7.0" },
     { name = "chromadb-client", marker = "extra == 'starter'" },
     { name = "datasets", marker = "extra == 'starter'", specifier = ">=5.2.0" },
@@ -3668,12 +3675,13 @@ requires-dist = [
     { name = "markitdown", extras = ["all"], marker = "extra == 'starter'" },
     { name = "matplotlib", marker = "extra == 'starter'", specifier = ">=3.11.2" },
     { name = "mcp", specifier = ">=2.0" },
-    { name = "milvus-lite", marker = "(platform_machine == 'aarch64' and extra == 'starter') or (platform_machine == 'arm64' and extra == 'starter') or (platform_machine == 'x86_64' and extra == 'starter')", specifier = ">=2.5.1,<3.0" },
+    { name = "milvus-lite", marker = "(platform_machine == 'aarch64' or platform_machine == 'arm64' or platform_machine == 'x86_64') and extra == 'starter'", specifier = ">=2.5.1,<3.0" },
     { name = "models-dev", specifier = ">=1.0.398" },
     { name = "neo4j", marker = "extra == 'starter'", specifier = ">=6.4.1" },
     { name = "numpy", marker = "extra == 'starter'", specifier = ">=2.5.5" },
     { name = "ogx-api", editable = "src/ogx_api" },
-    { name = "ogx-client", marker = "extra == 'client'", specifier = ">=1.5.0" },
+    { name = "ogx-client", marker = "extra == 'client'", specifier = ">=2.0.0" },
+    { name = "ollama" },
     { name = "ollama", marker = "extra == 'starter'" },
     { name = "openai", specifier = ">=3.55.1" },
     { name = "opentelemetry-distro", specifier = ">=0.60b1" },
@@ -3688,6 +3696,7 @@ requires-dist = [
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.15.1" },
     { name = "pymilvus", extras = ["milvus-lite"], marker = "extra == 'starter'", specifier = ">=3.0.3" },
     { name = "pymongo", marker = "extra == 'starter'", specifier = ">=4.20.0" },
+    { name = "pypdf", specifier = ">=7.1.1" },
     { name = "pypdf", marker = "extra == 'starter'", specifier = ">=7.1.1" },
     { name = "pythainlp", marker = "extra == 'starter'", specifier = ">=5.3.7" },
     { name = "python-dotenv", specifier = ">=1.2.3" },
@@ -3710,6 +3719,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'starter'", specifier = ">=2.15.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "tqdm", marker = "extra == 'starter'", specifier = ">=4.70.1" },
     { name = "tree-sitter", marker = "extra == 'starter'", specifier = ">=0.26.1" },
+    { name = "typesafe-sdk", specifier = ">=0.7.5" },
     { name = "unstructured-client", marker = "extra == 'starter'", specifier = ">=0.47.0" },
     { name = "uvicorn", specifier = ">=0.53.0" },
     { name = "weaviate-client", marker = "extra == 'starter'", specifier = ">=4.24.1" },
@@ -3757,7 +3767,7 @@ dev = [
     { name = "nbval" },
     { name = "neo4j", specifier = ">=6.4.1" },
     { name = "nest-asyncio" },
-    { name = "ogx-client", specifier = ">=1.5.0" },
+    { name = "ogx-client", specifier = ">=2.0.0" },
     { name = "ollama" },
     { name = "openapi-spec-validator", specifier = ">=0.9.0" },
     { name = "pandas", specifier = ">=3.1.1" },
@@ -3847,19 +3857,17 @@ requires-dist = [
 
 [[package]]
 name = "ogx-client"
-version = "1.5.0"
+version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "fire" },
     { name = "httpx" },
     { name = "pydantic" },
     { name = "python-dateutil" },
-    { name = "requests" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c6/0e/985a2b90fea50f662da1e07d0c241062dde363d560aba527711001fd3eb6/ogx_client-1.5.0.tar.gz", hash = "sha256:4d932ae3d7105e48f9f99d320f3ca14d58a79ac196cad06f660708ce20e8a04d", size = 649571, upload-time = "2026-10-09T01:40:07.168Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7a/20/02ebba8af2f847ad7f2551aec9ca94ca547cac820545cca88c8774ae3738/ogx_client-2.0.0.tar.gz", hash = "sha256:deddc25ba68c31f901c235df91aa3e1ef7899cd1974671e3337113327a8c42ae", size = 665428, upload-time = "2026-11-26T23:01:06.145Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9b/6c/5c7a3e1cf70eb185fda6f097fb42bf1c6f82ff71051a2dfe8b02e8bdb576/ogx_client-1.5.0-py3-none-any.whl", hash = "sha256:b9d90a85851807f47e757501991d4b004432affe761cc831357015fa6dda8624", size = 1595662, upload-time = "2026-10-09T01:40:05.516Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/f0/285bcbde394ad48bc9a3eae3ebb9cc21935d037cbc01f3086e6e0574b34f/ogx_client-2.0.0-py3-none-any.whl", hash = "sha256:3480651f796a71141a9e8d34828d19f8ed6fc54aa756b6abe88ba34a3f06c1d5", size = 1660321, upload-time = "2026-11-26T23:01:03.275Z" },
 ]
 
 [[package]]
