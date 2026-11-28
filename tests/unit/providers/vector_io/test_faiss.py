@@ -199,6 +199,37 @@ async def test_meta_index_updated_on_delete_chunks(faiss_index, sample_chunks, s
     assert faiss_index._meta_index["document_id"]["mock-doc-2"] == {0}
 
 
+async def test_delete_last_chunk_then_add_keeps_positions_aligned(faiss_index, embedding_dimension):
+    """Deleting the newest chunk and adding another must not leave the deleted chunk searchable."""
+    from ogx.providers.utils.memory.vector_store import ChunkForDeletion
+
+    def embedded(chunk_id: str, text: str, hot: int) -> EmbeddedChunk:
+        embedding = np.zeros(embedding_dimension, dtype=np.float32)
+        embedding[hot] = 1.0
+        return EmbeddedChunk(
+            content=text,
+            chunk_id=chunk_id,
+            metadata={"document_id": chunk_id},
+            chunk_metadata=ChunkMetadata(chunk_id=chunk_id, document_id=chunk_id),
+            embedding=embedding.tolist(),
+            embedding_model="test-embedding-model",
+            embedding_dimension=embedding_dimension,
+        )
+
+    await faiss_index.add_chunks([embedded("a", "cats", 0), embedded("b", "dogs", 1)])
+    await faiss_index.delete_chunks([ChunkForDeletion(chunk_id="b", document_id="b")])
+    await faiss_index.add_chunks([embedded("c", "fish", 2)])
+
+    assert faiss_index.chunk_ids == ["a", "c"]
+    assert sorted(faiss_index.chunk_by_index) == [0, 1]
+
+    query = np.zeros(embedding_dimension, dtype=np.float32)
+    query[2] = 1.0
+    response = await faiss_index.query_vector(query, k=2, score_threshold=0.0)
+    assert [chunk.chunk_id for chunk in response.chunks][0] == "c"
+    assert "b" not in [chunk.chunk_id for chunk in response.chunks]
+
+
 async def test_add_chunks_replaces_existing_chunk_id(
     faiss_index, sample_chunks, sample_embeddings, embedding_dimension
 ):
