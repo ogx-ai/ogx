@@ -13,11 +13,7 @@ from fastapi.param_functions import File, Form
 from fastapi.responses import Response
 from pydantic import ValidationError
 
-from ogx_api.common.upload_limits import (
-    DEFAULT_MAX_UPLOAD_SIZE_BYTES,
-    PreReadUploadFile,
-    read_upload_with_size_limit,
-)
+from ogx_api.common.upload_limits import DEFAULT_MAX_UPLOAD_SIZE_BYTES, enforce_upload_size_limit
 from ogx_api.router_utils import create_path_dependency, create_query_dependency, standard_responses
 from ogx_api.version import OGX_API_V1
 
@@ -154,12 +150,11 @@ def create_router(impl: Files, max_upload_size_bytes: int = DEFAULT_MAX_UPLOAD_S
             Form(alias="expires_after", description="Optional expiration settings for the file."),
         ] = None,
     ) -> OpenAIFileObject:
-        content = await read_upload_with_size_limit(file, max_upload_size_bytes)
-        safe_file = PreReadUploadFile(content, filename=file.filename, content_type=file.content_type)
+        enforce_upload_size_limit(file, max_upload_size_bytes)
         request = UploadFileRequest(
             purpose=purpose,
             expires_after=expires_after,
         )
-        return await impl.openai_upload_file(request, safe_file)
+        return await impl.openai_upload_file(request, file)
 
     return router

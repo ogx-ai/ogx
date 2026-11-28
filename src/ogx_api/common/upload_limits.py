@@ -6,9 +6,9 @@
 
 """Upload limit utilities for enforcing file size limits.
 
-Provides a bounded-read helper that reads UploadFile objects in chunks,
-aborting early when the configured maximum size is exceeded. This avoids
-buffering arbitrarily large uploads into memory before rejecting them.
+An upload's size is measured by seeking to the end of its file, so it is checked
+against the limit without reading it and without trusting the declared
+``UploadFile.size``.
 """
 
 import io
@@ -21,21 +21,31 @@ from ogx_api.common.errors import FileTooLargeError
 # Default maximum upload size: 100 MiB
 DEFAULT_MAX_UPLOAD_SIZE_BYTES: int = 100 * 1024 * 1024
 
-# Chunk size for incremental reads (1 MiB)
-_READ_CHUNK_SIZE: int = 1 * 1024 * 1024
+
+def enforce_upload_size_limit(file: UploadFile, max_upload_bytes: int = DEFAULT_MAX_UPLOAD_SIZE_BYTES) -> None:
+    """Reject an upload larger than *max_upload_bytes* without reading it.
+
+    The size is the number of bytes actually received, not the declared
+    ``file.size``. The file is left at its start, ready to be streamed.
+
+    Args:
+        file: The FastAPI UploadFile to check.
+        max_upload_bytes: Maximum allowed file size in bytes.
+
+    Raises:
+        FileTooLargeError: If the file exceeds *max_upload_bytes*.
+    """
+    size = file.file.seek(0, io.SEEK_END)
+    file.file.seek(0)
+    if size > max_upload_bytes:
+        raise FileTooLargeError(file_size=size, max_size=max_upload_bytes)
 
 
 async def read_upload_with_size_limit(
     file: UploadFile,
     max_upload_bytes: int = DEFAULT_MAX_UPLOAD_SIZE_BYTES,
 ) -> bytes:
-    """Read an uploaded file with a size limit, aborting early if exceeded.
-
-    Performs two levels of checking:
-    1. Pre-check: if ``file.size`` is populated (from Content-Length), reject
-       immediately without reading any bytes.
-    2. Chunked read: reads the file in fixed-size chunks, tracking total bytes.
-       Stops as soon as the cumulative size exceeds *max_upload_bytes*.
+    """Read an uploaded file, rejecting it before any read if it exceeds *max_upload_bytes*.
 
     Args:
         file: The FastAPI UploadFile to read.
@@ -47,63 +57,17 @@ async def read_upload_with_size_limit(
     Raises:
         FileTooLargeError: If the file exceeds *max_upload_bytes*.
     """
-    # Fast path: reject based on declared size when available.
-    # Use getattr because not all file-like objects have .size (e.g. LibraryClientUploadFile).
-    declared_size = getattr(file, "size", None)
-    if declared_size is not None and declared_size > max_upload_bytes:
-        raise FileTooLargeError(file_size=declared_size, max_size=max_upload_bytes)
-
-    # Read in bounded chunks to avoid buffering unbounded data.
-    # Some file-like objects (e.g. LibraryClientUploadFile) don't accept a size
-    # argument to read(), so fall back to a single read() if chunked read fails.
-    chunks: list[bytes] = []
-    total_bytes = 0
-
-    try:
-        while True:
-            chunk = await file.read(_READ_CHUNK_SIZE)
-            if not chunk:
-                break
-            total_bytes += len(chunk)
-            if total_bytes > max_upload_bytes:
-                raise FileTooLargeError(file_size=total_bytes, max_size=max_upload_bytes)
-            chunks.append(chunk)
-    except TypeError:
-        # file.read() doesn't accept a size argument — try the underlying
-        # synchronous file object for bounded chunked reads before resorting
-        # to an unbounded read.
-        underlying = getattr(file, "_buf", None) or getattr(file, "file", None)
-        if underlying is not None and callable(getattr(underlying, "read", None)):
-            try:
-                while True:
-                    chunk = underlying.read(_READ_CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    total_bytes += len(chunk)
-                    if total_bytes > max_upload_bytes:
-                        raise FileTooLargeError(file_size=total_bytes, max_size=max_upload_bytes) from None
-                    chunks.append(chunk)
-                return b"".join(chunks)
-            except TypeError:
-                pass
-
-        # Last resort: declared_size was already validated above so if it was
-        # set the read is bounded; otherwise we have no way to chunk.
-        content: bytes = await file.read()
-        if len(content) > max_upload_bytes:
-            raise FileTooLargeError(file_size=len(content), max_size=max_upload_bytes) from None
-        return content
-
-    return b"".join(chunks)
+    enforce_upload_size_limit(file, max_upload_bytes)
+    content: bytes = await file.read()
+    return content
 
 
 class PreReadUploadFile(UploadFile):
-    """UploadFile subclass backed by already-read bytes.
+    """UploadFile backed by bytes that are already in memory.
 
-    Providers call ``await file.read()`` to get content. After the route handler
-    has already performed a bounded read via :func:`read_upload_with_size_limit`,
-    this wrapper lets providers consume the pre-read bytes without a second disk/
-    network read.
+    Used wherever an upload is built in process rather than parsed from a
+    multipart request: after :func:`read_upload_with_size_limit`, by the library
+    client, and for files that providers create themselves.
     """
 
     def __init__(self, content: bytes, *, filename: str | None = None, content_type: str | None = None):
