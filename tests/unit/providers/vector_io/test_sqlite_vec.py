@@ -245,6 +245,32 @@ async def test_chunk_id_conflict(sqlite_vec_index, sample_chunks, embedding_dime
     assert len(chunk_ids) == len(set(chunk_ids)), "Duplicate chunk IDs detected across batches!"
 
 
+async def test_add_chunks_replaces_vector_of_existing_chunk_id(sqlite_vec_index, embedding_dimension):
+    """Re-inserting a chunk_id must replace its vector instead of adding a second vec0 row."""
+    query = np.ones(embedding_dimension, dtype=np.float32)
+
+    def embedded_chunk(chunk_id: str, embedding: np.ndarray) -> EmbeddedChunk:
+        return EmbeddedChunk(
+            content=f"content of {chunk_id}",
+            chunk_id=chunk_id,
+            metadata={"document_id": "doc"},
+            chunk_metadata=ChunkMetadata(document_id="doc", chunk_id=chunk_id),
+            embedding=embedding.tolist(),
+            embedding_model="test-embedding-model",
+            embedding_dimension=embedding_dimension,
+        )
+
+    await sqlite_vec_index.add_chunks([embedded_chunk("a", query), embedded_chunk("b", query + 0.1)])
+    await sqlite_vec_index.add_chunks([embedded_chunk("a", query)])
+    response = await sqlite_vec_index.query_vector(query, k=2, score_threshold=0.0)
+    assert [chunk.chunk_id for chunk in response.chunks] == ["a", "b"]
+
+    # The old vector of "b" must no longer match once "b" is stored with a new embedding.
+    await sqlite_vec_index.add_chunks([embedded_chunk("b", -query)])
+    response = await sqlite_vec_index.query_vector(query + 0.1, k=2, score_threshold=0.0)
+    assert [chunk.chunk_id for chunk in response.chunks] == ["a", "b"]
+
+
 @pytest.fixture(scope="session")
 async def sqlite_vec_adapter(sqlite_connection):
     config = type("Config", (object,), {"db_path": ":memory:"})  # Mock config with in-memory database
