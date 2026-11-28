@@ -507,3 +507,48 @@ class TestModerationHeadersConfig:
         )
         assert config.moderation_headers == {"Authorization": "Bearer sk-test"}
         assert config.moderation_endpoint == "http://mod.test/v1/moderations"
+
+
+async def test_moderation_call_replays_with_no_endpoint_running(tmp_path, monkeypatch):
+    """run_guardrails posts to moderation_endpoint with a raw httpx2 client, which the
+    recorder intercepts (/v1/moderations), so guardrail integration tests replay in CI
+    without a live moderation endpoint (#6950)."""
+    import httpx2
+
+    from ogx.providers.inline.responses.builtin.responses.utils import run_guardrails
+    from ogx.testing.api_recorder import APIRecordingMode, api_recording
+
+    endpoint = "http://127.0.0.1:11435/v1/moderations"
+    body = {
+        "id": "modr-1",
+        "model": "llama-guard3:1b",
+        "results": [{"flagged": True, "categories": {"violent_crimes": True, "hate": False}}],
+    }
+    calls: list[httpx2.Request] = []
+
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        calls.append(request)
+        return httpx2.Response(200, json=body)
+
+    def refuse(request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ConnectError("no moderation endpoint is listening", request=request)
+
+    original_init = httpx2.AsyncClient.__init__
+
+    def use_transport(handler):
+        def init(self, *args, **kwargs):
+            kwargs["transport"] = httpx2.MockTransport(handler)
+            original_init(self, *args, **kwargs)
+
+        return init
+
+    monkeypatch.setattr(httpx2.AsyncClient, "__init__", use_transport(answer))
+    with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(tmp_path)):
+        recorded = await run_guardrails(endpoint, "How can I hurt someone?")
+
+    monkeypatch.setattr(httpx2.AsyncClient, "__init__", use_transport(refuse))
+    with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(tmp_path)):
+        replayed = await run_guardrails(endpoint, "How can I hurt someone?")
+
+    assert len(calls) == 1
+    assert recorded == replayed == "Content blocked by safety guardrails (flagged for: violent_crimes)"

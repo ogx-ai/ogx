@@ -201,6 +201,17 @@ the pinned vLLM 0.34.0 CPU wheel against vLLM's structured decisions API
 commits, and every file is sha256-verified before use. Replay uses the saved
 responses and does not require a running vLLM server.
 
+### Responses Guardrail Recordings
+
+The responses guardrail tests (`tests/integration/agents/test_openai_responses.py`) need the
+builtin responses provider's `moderation_endpoint`, an OpenAI-compatible `/v1/moderations`
+endpoint. Ollama serves none, so the `ollama` setup points it, through
+`OGX_TEST_MODERATION_ENDPOINT`, at `scripts/moderation_shim.py`: a small adapter that asks
+`llama-guard3:1b` (pulled by the ollama setup) for a verdict and returns it as a moderation
+result. `scripts/integration-tests.sh` starts the shim when recording; replay serves the
+recorded moderation responses. Setups that don't set `OGX_TEST_MODERATION_ENDPOINT` leave
+guardrails unconfigured, and the guardrail tests skip.
+
 ### Model-List Recordings
 
 `models-*.json` files record provider model-list responses

@@ -57,6 +57,10 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         description="Local Ollama provider with text models",
         env={
             "OLLAMA_URL": "http://0.0.0.0:11434/v1",
+            # Responses guardrails: a /v1/moderations shim over the llama-guard3:1b model
+            # setup-ollama pulls (scripts/moderation_shim.py, started by integration-tests.sh
+            # when recording). The URL is part of the recording hash, so keep it fixed.
+            "OGX_TEST_MODERATION_ENDPOINT": "http://127.0.0.1:11435/v1/moderations",
         },
         defaults={
             "text_model": "ollama/qwen3.5:0.8b",
