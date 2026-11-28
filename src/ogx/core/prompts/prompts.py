@@ -122,6 +122,7 @@ class PromptServiceImpl(Prompts):
             prompt=request.prompt,
             version=1,
             variables=variables,
+            is_default=True,
         )
 
         await self.sql_store.insert(
@@ -162,7 +163,11 @@ class PromptServiceImpl(Prompts):
         created_at = int(time.time())
 
         updated_prompt = Prompt(
-            prompt_id=request.prompt_id, prompt=request.prompt, version=new_version, variables=variables
+            prompt_id=request.prompt_id,
+            prompt=request.prompt,
+            version=new_version,
+            variables=variables,
+            is_default=request.set_as_default,
         )
 
         await self.sql_store.insert(
