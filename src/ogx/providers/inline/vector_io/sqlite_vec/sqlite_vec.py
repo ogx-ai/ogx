@@ -236,19 +236,22 @@ class SQLiteVecIndex(EmbeddingIndex):
                         metadata_data,
                     )
 
-                    # Insert vector embeddings
+                    # Deduplicate batch by chunk_id keeping the last occurrence for vector and FTS tables
+                    unique_chunk_map = {
+                        chunk.chunk_id: (chunk, emb) for chunk, emb in zip(batch_chunks, batch_embeddings, strict=True)
+                    }
+                    chunk_id_tuples = [(cid,) for cid in unique_chunk_map]
+
+                    # Insert vector embeddings (DELETE existing entries since vec0 doesn't support ON CONFLICT)
+                    cur.executemany(f"DELETE FROM [{self.vector_table}] WHERE id = ?;", chunk_id_tuples)
                     embedding_data = [
-                        ((chunk.chunk_id, serialize_vector(emb.tolist())))
-                        for chunk, emb in zip(batch_chunks, batch_embeddings, strict=True)
+                        (cid, serialize_vector(emb.tolist())) for cid, (chunk, emb) in unique_chunk_map.items()
                     ]
                     cur.executemany(f"INSERT INTO [{self.vector_table}] (id, embedding) VALUES (?, ?);", embedding_data)
 
-                    # Insert FTS content
-                    fts_data = [(chunk.chunk_id, chunk.content) for chunk in batch_chunks]
-                    # DELETE existing entries with same IDs (FTS5 doesn't support ON CONFLICT)
-                    cur.executemany(f"DELETE FROM [{self.fts_table}] WHERE id = ?;", [(row[0],) for row in fts_data])
-
-                    # INSERT new entries
+                    # Insert FTS content (DELETE existing entries since FTS5 doesn't support ON CONFLICT)
+                    fts_data = [(chunk.chunk_id, chunk.content) for chunk, _ in unique_chunk_map.values()]
+                    cur.executemany(f"DELETE FROM [{self.fts_table}] WHERE id = ?;", chunk_id_tuples)
                     cur.executemany(f"INSERT INTO [{self.fts_table}] (id, content) VALUES (?, ?);", fts_data)
 
                 connection.commit()
