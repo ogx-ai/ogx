@@ -755,6 +755,32 @@ async def test_store_response_uses_incremental_input_with_previous_response(
     assert result.status == "completed"
 
 
+async def test_store_response_assigns_ids_to_list_input_messages(
+    openai_responses_impl, mock_responses_store, mock_inference_api
+):
+    """Messages in a list input that have no id get their own id when stored; a client-supplied id is kept."""
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input=[
+                OpenAIResponseMessage(role="user", content=[OpenAIResponseInputMessageContentText(text="Hi")]),
+                OpenAIResponseMessage(role="assistant", content="Hello"),
+                OpenAIResponseMessage(id="msg_client", role="user", content="What is 2+2?"),
+                OpenAIResponseMessage(role="user", content="Answer briefly."),
+            ],
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            store=True,
+        )
+    )
+
+    stored_ids = [item.id for item in mock_responses_store.upsert_response_object.call_args.kwargs["input"]]
+
+    assert stored_ids[2] == "msg_client"
+    assert all(stored_ids)
+    assert len(set(stored_ids)) == len(stored_ids)
+
+
 async def test_store_response_disables_incremental_input_when_auto_compaction_applies(
     openai_responses_impl, mock_responses_store, mock_inference_api
 ):
