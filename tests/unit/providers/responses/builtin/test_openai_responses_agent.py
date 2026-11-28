@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from openai.types.chat.chat_completion_chunk import (
@@ -23,12 +23,15 @@ from ogx_api import (
 )
 from ogx_api.openai_responses import (
     OpenAIResponseError,
+    OpenAIResponseInputToolFunction,
+    OpenAIResponseInputToolMCP,
     OpenAIResponseInputToolWebSearch,
+    OpenAIResponseMessage,
     OpenAIResponseObject,
     OpenAIResponseObjectStreamResponseFailed,
 )
 from ogx_api.responses.models import CreateResponseRequest
-from ogx_api.tools import ToolDef
+from ogx_api.tools import ListToolDefsResponse, ToolDef, ToolInvocationResult
 
 
 async def test_failed_stream_persists_non_system_messages(openai_responses_impl, mock_responses_store):
@@ -473,3 +476,259 @@ async def test_agent_loop_incomplete_due_to_length_finish_reason(openai_response
     assert final_event.response.status == "incomplete"
     assert final_event.response.incomplete_details is not None
     assert final_event.response.incomplete_details.reason == "length"
+
+
+def _call_until_dropped(tool_name):
+    """A model that calls tool_name whenever it is offered, and answers otherwise."""
+
+    def fake_inference(params):
+        return _call_until_dropped_stream(params, tool_name)
+
+    return fake_inference
+
+
+def _web_search_until_dropped_stream(params):
+    return _call_until_dropped_stream(params, "web_search")
+
+
+def _call_until_dropped_stream(params, tool_name):
+    offered = {tool["function"]["name"] for tool in params.tools or []}
+
+    async def stream():
+        if tool_name in offered:
+            delta = ChoiceDelta(
+                role="assistant",
+                tool_calls=[
+                    ChoiceDeltaToolCall(
+                        index=0,
+                        id=f"call_{len(params.messages)}",
+                        function=ChoiceDeltaToolCallFunction(name=tool_name, arguments='{"query":"test"}'),
+                    )
+                ],
+            )
+            finish_reason = "tool_calls"
+        else:
+            delta = ChoiceDelta(role="assistant", content="Here is the answer.")
+            finish_reason = "stop"
+        yield ChatCompletionChunk(
+            id="test_123",
+            choices=[Choice(index=0, delta=delta, finish_reason=finish_reason)],
+            created=1234567890,
+            model="gpt-4o",
+            object="chat.completion.chunk",
+        )
+
+    return stream()
+
+
+def _offered_tool_names(call):
+    return [tool["function"]["name"] for tool in call.args[0].tools or []]
+
+
+@pytest.fixture
+def web_search_tool(openai_responses_impl, mock_web_search_api):
+    openai_responses_impl.web_search_api.tool_def.return_value = ToolDef(
+        name="web_search", description="Search the web", input_schema={}
+    )
+    mock_web_search_api.search.return_value = WebSearchResult(content="Search results")
+    return mock_web_search_api
+
+
+async def test_max_tool_calls_stops_offering_builtin_tools(openai_responses_impl, mock_inference_api, web_search_tool):
+    """Once max_tool_calls is reached, built-in tools are no longer offered, so the model answers."""
+    mock_inference_api.openai_chat_completion.side_effect = _web_search_until_dropped_stream
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="Test input",
+            model="gpt-4o",
+            tools=[OpenAIResponseInputToolWebSearch(type="web_search")],
+            max_tool_calls=1,
+            stream=False,
+        )
+    )
+
+    assert web_search_tool.search.call_count == 1
+    calls = mock_inference_api.openai_chat_completion.call_args_list
+    assert len(calls) == 2
+    assert _offered_tool_names(calls[0]) == ["web_search"]
+    assert calls[1].args[0].tools is None
+    assert calls[1].args[0].tool_choice is None
+    assert calls[1].args[0].parallel_tool_calls is None
+    assert result.status == "completed"
+    assert isinstance(result.output[-1], OpenAIResponseMessage)
+
+
+async def test_max_tool_calls_keeps_function_tools(openai_responses_impl, mock_inference_api, web_search_tool):
+    """Reaching max_tool_calls drops the built-in tool but keeps function tools offered."""
+    mock_inference_api.openai_chat_completion.side_effect = _web_search_until_dropped_stream
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="Test input",
+            model="gpt-4o",
+            tools=[
+                OpenAIResponseInputToolWebSearch(type="web_search"),
+                OpenAIResponseInputToolFunction(name="get_weather", parameters={"location": "string"}),
+            ],
+            max_tool_calls=1,
+            stream=False,
+        )
+    )
+
+    assert web_search_tool.search.call_count == 1
+    calls = mock_inference_api.openai_chat_completion.call_args_list
+    assert len(calls) == 2
+    assert sorted(_offered_tool_names(calls[0])) == ["get_weather", "web_search"]
+    assert _offered_tool_names(calls[1]) == ["get_weather"]
+    assert result.status == "completed"
+    assert isinstance(result.output[-1], OpenAIResponseMessage)
+
+
+async def test_max_tool_calls_clears_tool_choice_when_no_tools_remain(
+    openai_responses_impl, mock_inference_api, web_search_tool
+):
+    """An allowed_tools choice limited to the built-in leaves no tools after the cap, so tools and tool_choice are unset."""
+    mock_inference_api.openai_chat_completion.side_effect = _web_search_until_dropped_stream
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="Test input",
+            model="gpt-4o",
+            tools=[
+                OpenAIResponseInputToolWebSearch(type="web_search"),
+                OpenAIResponseInputToolFunction(name="get_weather", parameters={"location": "string"}),
+            ],
+            tool_choice={"type": "allowed_tools", "mode": "required", "tools": [{"type": "web_search"}]},
+            max_tool_calls=1,
+            stream=False,
+        )
+    )
+
+    assert web_search_tool.search.call_count == 1
+    calls = mock_inference_api.openai_chat_completion.call_args_list
+    assert len(calls) == 2
+    assert _offered_tool_names(calls[0]) == ["web_search"]
+    assert calls[1].args[0].tools is None
+    assert calls[1].args[0].tool_choice is None
+    assert result.status == "completed"
+    assert isinstance(result.output[-1], OpenAIResponseMessage)
+
+
+async def test_max_tool_calls_clears_tool_choice_naming_dropped_tool(
+    openai_responses_impl, mock_inference_api, web_search_tool
+):
+    """A tool_choice forcing a dropped built-in is cleared even while function tools remain.
+
+    A context-length retry restarts the loop with the request's tool_choice after the cap is reached.
+    """
+    context_error = Exception("context length exceeded")
+    context_error.body = {"error": {"code": "context_length_exceeded"}}
+    n_calls = {"count": 0}
+
+    def fake_inference(params):
+        n_calls["count"] += 1
+        if n_calls["count"] == 2:
+            raise context_error
+        return _web_search_until_dropped_stream(params)
+
+    mock_inference_api.openai_chat_completion.side_effect = fake_inference
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input=[
+                OpenAIResponseMessage(role="user", content="Earlier question"),
+                OpenAIResponseMessage(role="assistant", content="Earlier answer"),
+                OpenAIResponseMessage(role="user", content="Test input"),
+            ],
+            model="gpt-4o",
+            tools=[
+                OpenAIResponseInputToolWebSearch(type="web_search"),
+                OpenAIResponseInputToolFunction(name="get_weather", parameters={"location": "string"}),
+            ],
+            tool_choice={"type": "web_search"},
+            truncation="auto",
+            max_tool_calls=1,
+            stream=False,
+        )
+    )
+
+    assert web_search_tool.search.call_count == 1
+    calls = mock_inference_api.openai_chat_completion.call_args_list
+    assert len(calls) == 3
+    assert calls[0].args[0].tool_choice == {"type": "function", "function": {"name": "web_search"}}
+    assert _offered_tool_names(calls[2]) == ["get_weather"]
+    assert calls[2].args[0].tool_choice is None
+    assert result.status == "completed"
+    assert isinstance(result.output[-1], OpenAIResponseMessage)
+
+
+async def test_max_tool_calls_keeps_function_tool_named_like_builtin(
+    openai_responses_impl, mock_inference_api, web_search_tool
+):
+    """A user function tool that shares a built-in's name is a function tool, so the cap never drops it."""
+    mock_inference_api.openai_chat_completion.side_effect = _web_search_until_dropped_stream
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="Test input",
+            model="gpt-4o",
+            tools=[
+                OpenAIResponseInputToolWebSearch(type="web_search"),
+                OpenAIResponseInputToolFunction(name="file_search", parameters={"query": "string"}),
+            ],
+            max_tool_calls=1,
+            stream=False,
+        )
+    )
+
+    assert web_search_tool.search.call_count == 1
+    calls = mock_inference_api.openai_chat_completion.call_args_list
+    assert len(calls) == 2
+    assert sorted(_offered_tool_names(calls[0])) == ["file_search", "web_search"]
+    assert _offered_tool_names(calls[1]) == ["file_search"]
+    assert result.status == "completed"
+    assert isinstance(result.output[-1], OpenAIResponseMessage)
+
+
+@patch("ogx.providers.utils.tools.mcp.validate_mcp_endpoint")
+@patch("ogx.providers.utils.tools.mcp.invoke_mcp_tool", new_callable=AsyncMock)
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.validate_mcp_endpoint")
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
+async def test_max_tool_calls_stops_offering_mcp_tools(
+    mock_list_mcp_tools,
+    _mock_validate,
+    mock_invoke_mcp_tool,
+    _mock_exec_validate,
+    openai_responses_impl,
+    mock_inference_api,
+):
+    """Once max_tool_calls is reached, MCP tools are no longer offered, so the model answers."""
+    mock_list_mcp_tools.return_value = ListToolDefsResponse(
+        data=[ToolDef(name="lookup", description="Look something up", input_schema={})]
+    )
+    mock_invoke_mcp_tool.return_value = ToolInvocationResult(content="lookup result")
+    mock_inference_api.openai_chat_completion.side_effect = _call_until_dropped("lookup")
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="Test input",
+            model="gpt-4o",
+            tools=[
+                OpenAIResponseInputToolMCP(
+                    server_label="docs", server_url="http://mcp.example.com/sse", require_approval="never"
+                ),
+            ],
+            max_tool_calls=1,
+            stream=False,
+        )
+    )
+
+    assert mock_invoke_mcp_tool.await_count == 1
+    calls = mock_inference_api.openai_chat_completion.call_args_list
+    assert len(calls) == 2
+    assert _offered_tool_names(calls[0]) == ["lookup"]
+    assert calls[1].args[0].tools is None
+    assert calls[1].args[0].tool_choice is None
+    assert result.status == "completed"
+    assert isinstance(result.output[-1], OpenAIResponseMessage)
