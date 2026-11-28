@@ -374,7 +374,21 @@ TS_CLIENT_PATH=~/.cache/ogx-client-typescript scripts/integration-tests.sh --sta
 
 TypeScript tests run immediately after Python tests pass, using the same replay fixtures. The mapping between Python suites/setups and TypeScript test files is defined in `tests/integration/client-typescript/suites.json`.
 
-If `TS_CLIENT_PATH` is unset, TypeScript tests are skipped entirely.
+If `TS_CLIENT_PATH` is unset, TypeScript tests are skipped entirely. `--typescript-only` (skip the Python tests) fails instead when `TS_CLIENT_PATH` is unset or the stack config is not a server, since it would otherwise run no tests at all.
+
+### Recording TypeScript client requests
+
+The TypeScript client serializes request bodies with a different byte layout than the Python client, so its requests hash to their own recordings: a Python recording never satisfies a TypeScript replay, and vice versa. Anything that changes recorded request bodies (a model migration, a client serialization change, a new test in `client-typescript/__tests__/`) needs TypeScript-side recordings as well.
+
+The Integration Tests (Record) workflow records them: lanes whose suite and setup have TypeScript tests mapped in `suites.json` also run the TypeScript suite against the recording server, checked out from `ogx-client-typescript` `main`, so `record-if-missing` fills in both clients' recordings. The workflow runs automatically on PRs for the ollama lanes; dispatch it for other lanes (e.g. `gpt` / `responses`), or after a change in `ogx-client-typescript` itself, which does not trigger it.
+
+To record locally instead, run only the TypeScript suite against a live backend:
+
+```bash
+TS_CLIENT_PATH=~/.cache/ogx-client-typescript scripts/integration-tests.sh \
+  --stack-config server:ci-tests --suite base --setup ollama \
+  --inference-mode record-if-missing --typescript-only
+```
 
 ## Directory Structure
 

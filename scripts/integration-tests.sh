@@ -181,6 +181,20 @@ if [[ -n "$TEST_FILE" && -z "$TEST_SETUP" ]]; then
     exit 1
 fi
 
+# --typescript-only skips the Python tests, and the TypeScript tests only run when
+# TS_CLIENT_PATH is set and the stack config is a real server. Without both, the run would
+# succeed having executed zero tests.
+if [[ "$TYPESCRIPT_ONLY" == true && "$COLLECT_ONLY" == false ]]; then
+    if [[ -z "${TS_CLIENT_PATH:-}" ]]; then
+        echo "Error: --typescript-only requires TS_CLIENT_PATH (a local ogx-client-typescript checkout or an npm version)"
+        exit 1
+    fi
+    if [[ "$STACK_CONFIG" != server:* && "$STACK_CONFIG" != docker:* && "$STACK_CONFIG" != http://* ]]; then
+        echo "Error: --typescript-only requires a server stack config (server:, docker: or http://), got '$STACK_CONFIG'"
+        exit 1
+    fi
+fi
+
 echo "=== OGX Integration Test Runner ==="
 echo "Stack Config: $STACK_CONFIG"
 echo "Setup: $TEST_SETUP"
