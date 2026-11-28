@@ -1,0 +1,74 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=thegrid/text-standard-inference:chat_completion:non_streaming_02]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.thegrid.ai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "text-standard",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet has rings around it with a name starting with letter S?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "text-standard",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-cf63c6022eb1",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "The planet you\u2019re thinking of is **Saturn**.  \n\nSaturn is famous for its spectacular system of rings, which are made up of countless icy particles ranging from tiny grains to large boulders. It\u2019s the only planet whose name begins with the letter \u201cS\u201d and also has such a prominent ring system. (While other planets\u2014Jupiter, Uranus, and Neptune\u2014also have rings, their names do not start with \u201cS.\u201d)",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "The user asks: \"Which planet has rings around it with a name starting with letter S?\" Probably they refer to planets that have rings and the name of the planet starts with S? The planet with rings is Saturn, which starts with S. Also perhaps some moons have rings? But the question: \"Which planet has rings around it with a name starting with letter S?\" Likely answer: Saturn. Provide explanation."
+            }
+          }
+        ],
+        "created": 0,
+        "model": "openai/gpt-oss-120b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 187,
+          "prompt_tokens": 86,
+          "total_tokens": 273,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": null,
+            "audio_tokens": null,
+            "reasoning_tokens": 84,
+            "rejected_prediction_tokens": null
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 65
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 84
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

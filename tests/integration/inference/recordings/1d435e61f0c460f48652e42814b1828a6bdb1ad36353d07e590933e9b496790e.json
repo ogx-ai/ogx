@@ -1,0 +1,69 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[openai_client-txt=thegrid/text-standard-inference:chat_completion:non_streaming_01]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.thegrid.ai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "text-standard",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet do humans live on?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "text-standard",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-1d435e61f0c4",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Humans live on **Earth**\u2014the third planet from the Sun in our solar system. It\u2019s the only known world that supports the complex life forms, ecosystems, and environments that humans depend on. \ud83c\udf0d",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "provider_specific_fields": {
+                "name": null,
+                "refusal": null
+              },
+              "reasoning_content": "The user asks: \"Which planet do humans live on?\" Simple question. Answer: Earth. Possibly elaborate. Provide context."
+            },
+            "provider_specific_fields": {}
+          }
+        ],
+        "created": 0,
+        "model": "openai/gpt-oss-120b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": "default",
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 78,
+          "prompt_tokens": 61,
+          "total_tokens": 139,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null,
+          "estimated_cost": 1.5517e-05
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}
