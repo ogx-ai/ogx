@@ -846,3 +846,60 @@ async def test_identical_files_keep_separate_chunks(sqlite_vec_index, embedding_
     response = await sqlite_vec_index.query_keyword(query_string="fox", k=total * 2, score_threshold=0.0)
     assert len(response.chunks) == len(chunks_by_doc["file-b"])
     assert {chunk.metadata["document_id"] for chunk in response.chunks} == {"file-b"}
+
+
+async def test_add_chunks_upsert_replaces_vector_without_duplicates(sqlite_vec_index):
+    """Test that re-inserting a chunk replaces its vector row in vec0 instead of adding duplicate rows (#7059)."""
+    import numpy as np
+
+    from ogx_api import Chunk, ChunkMetadata, EmbeddedChunk
+
+    chunk_a = Chunk(
+        content="first chunk content",
+        chunk_id="chunk-a",
+        metadata={"document_id": "doc-1"},
+        chunk_metadata=ChunkMetadata(chunk_id="chunk-a", document_id="doc-1"),
+    )
+    chunk_b = Chunk(
+        content="second chunk content",
+        chunk_id="chunk-b",
+        metadata={"document_id": "doc-1"},
+        chunk_metadata=ChunkMetadata(chunk_id="chunk-b", document_id="doc-1"),
+    )
+
+    emb_dim = sqlite_vec_index.embedding_dimension
+    emb_a = np.zeros(emb_dim, dtype=np.float32)
+    emb_a[0] = 1.0
+    emb_b = np.zeros(emb_dim, dtype=np.float32)
+    emb_b[1] = 1.0
+
+    embedded_first = [
+        EmbeddedChunk(
+            content=chunk_a.content,
+            chunk_id=chunk_a.chunk_id,
+            metadata=chunk_a.metadata,
+            chunk_metadata=chunk_a.chunk_metadata,
+            embedding=emb_a.tolist(),
+            embedding_model="test-embedding-model",
+            embedding_dimension=emb_dim,
+        ),
+        EmbeddedChunk(
+            content=chunk_b.content,
+            chunk_id=chunk_b.chunk_id,
+            metadata=chunk_b.metadata,
+            chunk_metadata=chunk_b.chunk_metadata,
+            embedding=emb_b.tolist(),
+            embedding_model="test-embedding-model",
+            embedding_dimension=emb_dim,
+        ),
+    ]
+    await sqlite_vec_index.add_chunks(embedded_first)
+
+    # Re-insert chunk_a (upsert)
+    await sqlite_vec_index.add_chunks([embedded_first[0]])
+
+    # Query vector search with k=2: should return exactly ['chunk-a', 'chunk-b'] with no duplicates
+    response = await sqlite_vec_index.query_vector(query_vector=emb_a, k=2, score_threshold=0.0)
+    returned_ids = [c.chunk_id for c in response.chunks]
+    assert returned_ids == ["chunk-a", "chunk-b"]
+    assert len(set(returned_ids)) == len(returned_ids)

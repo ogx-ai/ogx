@@ -241,6 +241,11 @@ class SQLiteVecIndex(EmbeddingIndex):
                         ((chunk.chunk_id, serialize_vector(emb.tolist())))
                         for chunk, emb in zip(batch_chunks, batch_embeddings, strict=True)
                     ]
+                    # DELETE existing vector entries with same IDs (vec0 doesn't support ON CONFLICT)
+                    cur.executemany(
+                        f"DELETE FROM [{self.vector_table}] WHERE id = ?;", [(row[0],) for row in embedding_data]
+                    )
+
                     cur.executemany(f"INSERT INTO [{self.vector_table}] (id, embedding) VALUES (?, ?);", embedding_data)
 
                     # Insert FTS content
