@@ -18,6 +18,7 @@ import time
 import uuid
 from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -134,12 +135,13 @@ _GEMINI_CONTENT_FILTER_REASONS: set[str] = {
 
 
 def convert_finish_reason(
-    finish_reason: str | None,
+    finish_reason: str | Enum | None,
 ) -> OpenAIFinishReason:
-    """Map a Gemini FinishReason string to the OpenAI finish_reason literal."""
+    """Map a Gemini FinishReason (string or google-genai enum) to the OpenAI finish_reason literal."""
     if finish_reason is None:
         return "stop"
-    reason_str = str(finish_reason).upper()
+    # str() of a google-genai enum member is "FinishReason.MAX_TOKENS", so use the member name.
+    reason_str = (finish_reason.name if isinstance(finish_reason, Enum) else str(finish_reason)).upper()
     if reason_str in _GEMINI_CONTENT_FILTER_REASONS:
         return "content_filter"
 
@@ -640,7 +642,7 @@ def _resolve_finish_reason_common(
         return "tool_calls"
     if finish_reason_val is None:
         return None if allow_none else "stop"
-    return convert_finish_reason(str(finish_reason_val))
+    return convert_finish_reason(finish_reason_val)
 
 
 def _resolve_finish_reason(
