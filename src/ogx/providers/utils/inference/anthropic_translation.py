@@ -263,6 +263,24 @@ def _reasoning_text(obj: Any) -> str | None:
     return getattr(obj, "reasoning_content", None) or getattr(obj, "reasoning", None) or None
 
 
+def has_cache_control(request: AnthropicCreateMessageRequest) -> bool:
+    """Check whether the Anthropic request specifies any prompt cache_control breakpoints."""
+    if request.system and not isinstance(request.system, str):
+        if any(getattr(block, "cache_control", None) is not None for block in request.system):
+            return True
+
+    for msg in request.messages:
+        if not isinstance(msg.content, str):
+            if any(getattr(block, "cache_control", None) is not None for block in msg.content):
+                return True
+
+    if request.tools:
+        if any(getattr(tool, "cache_control", None) is not None for tool in request.tools):
+            return True
+
+    return False
+
+
 def anthropic_request_to_openai(
     request: AnthropicCreateMessageRequest, *, reasoning_capable: bool = False
 ) -> OpenAIChatCompletionRequestWithExtraBody:
@@ -271,6 +289,13 @@ def anthropic_request_to_openai(
     ``thinking`` (enabled or adaptive) is mapped to ``reasoning_effort`` when the target
     model is ``reasoning_capable`` and rejected otherwise, rather than silently dropped.
     """
+    if has_cache_control(request):
+        logger.warning(
+            "Anthropic request specified cache_control breakpoints, but translation to OpenAI "
+            "chat completions does not preserve prompt cache control for model '%s'",
+            request.model,
+        )
+
     thinking = request.thinking
     reasoning_effort: Literal["low", "medium", "high"] | None = None
     if thinking is not None and is_thinking_requested(thinking):
@@ -356,16 +381,25 @@ def openai_response_to_anthropic(
     usage = AnthropicUsage()
     if response.usage:
         cache_read = None
-        if response.usage.prompt_tokens_details and hasattr(response.usage.prompt_tokens_details, "cached_tokens"):
-            cache_read = response.usage.prompt_tokens_details.cached_tokens
+        cache_creation = None
+        if response.usage.prompt_tokens_details:
+            cached = getattr(response.usage.prompt_tokens_details, "cached_tokens", None)
+            if isinstance(cached, int):
+                cache_read = cached
+            for attr in ("cache_creation_tokens", "cache_write_tokens"):
+                val = getattr(response.usage.prompt_tokens_details, attr, None)
+                if isinstance(val, int):
+                    cache_creation = val
+                    break
 
         # OpenAI's prompt_tokens includes cached tokens; Anthropic's input_tokens
         # excludes them (total input = input_tokens + cache_read + cache_creation),
         # so the cached portion must be subtracted or consumers count it twice.
         usage = AnthropicUsage(
-            input_tokens=max((response.usage.prompt_tokens or 0) - (cache_read or 0), 0),
+            input_tokens=max((response.usage.prompt_tokens or 0) - (cache_read or 0) - (cache_creation or 0), 0),
             output_tokens=response.usage.completion_tokens or 0,
             cache_read_input_tokens=cache_read,
+            cache_creation_input_tokens=cache_creation,
         )
 
     return AnthropicMessageResponse(
@@ -404,6 +438,7 @@ async def _translate_openai_stream_events(
     output_tokens = 0
     input_tokens = 0
     cache_read_tokens: int | None = None
+    cache_creation_tokens: int | None = None
     stop_reason = "end_turn"
 
     try:
@@ -412,10 +447,15 @@ async def _translate_openai_stream_events(
                 if chunk.usage:
                     input_tokens = chunk.usage.prompt_tokens or 0
                     output_tokens = chunk.usage.completion_tokens or 0
-                    if chunk.usage.prompt_tokens_details and hasattr(
-                        chunk.usage.prompt_tokens_details, "cached_tokens"
-                    ):
-                        cache_read_tokens = chunk.usage.prompt_tokens_details.cached_tokens
+                    if chunk.usage.prompt_tokens_details:
+                        cached = getattr(chunk.usage.prompt_tokens_details, "cached_tokens", None)
+                        if isinstance(cached, int):
+                            cache_read_tokens = cached
+                        for attr in ("cache_creation_tokens", "cache_write_tokens"):
+                            val = getattr(chunk.usage.prompt_tokens_details, attr, None)
+                            if isinstance(val, int):
+                                cache_creation_tokens = val
+                                break
                 continue
 
             choice = chunk.choices[0]
@@ -501,8 +541,15 @@ async def _translate_openai_stream_events(
             if chunk.usage:
                 input_tokens = chunk.usage.prompt_tokens or 0
                 output_tokens = chunk.usage.completion_tokens or 0
-                if chunk.usage.prompt_tokens_details and hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
-                    cache_read_tokens = chunk.usage.prompt_tokens_details.cached_tokens
+                if chunk.usage.prompt_tokens_details:
+                    cached = getattr(chunk.usage.prompt_tokens_details, "cached_tokens", None)
+                    if isinstance(cached, int):
+                        cache_read_tokens = cached
+                    for attr in ("cache_creation_tokens", "cache_write_tokens"):
+                        val = getattr(chunk.usage.prompt_tokens_details, attr, None)
+                        if isinstance(val, int):
+                            cache_creation_tokens = val
+                            break
     except Exception:
         logger.exception("Failed to stream translation response")
         yield ErrorStreamEvent(
@@ -532,9 +579,10 @@ async def _translate_openai_stream_events(
         usage=AnthropicUsage(
             # Same convention translation as the non-streaming path: Anthropic's
             # input_tokens excludes the cached portion of OpenAI's prompt_tokens.
-            input_tokens=max(input_tokens - (cache_read_tokens or 0), 0),
+            input_tokens=max(input_tokens - (cache_read_tokens or 0) - (cache_creation_tokens or 0), 0),
             output_tokens=output_tokens,
             cache_read_input_tokens=cache_read_tokens,
+            cache_creation_input_tokens=cache_creation_tokens,
         ),
     )
     yield MessageStopEvent()

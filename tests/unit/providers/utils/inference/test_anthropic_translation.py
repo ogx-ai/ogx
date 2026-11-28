@@ -1567,3 +1567,114 @@ class TestPassthroughStreamClientKwargs:
 async def _empty_lines():
     return
     yield
+
+
+class TestPromptCachingTranslation:
+    """Prompt caching cache_control drop warning and token usage mapping."""
+
+    def test_cache_control_on_system_triggers_warning(self, caplog):
+        import logging
+
+        from ogx_api.messages.models import (
+            AnthropicCacheControl,
+            AnthropicCreateMessageRequest,
+            AnthropicMessage,
+            AnthropicTextBlock,
+        )
+
+        request = AnthropicCreateMessageRequest(
+            model="gpt-4o",
+            max_tokens=100,
+            messages=[AnthropicMessage(role="user", content="hello")],
+            system=[AnthropicTextBlock(text="You are helpful", cache_control=AnthropicCacheControl(type="ephemeral"))],
+        )
+        with caplog.at_level(logging.WARNING):
+            anthropic_request_to_openai(request)
+        assert any("cache_control breakpoints" in record.message for record in caplog.records)
+
+    def test_cache_control_on_message_triggers_warning(self, caplog):
+        import logging
+
+        from ogx_api.messages.models import (
+            AnthropicCacheControl,
+            AnthropicCreateMessageRequest,
+            AnthropicMessage,
+            AnthropicTextBlock,
+        )
+
+        request = AnthropicCreateMessageRequest(
+            model="gpt-4o",
+            max_tokens=100,
+            messages=[
+                AnthropicMessage(
+                    role="user",
+                    content=[AnthropicTextBlock(text="hello", cache_control=AnthropicCacheControl(type="ephemeral"))],
+                )
+            ],
+        )
+        with caplog.at_level(logging.WARNING):
+            anthropic_request_to_openai(request)
+        assert any("cache_control breakpoints" in record.message for record in caplog.records)
+
+    def test_cache_control_on_tool_triggers_warning(self, caplog):
+        import logging
+
+        from ogx_api.messages.models import (
+            AnthropicCacheControl,
+            AnthropicCreateMessageRequest,
+            AnthropicCustomToolDef,
+            AnthropicMessage,
+        )
+
+        tool = AnthropicCustomToolDef(
+            name="get_weather",
+            description="weather",
+            input_schema={"type": "object"},
+            cache_control=AnthropicCacheControl(type="ephemeral"),
+        )
+        request = AnthropicCreateMessageRequest(
+            model="gpt-4o",
+            max_tokens=100,
+            messages=[AnthropicMessage(role="user", content="hello")],
+            tools=[tool],
+        )
+        with caplog.at_level(logging.WARNING):
+            anthropic_request_to_openai(request)
+        assert any("cache_control breakpoints" in record.message for record in caplog.records)
+
+    def test_no_cache_control_no_warning(self, caplog):
+        import logging
+
+        from ogx_api.messages.models import AnthropicCreateMessageRequest, AnthropicMessage
+
+        request = AnthropicCreateMessageRequest(
+            model="gpt-4o",
+            max_tokens=100,
+            messages=[AnthropicMessage(role="user", content="hello")],
+        )
+        with caplog.at_level(logging.WARNING):
+            anthropic_request_to_openai(request)
+        assert not any("cache_control breakpoints" in record.message for record in caplog.records)
+
+    def test_cache_creation_tokens_mapped_in_response(self):
+        class UsageDetails:
+            cached_tokens = 40
+            cache_creation_tokens = 30
+
+        openai_resp = MagicMock()
+        openai_resp.choices = [MagicMock()]
+        openai_resp.choices[0].message = MagicMock()
+        openai_resp.choices[0].message.content = "response"
+        openai_resp.choices[0].message.tool_calls = None
+        openai_resp.choices[0].finish_reason = "stop"
+        openai_resp.usage = MagicMock()
+        openai_resp.usage.prompt_tokens = 100
+        openai_resp.usage.completion_tokens = 20
+        openai_resp.usage.prompt_tokens_details = UsageDetails()
+
+        result = openai_response_to_anthropic(openai_resp, "m")
+        # 100 total prompt tokens - 40 read - 30 created = 30 uncached input tokens
+        assert result.usage.input_tokens == 30
+        assert result.usage.output_tokens == 20
+        assert result.usage.cache_read_input_tokens == 40
+        assert result.usage.cache_creation_input_tokens == 30
