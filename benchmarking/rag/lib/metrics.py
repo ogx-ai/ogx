@@ -21,7 +21,7 @@ def retrieval_metrics(
     qrels: dict[str, dict[str, int]],
     results: dict[str, dict[str, float]],
     k_values: list[int] | None = None,
-) -> dict[str, float]:
+) -> dict[str, float | int]:
     """Compute retrieval metrics using pytrec_eval.
 
     Args:
@@ -30,7 +30,11 @@ def retrieval_metrics(
         k_values: Cutoff values for nDCG, recall, MAP. Default [5, 10].
 
     Returns:
-        Aggregated metrics dict, e.g. {"ndcg_cut_10": 0.45, "recall_10": 0.78, ...}
+        Aggregated metrics dict, e.g. {"ndcg_cut_10": 0.45, "recall_10": 0.78, ...},
+        plus "num_scored_queries" (queries the averages were taken over) and
+        "num_missing_queries" (queries in qrels that got no result, usually
+        because the run errored past them). Callers already set their own
+        "num_queries", so these use distinct names.
     """
     if k_values is None:
         k_values = [5, 10]
@@ -44,7 +48,10 @@ def retrieval_metrics(
     # Filter to queries present in both qrels and results
     common_qids = set(qrels.keys()) & set(results.keys())
     if not common_qids:
-        return dict.fromkeys(metrics_set, 0.0)
+        empty = dict.fromkeys(metrics_set, 0.0)
+        empty["num_scored_queries"] = 0
+        empty["num_missing_queries"] = len(qrels)
+        return empty
 
     filtered_qrels = {qid: qrels[qid] for qid in common_qids}
     filtered_results = {qid: results[qid] for qid in common_qids}
@@ -57,6 +64,12 @@ def retrieval_metrics(
     for metric in metrics_set:
         values = [per_query[qid][metric] for qid in per_query if metric in per_query[qid]]
         aggregated[metric] = sum(values) / len(values) if values else 0.0
+
+    # Report what the averages were taken over. Queries the run never produced a
+    # result for are absent from common_qids, so without these two numbers a
+    # partial run and a complete one are indistinguishable in the output.
+    aggregated["num_scored_queries"] = len(common_qids)
+    aggregated["num_missing_queries"] = len(set(qrels.keys()) - common_qids)
 
     return aggregated
 
@@ -91,7 +104,7 @@ _rouge_scorer = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
 def answer_metrics(
     predictions: dict[str, str],
     ground_truths: dict[str, str | list[str]],
-) -> dict[str, float]:
+) -> dict[str, float | int]:
     """Compute aggregated answer quality metrics.
 
     Uses HuggingFace `evaluate` (SQuAD metric) for EM/F1 and `rouge-score` for ROUGE-L.
@@ -105,7 +118,13 @@ def answer_metrics(
     """
     common_qids = sorted(set(predictions.keys()) & set(ground_truths.keys()))
     if not common_qids:
-        return {"exact_match": 0.0, "f1": 0.0, "rouge_l": 0.0, "num_queries": 0}
+        return {
+            "exact_match": 0.0,
+            "f1": 0.0,
+            "rouge_l": 0.0,
+            "num_queries": 0,
+            "num_missing_queries": len(ground_truths),
+        }
 
     # Format for HuggingFace squad metric
     hf_predictions = []
@@ -139,4 +158,5 @@ def answer_metrics(
         "f1": squad_results["f1"] / 100.0,
         "rouge_l": sum(rouge_scores) / len(rouge_scores),
         "num_queries": len(common_qids),
+        "num_missing_queries": len(set(ground_truths.keys()) - set(common_qids)),
     }
