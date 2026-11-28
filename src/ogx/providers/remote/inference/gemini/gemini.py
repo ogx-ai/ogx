@@ -15,7 +15,7 @@ from ogx_api import (
     validate_embeddings_input_is_text,
 )
 
-from .config import GeminiConfig
+from .config import DEFAULT_BASE_URL, GeminiConfig
 
 
 class GeminiInferenceAdapter(OpenAIMixin):
@@ -32,8 +32,10 @@ class GeminiInferenceAdapter(OpenAIMixin):
         "models/gemini-embedding-001": {"embedding_dimension": 3072, "context_length": 2048},
     }
 
-    def get_base_url(self):
-        return "https://generativelanguage.googleapis.com/v1beta/openai/"
+    def get_base_url(self) -> str:
+        if self.config.base_url:
+            return str(self.config.base_url)
+        return DEFAULT_BASE_URL
 
     def get_api_key(self) -> str | None:
         """Return API key or access token for the OpenAI-compatible client.
