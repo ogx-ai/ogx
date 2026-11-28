@@ -168,7 +168,11 @@ def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: arg
     resolved_config = reveal_secret_fields(config.model_dump())
     fd, resolved_path = tempfile.mkstemp(suffix=".yaml", prefix="ogx-run-")
     resolved_file = Path(resolved_path)
-    atexit.register(lambda p=resolved_file: p.unlink(missing_ok=True))
+
+    def _remove_resolved_config() -> None:
+        resolved_file.unlink(missing_ok=True)
+
+    atexit.register(_remove_resolved_config)
     with os.fdopen(fd, "w") as f:
         yaml.dump(resolved_config, f, default_flow_style=False, sort_keys=False)
 
