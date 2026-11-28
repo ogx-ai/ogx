@@ -115,6 +115,21 @@ class MultiHOPBenchmark(BenchmarkRunner):
         all_ground_truths = {qid: r["ground_truth"] for qid, r in per_query.items()}
         metrics = answer_metrics(all_predictions, all_ground_truths)
 
+        from lib.metrics import majority_baseline_metrics
+
+        baseline = majority_baseline_metrics(all_ground_truths)
+        metrics.update(baseline)
+        metrics["below_majority_baseline"] = bool(metrics["f1"] < baseline["majority_baseline_f1"])
+        if metrics["below_majority_baseline"]:
+            logger.warning(
+                "MultiHOP F1 %.4f is BELOW the majority-answer baseline %.4f "
+                "(constant %r): this run is indistinguishable from a constant "
+                "reply; see ogx-ai/ogx#6647.",
+                metrics["f1"],
+                baseline["majority_baseline_f1"],
+                baseline["majority_answer"],
+            )
+
         # Build qrels from evidence docs
         qrels = {}
         if self.evidence_docs:
