@@ -136,6 +136,14 @@ def main(fmt: str, output: str | None):
             val = row["metrics"].get(metric, "N/A")
             table_row[metric] = f"{val:.4f}" if isinstance(val, float) else str(val)
 
+        if benchmark == "multihop" and "majority_baseline_f1" in row["metrics"]:
+            table_row["Majority F1"] = f"{row['metrics']['majority_baseline_f1']:.4f}"
+            table_row["Beats baseline?"] = (
+                "Yes"
+                if isinstance(primary_val, float) and primary_val > row["metrics"]["majority_baseline_f1"]
+                else "NO"
+            )
+
         table_rows.append(table_row)
 
     df = pd.DataFrame(table_rows)

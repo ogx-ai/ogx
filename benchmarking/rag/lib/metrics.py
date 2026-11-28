@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from collections import Counter
+
 import evaluate
 import pytrec_eval
 from rouge_score import rouge_scorer
@@ -139,4 +141,38 @@ def answer_metrics(
         "f1": squad_results["f1"] / 100.0,
         "rouge_l": sum(rouge_scores) / len(rouge_scores),
         "num_queries": len(common_qids),
+    }
+
+
+def majority_baseline_metrics(
+    ground_truths: dict[str, str | list[str]],
+) -> dict[str, float | str | int]:
+    """Score a constant majority-answer reply with the same metric as the run.
+
+    The majority answer is the most frequent gold answer; every query is
+    answered with it, and the result is scored by :func:`answer_metrics`.
+    A run whose F1 does not beat this baseline is indistinguishable from a
+    system that does no retrieval and no generation (see ogx-ai/ogx#6647:
+    constant ``Yes`` scores F1 0.3059 on MultiHopRAG, above every published
+    run score). The baseline is computed live from the gold answers, not
+    hardcoded, so it follows the dataset.
+    """
+    answers = [(gt[0] if isinstance(gt, list) else gt) for gt in ground_truths.values()]
+    if not answers:
+        return {
+            "majority_answer": "",
+            "majority_count": 0,
+            "majority_baseline_exact_match": 0.0,
+            "majority_baseline_f1": 0.0,
+            "majority_baseline_rouge_l": 0.0,
+        }
+    majority_answer, majority_count = Counter(answers).most_common(1)[0]
+    constant = dict.fromkeys(ground_truths, majority_answer)
+    scored = answer_metrics(constant, ground_truths)
+    return {
+        "majority_answer": majority_answer,
+        "majority_count": majority_count,
+        "majority_baseline_exact_match": scored["exact_match"],
+        "majority_baseline_f1": scored["f1"],
+        "majority_baseline_rouge_l": scored["rouge_l"],
     }

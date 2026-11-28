@@ -162,6 +162,13 @@ def main(
             click.echo(f"  {key:25s} {value:.4f}")
         else:
             click.echo(f"  {key:25s} {value}")
+    if "majority_baseline_f1" in metrics:
+        click.echo(
+            f"  {'Majority baseline F1:':25s} {metrics['majority_baseline_f1']:.4f} "
+            f"(constant {metrics.get('majority_answer', '')!r})"
+        )
+        if metrics.get("below_majority_baseline"):
+            click.echo("  FLAG: this run did NOT beat the majority-answer baseline (see ogx-ai/ogx#6647).")
     click.echo(f"{'=' * 60}")
     click.echo(f"Results saved to: {output_dir}")
 
