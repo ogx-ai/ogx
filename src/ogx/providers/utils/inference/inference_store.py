@@ -24,7 +24,8 @@ from ogx_api import (
     ChatCompletionMessageList,
     ListOpenAIChatCompletionResponse,
     OpenAIChatCompletion,
-    OpenAIChatCompletionContentPartParam,
+    OpenAIChatCompletionContentPartImageParam,
+    OpenAIChatCompletionContentPartTextParam,
     OpenAIChatCompletionResponseMessage,
     OpenAICompletionWithInputMessages,
     OpenAIMessageParam,
@@ -41,18 +42,21 @@ class _WriteItem(NamedTuple):
     request_context: RequestContext
 
 
-def _supported_content_parts(content: Any) -> list[OpenAIChatCompletionContentPartParam] | None:
+def _supported_content_parts(
+    content: Any,
+) -> list[OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam] | None:
     """Return only multipart content parts supported by the listing response schema."""
     if not isinstance(content, list):
         return None
 
-    supported_parts = []
+    supported_parts: list[OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam] = []
     for part in content:
         if not isinstance(part, dict):
             continue
-        if part.get("type") not in {"text", "image_url"}:
-            continue
-        supported_parts.append(part)
+        if part.get("type") == "text":
+            supported_parts.append(OpenAIChatCompletionContentPartTextParam(**part))
+        elif part.get("type") == "image_url":
+            supported_parts.append(OpenAIChatCompletionContentPartImageParam(**part))
 
     return supported_parts or None
 
