@@ -81,7 +81,7 @@ class TestOpenAIResponses:
             assert len(response.output_text.strip()) > 0
         elif response.status == "incomplete":
             assert response.incomplete_details is not None
-            assert response.incomplete_details.reason == "length"
+            assert response.incomplete_details.reason == "max_output_tokens"
 
     def test_openai_response_with_small_max_output_tokens(self, openai_client, client_with_models, text_model_id):
         """Test response with very small max_output_tokens to trigger potential truncation."""
@@ -109,7 +109,7 @@ class TestOpenAIResponses:
         # reasoning models that spend the budget on reasoning tokens.
         assert response.status == "incomplete"
         assert response.incomplete_details is not None
-        assert response.incomplete_details.reason == "length"
+        assert response.incomplete_details.reason == "max_output_tokens"
         assert response.usage is not None
         # Allow some tolerance for provider differences
         assert response.usage.output_tokens <= 25, (
@@ -1130,7 +1130,7 @@ class TestOpenAIResponses:
         assert response.incomplete_details is None
 
     def test_openai_response_incomplete_details_length(self, openai_client, client_with_models, text_model_id):
-        """Test incomplete_details.reason is 'length' when chat completion returns finish_reason='length'.
+        """Test incomplete_details.reason is 'max_output_tokens' on finish_reason='length'.
 
         A small max_output_tokens with a long prompt causes the provider to truncate
         the output in a single inference call, returning finish_reason='length'.
@@ -1154,12 +1154,12 @@ class TestOpenAIResponses:
         assert response.id.startswith("resp_")
         assert response.status == "incomplete"
         assert response.incomplete_details is not None
-        assert response.incomplete_details.reason == "length"
+        assert response.incomplete_details.reason == "max_output_tokens"
 
     def test_openai_response_incomplete_details_length_streaming(
         self, openai_client, client_with_models, text_model_id
     ):
-        """Test streaming incomplete_details.reason is 'length' when chat completion returns finish_reason='length'."""
+        """Test streaming incomplete_details.reason is 'max_output_tokens' on finish_reason='length'."""
         skip_if_provider_is_vertexai(
             client_with_models,
             text_model_id,
@@ -1185,7 +1185,7 @@ class TestOpenAIResponses:
         assert len(incomplete_events) == 1
         assert incomplete_events[0].response.status == "incomplete"
         assert incomplete_events[0].response.incomplete_details is not None
-        assert incomplete_events[0].response.incomplete_details.reason == "length"
+        assert incomplete_events[0].response.incomplete_details.reason == "max_output_tokens"
 
     def test_openai_response_incomplete_details_max_iterations_exceeded(self, openai_client, text_model_id):
         """Test incomplete_details.reason is 'max_iterations_exceeded' when the agent loop

@@ -90,11 +90,12 @@ The `reasoning` object in the output of Responses works for inference providers 
 
 ### Incomplete Details
 
-**Status:** Not Implemented
+**Status:** Partially Implemented
 
 **Issue:** [#3567](https://github.com/ogx-ai/ogx/issues/3567)
 
-The return object from a call to Responses includes a field for indicating why a response is incomplete if it is.  For example, if the model stops generating because it has reached the specified max output tokens (see above), this field should be set to "IncompleteDetails(reason='max_output_tokens')".  This is not implemented in OGX.
+The return object from a call to Responses includes a field for indicating why a response is incomplete if it is.  When the model stops generating because it has reached `max_output_tokens`, OGX sets the status to `incomplete` and this field to "IncompleteDetails(reason='max_output_tokens')", as OpenAI does.
+OGX does not yet report the other OpenAI reason, `content_filter`. It also uses an OGX-specific reason, `max_iterations_exceeded`, when it ends the inference loop early, for example after reaching the inference iteration limit.
 
 
 ---
